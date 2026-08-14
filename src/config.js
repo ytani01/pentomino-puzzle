@@ -306,13 +306,13 @@ export const LAYOUTS = Object.fromEntries(
  * 見えるようにするため（TODO-007）。
  */
 export const TILE = {
-  border: 2,
+  border: 1,
   bevel: 4,
   highlight: 0xffffff,
   highlightAlpha: 0.18,
   shadow: 0x000000,
   shadowAlpha: 0.3,
-  edgeDarken: 0.68,
+  edgeDarken: 0.0,
 };
 
 /**
