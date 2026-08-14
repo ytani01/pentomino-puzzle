@@ -60,6 +60,26 @@ python3 -m http.server 8765
 | `src/scenes/game.js` | 本編。Phaser とのつなぎに徹し、判定は `logic.js` に任せる |
 | `src/scenes/clear.js` | クリア表示と記録の更新 |
 | `tests.html` | 計算のテスト（ブラウザで開くだけ） |
+| `.github/workflows/pages.yml` | タグを押したときに GitHub Pages へ公開する |
+
+## 公開（GitHub Pages）
+
+- リポジトリの Settings → Pages → Source を **GitHub Actions** にしておく
+  （リポジトリを作り直したときに忘れやすい。手で行う必要がある）
+- 公開するのはタグを押したとき（`v` から始まる名前、例 `v0.2.0`）だけ。
+  通常の push では動かない
+- `src/config.js` の `VERSION`（既定は `'dev'`）を、`.github/workflows/pages.yml` が
+  タグ名へ書き換えてから公開する。ローカルで直接開いた画面は `dev` のまま
+  （公開前の見た目と本番の見た目が違う。これは許容している）
+- 手順:
+  ```bash
+  git tag v0.2.0
+  git push --tags
+  ```
+- ワークフローの置換は `src/config.js` の `export const VERSION = 'dev';` という
+  行を丸ごと文字列一致で探す。**この行の書き方を変えたら
+  `.github/workflows/pages.yml` も直す**（見つからなければジョブが失敗して
+  気づけるようにしてある。`dev` のまま静かに公開されることはない）
 
 ## 作業の進め方
 

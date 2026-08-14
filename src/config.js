@@ -130,3 +130,10 @@ export const SOLVER_LIMIT = 1000000;
 
 /** クリア記録（最短時間）の保存先。 */
 export const STORAGE_KEY = 'pentomino-puzzle/best-ms';
+
+/**
+ * 表示用のバージョン。タグを打って GitHub Pages へ公開するとき、
+ * CI がこの行の `'dev'` をタグ名へ書き換える（`.github/workflows/pages.yml`）。
+ * ローカルで直接開いたときは書き換わらないので `dev` のまま出る。
+ */
+export const VERSION = 'dev';

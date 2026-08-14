@@ -1,0 +1,56 @@
+name: Deploy to GitHub Pages
+
+# タグ（v から始まる名前）を push したときだけ動く。
+# 通常の push では動かさない（公開のたびに毎回上がってしまうのを避けるため）。
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: タグ名を VERSION に埋め込む
+        run: |
+          set -eu
+          MARKER="export const VERSION = 'dev';"
+          if ! grep -qF "$MARKER" src/config.js; then
+            echo "::error::src/config.js に VERSION のプレースホルダ（$MARKER）が見つからない。書き方が変わっていないか確認すること" >&2
+            exit 1
+          fi
+          sed -i "s|$MARKER|export const VERSION = '${GITHUB_REF_NAME}';|" src/config.js
+          if ! grep -qF "export const VERSION = '${GITHUB_REF_NAME}';" src/config.js; then
+            echo "::error::VERSION の置換に失敗した" >&2
+            exit 1
+          fi
+
+      - name: 公開するファイルだけを集める
+        run: |
+          set -eu
+          mkdir dist
+          cp index.html dist/
+          cp -r src dist/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

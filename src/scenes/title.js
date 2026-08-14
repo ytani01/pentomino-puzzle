@@ -6,7 +6,7 @@
  * 最初に必ず通る場所で済ませておく。
  */
 
-import { COLORS, FONT, LAYOUT, TEXT_COLORS } from '../config.js';
+import { COLORS, FONT, LAYOUT, TEXT_COLORS, VERSION } from '../config.js';
 import { formatTime } from '../logic.js';
 import { loadBest } from '../storage.js';
 import * as audio from '../audio.js';
@@ -77,6 +77,12 @@ export default class TitleScene extends Phaser.Scene {
 
     this.input.keyboard.on('keydown-SPACE', this.start, this);
     this.input.keyboard.on('keydown-ENTER', this.start, this);
+
+    this.add.text(LAYOUT.width - 12, LAYOUT.height - 12, VERSION, {
+      fontFamily: FONT.family,
+      fontSize: `${FONT.small}px`,
+      color: TEXT_COLORS.dim,
+    }).setOrigin(1, 1).setAlpha(0.6);
   }
 
   start() {
