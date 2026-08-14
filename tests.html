@@ -38,7 +38,7 @@
 <div id="results"></div>
 
 <script type="module">
-import { BOARD_SPEC, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, SOLVER_LIMIT } from './src/config.js';
+import { BOARDS, DEFAULT_BOARD_KEY, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, SOLVER_LIMIT } from './src/config.js';
 import {
   normalize, rotateCw, flip, sameShape, orientations, shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
@@ -127,6 +127,15 @@ test('置けるマスの数はピース 12 種ぶんとちょうど同じ', () =
 
 test('求解の打ち切り上限が正の数として決まっている', () => {
   assert(Number.isFinite(SOLVER_LIMIT) && SOLVER_LIMIT > 0, `上限が変: ${SOLVER_LIMIT}`);
+});
+
+test('BOARDS は 8×8 と 6×10 を持ち、既定の盤がその中にある', () => {
+  assertSame(Object.keys(BOARDS), ['8x8', '6x10'], '盤の並び');
+  assert(BOARDS[DEFAULT_BOARD_KEY], `既定の盤 ${DEFAULT_BOARD_KEY} が BOARDS に無い`);
+  for (const spec of Object.values(BOARDS)) {
+    assertSame(spec.rows * spec.cols - (spec.hole ? spec.hole.rows * spec.hole.cols : 0),
+      PLAYABLE_CELLS, `${spec.label} の置けるマス数`);
+  }
 });
 
 // ---- logic：向きの計算 ---------------------------------------------------
@@ -234,12 +243,28 @@ test('outlineEdges は向きを変えても本数が変わらない', () => {
 });
 
 // ---- logic：盤面 ---------------------------------------------------------
+//
+// createBoard / boardCells / canPlace / place / remove / isSolved /
+// regionsFitPieces / solve は盤の spec を受け取るので、8×8 と 6×10 の
+// 両方でループして回す（TODO-009）。盤ごとの求解結果（fullSolution）は
+// 盤面グループと solver グループの両方で使うので、先にまとめて作る。
+
+const BOARD_LIST = Object.values(BOARDS);
+const boardStates = BOARD_LIST.map((spec) => {
+  const emptyBoard = createBoard(spec);
+  return { spec, emptyBoard, fullSolution: solve(emptyBoard, NAMES) };
+});
 
 group('src/logic.js — 盤面');
 
-test('boardCells は中央 2×2 を抜いた 60 マスを返す', () => {
-  const cells = boardCells(BOARD_SPEC);
-  assertSame(cells.length, PLAYABLE_CELLS, 'マス数');
+for (const spec of BOARD_LIST) {
+  test(`boardCells は置けるマス ${PLAYABLE_CELLS} を返す（${spec.label}）`, () => {
+    assertSame(boardCells(spec).length, PLAYABLE_CELLS, 'マス数');
+  });
+}
+
+test('boardCells は 8×8 で中央 2×2 を抜く', () => {
+  const cells = boardCells(BOARDS['8x8']);
   const keys = new Set(cells.map(([r, c]) => `${r},${c}`));
   for (const [r, c] of [[3, 3], [3, 4], [4, 3], [4, 4]]) {
     assert(!keys.has(`${r},${c}`), `穴 (${r},${c}) が含まれている`);
@@ -247,88 +272,121 @@ test('boardCells は中央 2×2 を抜いた 60 マスを返す', () => {
   assert(keys.has('0,0') && keys.has('7,7'), '四隅が欠けている');
 });
 
-test('createBoard は空き 60 マスと穴 4 マスの盤を作る', () => {
-  const board = createBoard(BOARD_SPEC);
-  assertSame(board.grid.length, 64, 'マスの総数');
-  assertSame(board.grid.filter((v) => v === null).length, 60, '空き');
-  assertSame(board.grid.filter((v) => v === HOLE).length, 4, '穴');
+test('boardCells は 6×10 に穴が無い（60 マスすべて）', () => {
+  const cells = boardCells(BOARDS['6x10']);
+  assertSame(cells.length, 60, 'マス数');
+  const keys = new Set(cells.map(([r, c]) => `${r},${c}`));
+  assert(keys.has('0,0') && keys.has('5,9'), '四隅が欠けている');
 });
 
-test('cellAt は盤の外を穴として扱う', () => {
-  const board = createBoard(BOARD_SPEC);
-  assertSame(cellAt(board, 0, 0), null);
+for (const spec of BOARD_LIST) {
+  test(`createBoard は空き ${PLAYABLE_CELLS} マスの盤を作る（${spec.label}）`, () => {
+    const board = createBoard(spec);
+    assertSame(board.grid.length, spec.rows * spec.cols, 'マスの総数');
+    assertSame(board.grid.filter((v) => v === null).length, PLAYABLE_CELLS, '空き');
+    assertSame(board.grid.filter((v) => v === HOLE).length,
+      spec.rows * spec.cols - PLAYABLE_CELLS, '穴');
+  });
+}
+
+test('6×10 は穴が無く、置けるマスがちょうど 60', () => {
+  const board = createBoard(BOARDS['6x10']);
+  assertSame(board.grid.length, 60, '盤の大きさ');
+  assertSame(board.grid.filter((v) => v === HOLE).length, 0, '穴の数');
+  assertSame(board.grid.filter((v) => v === null).length, 60, '空きマス');
+});
+
+for (const spec of BOARD_LIST) {
+  test(`cellAt は盤の外を穴として扱う（${spec.label}）`, () => {
+    const board = createBoard(spec);
+    assertSame(cellAt(board, 0, 0), null);
+    assertSame(cellAt(board, -1, 0), HOLE, '上へはみ出す');
+    assertSame(cellAt(board, spec.rows, 0), HOLE, '下へはみ出す');
+    assertSame(cellAt(board, 0, spec.cols), HOLE, '右へはみ出す');
+  });
+}
+
+test('cellAt は 8×8 の中央 2×2 を穴として扱う', () => {
+  const board = createBoard(BOARDS['8x8']);
   assertSame(cellAt(board, 3, 3), HOLE);
-  assertSame(cellAt(board, -1, 0), HOLE);
-  assertSame(cellAt(board, 8, 0), HOLE);
 });
 
-test('canPlace は置ける場所を通す', () => {
-  const board = createBoard(BOARD_SPEC);
-  assertSame(canPlace(board, cellsOf('I'), 0, 0), { ok: true, reason: null });
-});
+for (const spec of BOARD_LIST) {
+  test(`canPlace は置ける場所を通す（${spec.label}）`, () => {
+    const board = createBoard(spec);
+    assertSame(canPlace(board, cellsOf('I'), 0, 0), { ok: true, reason: null });
+  });
 
-test('canPlace は盤の外を outside として断る', () => {
-  const board = createBoard(BOARD_SPEC);
-  assertSame(canPlace(board, cellsOf('I'), 5, 0).reason, 'outside', '下へはみ出す');
-  assertSame(canPlace(board, cellsOf('I'), -1, 0).reason, 'outside', '上へはみ出す');
-  assertSame(canPlace(board, cellsOf('U'), 0, 6).reason, 'outside', '右へはみ出す');
-});
+  test(`canPlace は盤の外を outside として断る（${spec.label}）`, () => {
+    const board = createBoard(spec);
+    assertSame(canPlace(board, cellsOf('I'), spec.rows - 1, 0).reason, 'outside', '下へはみ出す');
+    assertSame(canPlace(board, cellsOf('I'), -1, 0).reason, 'outside', '上へはみ出す');
+    assertSame(canPlace(board, cellsOf('U'), 0, spec.cols - 1).reason, 'outside', '右へはみ出す');
+  });
 
-test('canPlace は穴の上を hole として断る', () => {
-  const board = createBoard(BOARD_SPEC);
+  test(`canPlace は重なりを overlap として断る（${spec.label}）`, () => {
+    const board = place(createBoard(spec), 'I', cellsOf('I'), 0, 0);
+    assertSame(canPlace(board, cellsOf('I'), 0, 0).reason, 'overlap');
+    assertSame(canPlace(board, cellsOf('I'), 1, 0).reason, 'overlap');
+  });
+}
+
+test('canPlace は 8×8 の穴の上を hole として断る', () => {
+  const board = createBoard(BOARDS['8x8']);
   assertSame(canPlace(board, cellsOf('I'), 0, 3).reason, 'hole');
 });
 
-test('canPlace は重なりを overlap として断る', () => {
-  const board = place(createBoard(BOARD_SPEC), 'I', cellsOf('I'), 0, 0);
-  assertSame(canPlace(board, cellsOf('I'), 0, 0).reason, 'overlap');
-  assertSame(canPlace(board, cellsOf('I'), 1, 0).reason, 'overlap');
-});
+for (const spec of BOARD_LIST) {
+  test(`place は元の盤面を書き換えずに新しい盤面を返す（${spec.label}）`, () => {
+    const board = createBoard(spec);
+    const before = board.grid.slice();
+    const after = place(board, 'I', cellsOf('I'), 0, 0);
+    assertSame(board.grid, before, '元の盤面が変わった');
+    assert(after !== board, '同じ盤面を返している');
+    assertSame(after.grid.filter((v) => v === 'I').length, 5, '置いたマス数');
+  });
 
-test('place は元の盤面を書き換えずに新しい盤面を返す', () => {
-  const board = createBoard(BOARD_SPEC);
-  const before = board.grid.slice();
-  const after = place(board, 'I', cellsOf('I'), 0, 0);
-  assertSame(board.grid, before, '元の盤面が変わった');
-  assert(after !== board, '同じ盤面を返している');
-  assertSame(after.grid.filter((v) => v === 'I').length, 5, '置いたマス数');
-});
+  test(`remove は元の盤面を書き換えずにピースを取り除く（${spec.label}）`, () => {
+    const board = place(createBoard(spec), 'I', cellsOf('I'), 0, 0);
+    const before = board.grid.slice();
+    const after = remove(board, 'I');
+    assertSame(board.grid, before, '元の盤面が変わった');
+    assertSame(after.grid.filter((v) => v === 'I').length, 0, '取り除けていない');
+    assertSame(after.grid.filter((v) => v === null).length, PLAYABLE_CELLS, '空きに戻っていない');
+  });
 
-test('remove は元の盤面を書き換えずにピースを取り除く', () => {
-  const board = place(createBoard(BOARD_SPEC), 'I', cellsOf('I'), 0, 0);
-  const before = board.grid.slice();
-  const after = remove(board, 'I');
-  assertSame(board.grid, before, '元の盤面が変わった');
-  assertSame(after.grid.filter((v) => v === 'I').length, 0, '取り除けていない');
-  assertSame(after.grid.filter((v) => v === null).length, 60, '空きに戻っていない');
-});
+  test(`placedNames と emptyCells が盤の中身と合う（${spec.label}）`, () => {
+    const board = place(createBoard(spec), 'I', cellsOf('I'), 0, 0);
+    assertSame(placedNames(board), ['I']);
+    assertSame(emptyCells(board).length, PLAYABLE_CELLS - PIECE_SIZE);
+    assertSame(emptyCells(board)[0], [0, 1], '一番若い空きマス');
+  });
+}
 
-test('placedNames と emptyCells が盤の中身と合う', () => {
-  const board = place(createBoard(BOARD_SPEC), 'I', cellsOf('I'), 0, 0);
-  assertSame(placedNames(board), ['I']);
-  assertSame(emptyCells(board).length, 55);
-  assertSame(emptyCells(board)[0], [0, 1], '一番若い空きマス');
-});
+for (const state of boardStates) {
+  const { spec, emptyBoard, fullSolution } = state;
 
-test('isSolved は空きマスが無いときだけ真', () => {
-  const board = createBoard(BOARD_SPEC);
-  assert(!isSolved(board), '空の盤で真になった');
-  const solved = solve(board, NAMES).placements
-    .reduce((acc, p) => place(acc, p.name, p.cells, p.row, p.col), board);
-  assert(isSolved(solved), '埋めた盤で偽になった');
-});
+  test(`isSolved は空きマスが無いときだけ真（${spec.label}）`, () => {
+    assert(!isSolved(emptyBoard), '空の盤で真になった');
+    const solved = fullSolution.placements
+      .reduce((acc, p) => place(acc, p.name, p.cells, p.row, p.col), emptyBoard);
+    assert(isSolved(solved), '埋めた盤で偽になった');
+  });
+}
 
-test('emptyRegionSizes は空き領域を連結成分に分ける', () => {
-  // F を左上へ置くと (0,0) が 1 マスだけ切り離される。
-  const board = place(createBoard(BOARD_SPEC), 'F', cellsOf('F'), 0, 0);
-  assertSame(emptyRegionSizes(board), [1, 54]);
-});
+for (const spec of BOARD_LIST) {
+  test(`emptyRegionSizes は空き領域を連結成分に分ける（${spec.label}）`, () => {
+    // F を左上へ置くと (0,0) が 1 マスだけ切り離される。
+    const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
+    assertSame(emptyRegionSizes(board), [1, PLAYABLE_CELLS - PIECE_SIZE - 1]);
+  });
 
-test('regionsFitPieces は 5 で割り切れない塊があると偽', () => {
-  assert(regionsFitPieces(createBoard(BOARD_SPEC)), '空の盤で偽になった');
-  const board = place(createBoard(BOARD_SPEC), 'F', cellsOf('F'), 0, 0);
-  assert(!regionsFitPieces(board), '1 マスの取り残しを見逃した');
-});
+  test(`regionsFitPieces は 5 で割り切れない塊があると偽（${spec.label}）`, () => {
+    assert(regionsFitPieces(createBoard(spec)), '空の盤で偽になった');
+    const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
+    assert(!regionsFitPieces(board), '1 マスの取り残しを見逃した');
+  });
+}
 
 test('formatTime は mm:ss、1 時間を超えたら h:mm:ss', () => {
   assertSame(formatTime(0), '00:00');
@@ -342,98 +400,99 @@ test('formatTime は mm:ss、1 時間を超えたら h:mm:ss', () => {
 
 group('src/solver.js — ヒント用の求解');
 
-const emptyBoard = createBoard(BOARD_SPEC);
-const fullSolution = solve(emptyBoard, NAMES);
+for (const state of boardStates) {
+  const { spec, emptyBoard, fullSolution } = state;
 
-test('空の盤面から解が 1 つ求まる', () => {
-  assert(fullSolution.ok, `解が出なかった: ${fullSolution.reason}`);
-  assertSame(fullSolution.placements.length, 12, 'ピースの数');
-  assertSame(
-    fullSolution.placements.map((p) => p.name).sort().join(''),
-    NAMES.slice().sort().join(''),
-    '12 種すべてを使っていない',
-  );
-});
+  test(`空の盤面から解が 1 つ求まる（${spec.label}）`, () => {
+    assert(fullSolution.ok, `解が出なかった: ${fullSolution.reason}`);
+    assertSame(fullSolution.placements.length, 12, 'ピースの数');
+    assertSame(
+      fullSolution.placements.map((p) => p.name).sort().join(''),
+      NAMES.slice().sort().join(''),
+      '12 種すべてを使っていない',
+    );
+  });
 
-test('その解が盤面をちょうど埋める（重なりも空きも無い）', () => {
-  let board = emptyBoard;
-  for (const p of fullSolution.placements) {
-    const check = canPlace(board, p.cells, p.row, p.col);
-    assert(check.ok, `${p.name} が置けない: ${check.reason}`);
-    board = place(board, p.name, p.cells, p.row, p.col);
-  }
-  assert(isSolved(board), '空きマスが残った');
-  assertSame(placedNames(board).length, 12, '盤に並んだピースの数');
-});
+  test(`その解が盤面をちょうど埋める（重なりも空きも無い）（${spec.label}）`, () => {
+    let board = emptyBoard;
+    for (const p of fullSolution.placements) {
+      const check = canPlace(board, p.cells, p.row, p.col);
+      assert(check.ok, `${p.name} が置けない: ${check.reason}`);
+      board = place(board, p.name, p.cells, p.row, p.col);
+    }
+    assert(isSolved(board), '空きマスが残った');
+    assertSame(placedNames(board).length, 12, '盤に並んだピースの数');
+  });
 
-test('解の各ピースは、その向きが元の形の回転・反転になっている', () => {
-  for (const p of fullSolution.placements) {
-    const known = orientations(cellsOf(p.name));
-    assert(known.some((shape) => sameShape(shape, p.cells)), `${p.name} の向きが変`);
-  }
-});
+  test(`解の各ピースは、その向きが元の形の回転・反転になっている（${spec.label}）`, () => {
+    for (const p of fullSolution.placements) {
+      const known = orientations(cellsOf(p.name));
+      assert(known.some((shape) => sameShape(shape, p.cells)), `${p.name} の向きが変`);
+    }
+  });
 
-test('solve は渡した盤面を書き換えない', () => {
-  const board = createBoard(BOARD_SPEC);
-  const before = board.grid.slice();
-  solve(board, NAMES);
-  assertSame(board.grid, before);
-});
+  test(`solve は渡した盤面を書き換えない（${spec.label}）`, () => {
+    const board = createBoard(spec);
+    const before = board.grid.slice();
+    solve(board, NAMES);
+    assertSame(board.grid, before);
+  });
 
-test('詰みの盤面では解なしを返す', () => {
-  // F を左上へ置くと (0,0) が 1 マス残り、5 マスのピースでは埋められない。
-  const board = place(createBoard(BOARD_SPEC), 'F', cellsOf('F'), 0, 0);
-  const result = solve(board, NAMES.filter((name) => name !== 'F'));
-  assert(!result.ok, '解が出てしまった');
-  assertSame(result.reason, 'unsolvable', '理由');
-});
+  test(`詰みの盤面では解なしを返す（${spec.label}）`, () => {
+    // F を左上へ置くと (0,0) が 1 マス残り、5 マスのピースでは埋められない。
+    const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
+    const result = solve(board, NAMES.filter((name) => name !== 'F'));
+    assert(!result.ok, '解が出てしまった');
+    assertSame(result.reason, 'unsolvable', '理由');
+  });
 
-test('ピースの数と空きマスが釣り合わないときも解なし', () => {
-  const result = solve(createBoard(BOARD_SPEC), NAMES.slice(0, 11));
-  assert(!result.ok, '解が出てしまった');
-  assertSame(result.reason, 'unsolvable', '理由');
-});
+  test(`ピースの数と空きマスが釣り合わないときも解なし（${spec.label}）`, () => {
+    const result = solve(createBoard(spec), NAMES.slice(0, 11));
+    assert(!result.ok, '解が出てしまった');
+    assertSame(result.reason, 'unsolvable', '理由');
+  });
 
-test('試行回数の上限を超えたら limit として打ち切る', () => {
-  const result = solve(createBoard(BOARD_SPEC), NAMES, { limit: 10 });
-  assert(!result.ok, '打ち切られなかった');
-  assertSame(result.reason, 'limit', '理由');
-  assert(result.tries <= 11, `試行回数が上限を大きく超えた: ${result.tries}`);
-});
+  test(`試行回数の上限を超えたら limit として打ち切る（${spec.label}）`, () => {
+    const result = solve(createBoard(spec), NAMES, { limit: 10 });
+    assert(!result.ok, '打ち切られなかった');
+    assertSame(result.reason, 'limit', '理由');
+    assert(result.tries <= 11, `試行回数が上限を大きく超えた: ${result.tries}`);
+  });
 
-test('hintPlacement は一番若い空きマスを覆う 1 手を返す', () => {
-  const board = place(createBoard(BOARD_SPEC), 'X', cellsOf('X'), 0, 2);
-  const result = hintPlacement(board, NAMES.filter((name) => name !== 'X'));
-  assert(result.ok, `ヒントが出なかった: ${result.reason}`);
-  const target = emptyCells(board)[0];
-  const covers = result.placement.cells
-    .some(([dr, dc]) => result.placement.row + dr === target[0]
-      && result.placement.col + dc === target[1]);
-  assert(covers, `一番若い空きマス (${target}) を覆っていない`);
-  assert(canPlace(board, result.placement.cells, result.placement.row, result.placement.col).ok,
-    '返ってきた置き方が盤に合わない');
-});
+  test(`hintPlacement は一番若い空きマスを覆う 1 手を返す（${spec.label}）`, () => {
+    const board = place(createBoard(spec), 'X', cellsOf('X'), 0, 2);
+    const result = hintPlacement(board, NAMES.filter((name) => name !== 'X'));
+    assert(result.ok, `ヒントが出なかった: ${result.reason}`);
+    const target = emptyCells(board)[0];
+    const covers = result.placement.cells
+      .some(([dr, dc]) => result.placement.row + dr === target[0]
+        && result.placement.col + dc === target[1]);
+    assert(covers, `一番若い空きマス (${target}) を覆っていない`);
+    assert(canPlace(board, result.placement.cells, result.placement.row, result.placement.col).ok,
+      '返ってきた置き方が盤に合わない');
+  });
 
-test('hintPlacement は詰みの盤面で理由付きの解なしを返す', () => {
-  const board = place(createBoard(BOARD_SPEC), 'F', cellsOf('F'), 0, 0);
-  const result = hintPlacement(board, NAMES.filter((name) => name !== 'F'));
-  assert(!result.ok, '解が出てしまった');
-  assertSame(result.reason, 'unsolvable');
-  assertSame(result.placement, null);
-});
+  test(`hintPlacement は詰みの盤面で理由付きの解なしを返す（${spec.label}）`, () => {
+    const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
+    const result = hintPlacement(board, NAMES.filter((name) => name !== 'F'));
+    assert(!result.ok, '解が出てしまった');
+    assertSame(result.reason, 'unsolvable');
+    assertSame(result.placement, null);
+  });
 
-test('途中まで埋めた盤面からも最後まで解ける', () => {
-  // 実際に遊んでいる途中の形（正しい解の 4 手ぶん）から続きが求まるか。
-  let board = createBoard(BOARD_SPEC);
-  const used = [];
-  for (const p of fullSolution.placements.slice(0, 4)) {
-    board = place(board, p.name, p.cells, p.row, p.col);
-    used.push(p.name);
-  }
-  const result = solve(board, NAMES.filter((name) => !used.includes(name)));
-  assert(result.ok, `続きが解けなかった: ${result.reason}`);
-  assertSame(result.placements.length, 8, '残りのピースの数');
-});
+  test(`途中まで埋めた盤面からも最後まで解ける（${spec.label}）`, () => {
+    // 実際に遊んでいる途中の形（正しい解の 4 手ぶん）から続きが求まるか。
+    let board = emptyBoard;
+    const used = [];
+    for (const p of fullSolution.placements.slice(0, 4)) {
+      board = place(board, p.name, p.cells, p.row, p.col);
+      used.push(p.name);
+    }
+    const result = solve(board, NAMES.filter((name) => !used.includes(name)));
+    assert(result.ok, `続きが解けなかった: ${result.reason}`);
+    assertSame(result.placements.length, 8, '残りのピースの数');
+  });
+}
 
 // ---- 結果の表示 ---------------------------------------------------------
 
@@ -472,7 +531,10 @@ summary.textContent = failed === 0
 
 const note = document.createElement('p');
 note.className = 'note';
-note.textContent = `参考: 空の盤面の求解は ${fullSolution.tries} 回の試行で 1 解に届いた（上限 ${SOLVER_LIMIT}）。`;
+const triesNote = boardStates
+  .map(({ spec, fullSolution }) => `${spec.label} は ${fullSolution.tries} 回`)
+  .join('、');
+note.textContent = `参考: 空の盤面の求解に要した試行回数 — ${triesNote}（上限 ${SOLVER_LIMIT}）。`;
 results.appendChild(note);
 </script>
 </body>

@@ -2,12 +2,13 @@
  * Phaser の設定とシーンの登録。
  *
  * Phaser は CDN からグローバルとして読み込む（このファイルは import しない）。
- * 内部解像度は `LAYOUT` が起動時の向きから選んだ 1 組（横 960×640 / 縦
- * 640×960）で、以後は変えずに `Scale.FIT` へ任せる。盤の座標計算を実際の
+ * 内部解像度は `SCREEN` が起動時の向きから選んだ 1 組（横 960×640 / 縦
+ * 640×1136）で、以後は変えずに `Scale.FIT` へ任せる。盤の座標計算を実際の
  * 画面幅から切り離しておけるので、`logic.js` の升目の計算がそのまま画面に対応する。
+ * 盤の大きさ（8×8 と 6×10）を選び直しても内部解像度は変わらない。
  */
 
-import { COLORS, LAYOUT } from './config.js';
+import { COLORS, SCREEN } from './config.js';
 import BootScene from './scenes/boot.js';
 import TitleScene from './scenes/title.js';
 import GameScene from './scenes/game.js';
@@ -16,8 +17,8 @@ import ClearScene from './scenes/clear.js';
 window.game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'app',
-  width: LAYOUT.width,
-  height: LAYOUT.height,
+  width: SCREEN.width,
+  height: SCREEN.height,
   backgroundColor: COLORS.background,
   scale: {
     mode: Phaser.Scale.FIT,

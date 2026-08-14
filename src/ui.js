@@ -44,8 +44,9 @@ export function createPanel(scene, x, y, width, height, radius = 10) {
 /**
  * ボタン。中心を `(x, y)` に置く。
  *
- * 戻り値の Container には `setEnabled()` と `setLabel()` を生やしてある。
- * ヒントや Undo は押せない場面があるので、押せるかどうかを見た目に出す必要がある。
+ * 戻り値の Container には `setEnabled()`・`setLabel()`・`setSelected()` を
+ * 生やしてある。ヒントや Undo は押せない場面があるので押せるかどうかを、
+ * タイトルの盤の選択は 2 つのうちどちらを選んでいるかを、見た目に出す必要がある。
  */
 export function createButton(scene, options) {
   const {
@@ -65,18 +66,27 @@ export function createButton(scene, options) {
   container.enabled = true;
   container.hovered = false;
   container.pressed = false;
+  container.selected = false;
 
   const redraw = () => {
+    // 選んである状態は「押し込んだ面 + 強調色の枠と文字」で出す。塗りだけ
+    // 変えても、隣に並べたときにどちらを選んでいるか一目で分からないため。
     let fill = COLORS.buttonFace;
     if (!container.enabled) fill = COLORS.panel;
-    else if (container.pressed) fill = COLORS.buttonFaceDown;
+    else if (container.pressed || container.selected) fill = COLORS.buttonFaceDown;
     else if (container.hovered) fill = COLORS.buttonFaceHover;
+    let edge = COLORS.buttonEdge;
+    if (!container.enabled) edge = COLORS.panelEdge;
+    else if (container.selected) edge = COLORS.accent;
     face.clear();
     face.fillStyle(fill, 1);
     face.fillRoundedRect(-width / 2, -height / 2, width, height, 8);
-    face.lineStyle(2, container.enabled ? COLORS.buttonEdge : COLORS.panelEdge, 1);
+    face.lineStyle(2, edge, 1);
     face.strokeRoundedRect(-width / 2, -height / 2, width, height, 8);
-    text.setColor(container.enabled ? TEXT_COLORS.normal : TEXT_COLORS.disabled);
+    let color = TEXT_COLORS.normal;
+    if (!container.enabled) color = TEXT_COLORS.disabled;
+    else if (container.selected) color = TEXT_COLORS.accent;
+    text.setColor(color);
   };
 
   container.setSize(width, height);
@@ -98,6 +108,11 @@ export function createButton(scene, options) {
   };
   container.setLabel = (value) => {
     text.setText(value);
+    return container;
+  };
+  container.setSelected = (value) => {
+    container.selected = !!value;
+    redraw();
     return container;
   };
 

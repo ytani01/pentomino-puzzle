@@ -6,14 +6,22 @@
  * 並べるだけで組め、向きが変わっても描き直さずに済む。
  */
 
-import { COLORS, LAYOUT, PIECES, TILE } from '../config.js';
+import {
+  BOARD_REGISTRY_KEY, COLORS, DEFAULT_BOARD_KEY, LAYOUTS, PIECES, TILE,
+} from '../config.js';
 
-/** テクスチャ名。`game.js` から文字列を書かずに参照できるようにまとめておく。 */
+/**
+ * テクスチャ名。`game.js` から文字列を書かずに参照できるようにまとめておく。
+ *
+ * 名前にマスの大きさを含めるのは、盤によってマスの大きさが違うため
+ * （TODO-009）。焼き直しではなく別の名前で持つことで、盤を選び直しても
+ * 貼り直すだけで済む。大きさが同じなら同じ名前になり、自然に共用される。
+ */
 export const TEX = {
-  piece: (name) => `cell-${name}`,
-  boardCell: 'board-cell',
-  hole: 'board-hole',
-  ghost: 'cell-ghost',
+  piece: (name, cell) => `cell-${name}-${cell}`,
+  boardCell: (cell) => `board-cell-${cell}`,
+  hole: (cell) => `board-hole-${cell}`,
+  ghost: (cell) => `cell-ghost-${cell}`,
 };
 
 /**
@@ -33,14 +41,23 @@ export default class BootScene extends Phaser.Scene {
   }
 
   create() {
-    const size = LAYOUT.board.cell;
-    for (const piece of PIECES) {
-      this.makeTile(TEX.piece(piece.name), size, piece.color, true);
+    // 選べる盤ぶんをまとめて焼く。タイトルで選び直したときに焼く時間を
+    // 待たせないため（12 種 + 3 枚を 2 通り作っても、1 枚は数十 px 四方）。
+    for (const layout of Object.values(LAYOUTS)) {
+      this.makeTileSet(layout.board.cell);
     }
-    this.makeTile(TEX.boardCell, size, COLORS.boardCell, false);
-    this.makeTile(TEX.hole, size, COLORS.hole, false);
-    this.makeTile(TEX.ghost, size, COLORS.ghost, true);
+    this.registry.set(BOARD_REGISTRY_KEY, DEFAULT_BOARD_KEY);
     this.scene.start('Title');
+  }
+
+  /** 1 つの盤で使う 1 組（ピース 12 種と、盤のマス・穴・影）を焼く。 */
+  makeTileSet(size) {
+    for (const piece of PIECES) {
+      this.makeTile(TEX.piece(piece.name, size), size, piece.color, true);
+    }
+    this.makeTile(TEX.boardCell(size), size, COLORS.boardCell, false);
+    this.makeTile(TEX.hole(size), size, COLORS.hole, false);
+    this.makeTile(TEX.ghost(size), size, COLORS.ghost, true);
   }
 
   /**

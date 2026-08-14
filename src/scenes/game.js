@@ -8,7 +8,8 @@
  */
 
 import {
-  BOARD_SPEC, COLORS, FONT, INPUT, LAYOUT, OUTLINE, PIECES, TEXT_COLORS, VERSION,
+  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, INPUT, LAYOUTS, OUTLINE, PIECES,
+  TEXT_COLORS, VERSION,
 } from '../config.js';
 import {
   canPlace, createBoard, flip, formatTime, isSolved, normalize, outlineEdges, place,
@@ -33,7 +34,13 @@ export default class GameScene extends Phaser.Scene {
   create() {
     this.cameras.main.setBackgroundColor(COLORS.background);
 
-    this.board = createBoard(BOARD_SPEC);
+    // 盤はタイトルで選ぶ（TODO-009）。選び直せるのはタイトルだけなので、
+    // ここで 1 回読めば、このシーンが生きている間は変わらない。
+    this.boardKey = this.registry.get(BOARD_REGISTRY_KEY);
+    this.spec = BOARDS[this.boardKey];
+    this.layout = LAYOUTS[this.boardKey];
+
+    this.board = createBoard(this.spec);
     this.history = [];
     this.elapsed = 0;
     this.usedHint = false;
@@ -73,13 +80,14 @@ export default class GameScene extends Phaser.Scene {
   // ---- 画面の組み立て -------------------------------------------------
 
   drawBoard() {
-    const panel = LAYOUT.boardPanel;
+    const panel = this.layout.boardPanel;
     createPanel(this, panel.x, panel.y, panel.width, panel.height).setDepth(DEPTH.board);
-    const { x, y, cell } = LAYOUT.board;
+    const { x, y, cell } = this.layout.board;
     for (let row = 0; row < this.board.rows; row += 1) {
       for (let col = 0; col < this.board.cols; col += 1) {
         const playable = this.board.grid[row * this.board.cols + col] === null;
-        this.add.image(x + col * cell, y + row * cell, playable ? TEX.boardCell : TEX.hole)
+        this.add.image(x + col * cell, y + row * cell,
+                       playable ? TEX.boardCell(cell) : TEX.hole(cell))
           .setOrigin(0)
           .setDepth(DEPTH.board);
       }
@@ -87,7 +95,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   drawTray() {
-    const panel = LAYOUT.trayPanel;
+    const panel = this.layout.trayPanel;
     createPanel(this, panel.x, panel.y, panel.width, panel.height).setDepth(DEPTH.board);
   }
 
@@ -96,7 +104,8 @@ export default class GameScene extends Phaser.Scene {
     this.ghost = this.add.container(0, 0).setDepth(DEPTH.ghost).setVisible(false);
     this.ghostTiles = [];
     for (let i = 0; i < 5; i += 1) {
-      const tile = this.add.image(0, 0, TEX.ghost).setOrigin(0).setAlpha(0.28);
+      const tile = this.add.image(0, 0, TEX.ghost(this.layout.board.cell))
+        .setOrigin(0).setAlpha(0.28);
       this.ghost.add(tile);
       this.ghostTiles.push(tile);
     }
@@ -121,7 +130,8 @@ export default class GameScene extends Phaser.Scene {
       piece.shadow = this.add.graphics();
       piece.container.add(piece.shadow);
       for (let i = 0; i < piece.cells.length; i += 1) {
-        const tile = this.add.image(0, 0, TEX.piece(piece.name)).setOrigin(0);
+        const tile = this.add.image(0, 0, TEX.piece(piece.name, this.layout.board.cell))
+          .setOrigin(0);
         tile.setInteractive({ useHandCursor: true });
         tile.on('pointerdown', (pointer) => this.onPiecePointerDown(piece, pointer));
         piece.container.add(tile);
@@ -142,7 +152,7 @@ export default class GameScene extends Phaser.Scene {
    * 変わらないので、矩形とピースは 1 対 1 のまま固定でよい。
    */
   createTraySlots() {
-    const tray = LAYOUT.tray;
+    const tray = this.layout.tray;
     const slotWidth = tray.width / tray.cols;
     const slotHeight = tray.height / tray.rows;
     this.pieces.forEach((piece) => {
@@ -160,11 +170,11 @@ export default class GameScene extends Phaser.Scene {
 
   /**
    * 上部のメニューバー。縦画面では横幅が足りず、時間の表示とボタン 5 個が
-   * 1 段に並ばないので 2 段に折り返す（`LAYOUT.hud.rows`。TODO-011）。
+   * 1 段に並ばないので 2 段に折り返す（`this.layout.hud.rows`。TODO-011）。
    * 段の数だけで分かれるように書いてあるので、向きをここで見る必要はない。
    */
   createHud() {
-    const hud = LAYOUT.hud;
+    const hud = this.layout.hud;
     createPanel(this, hud.x, hud.y, hud.width, hud.height).setDepth(DEPTH.hud);
     const rowY = (row) => hud.y + hud.rowHeight * (row + 0.5);
 
@@ -211,7 +221,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createVersionText() {
-    this.add.text(LAYOUT.width - 12, LAYOUT.height - 12, VERSION, {
+    this.add.text(this.layout.width - 12, this.layout.height - 12, VERSION, {
       fontFamily: FONT.family,
       fontSize: `${FONT.small}px`,
       color: TEXT_COLORS.dim,
@@ -219,7 +229,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createMessage() {
-    this.messageText = this.add.text(LAYOUT.message.x, LAYOUT.message.y, '', {
+    this.messageText = this.add.text(this.layout.message.x, this.layout.message.y, '', {
       fontFamily: FONT.family,
       fontSize: `${FONT.body}px`,
       color: TEXT_COLORS.dim,
@@ -233,13 +243,13 @@ export default class GameScene extends Phaser.Scene {
    * （Phaser の入力は既定で最前面の対象だけに配る `topOnly` なので、これで足りる）。
    */
   createConfirmDialog() {
-    const cfg = LAYOUT.confirm;
-    const x = (LAYOUT.width - cfg.width) / 2;
-    const y = (LAYOUT.height - cfg.height) / 2;
+    const cfg = this.layout.confirm;
+    const x = (this.layout.width - cfg.width) / 2;
+    const y = (this.layout.height - cfg.height) / 2;
 
     this.confirmParts = [];
 
-    const backdrop = this.add.rectangle(0, 0, LAYOUT.width, LAYOUT.height, 0x000000, 0.55)
+    const backdrop = this.add.rectangle(0, 0, this.layout.width, this.layout.height, 0x000000, 0.55)
       .setOrigin(0).setDepth(DEPTH.confirm).setInteractive().setVisible(false);
     this.confirmParts.push(backdrop);
 
@@ -283,7 +293,7 @@ export default class GameScene extends Phaser.Scene {
 
   /** 今の向きに合わせて 5 枚のマスを並べ直す。枚数は変わらないので作り直さない。 */
   refreshPiece(piece) {
-    const cell = LAYOUT.board.cell;
+    const cell = this.layout.board.cell;
     piece.cells.forEach(([row, col], index) => {
       piece.tiles[index].setPosition(col * cell, row * cell);
     });
@@ -293,13 +303,13 @@ export default class GameScene extends Phaser.Scene {
   /**
    * シルエットの外周の縁取りと落ち影を引き直す。向きが変わるたびに呼ぶ。
    *
-   * 盤の 1 マス（`LAYOUT.board.cell`）の座標系で描いておけば、トレイでの
+   * 盤の 1 マス（`this.layout.board.cell`）の座標系で描いておけば、トレイでの
    * 縮小は Container の拡大率がそのまま効くので、描き分けが要らない。
    * 縁は線の太さの半分だけ内側へ寄せる。外へはみ出すと隣のピースにかぶり、
    * どちらの輪郭か分からなくなるため。
    */
   drawPieceEdges(piece) {
-    const cell = LAYOUT.board.cell;
+    const cell = this.layout.board.cell;
     const inset = OUTLINE.width / 2;
     const has = new Set(piece.cells.map(([row, col]) => `${row},${col}`));
 
@@ -326,15 +336,15 @@ export default class GameScene extends Phaser.Scene {
 
   /** 置かれている場所（盤かトレイか）から、Container の位置と拡大率を決める。 */
   pieceTransform(piece) {
-    const cell = LAYOUT.board.cell;
+    const cell = this.layout.board.cell;
     if (piece.location === 'board') {
       return {
-        x: LAYOUT.board.x + piece.col * cell,
-        y: LAYOUT.board.y + piece.row * cell,
+        x: this.layout.board.x + piece.col * cell,
+        y: this.layout.board.y + piece.row * cell,
         scale: 1,
       };
     }
-    const tray = LAYOUT.tray;
+    const tray = this.layout.tray;
     const slotWidth = tray.width / tray.cols;
     const slotHeight = tray.height / tray.rows;
     const centerX = tray.x + (piece.slot % tray.cols) * slotWidth + slotWidth / 2;
@@ -447,7 +457,7 @@ export default class GameScene extends Phaser.Scene {
     let offsetY = (pending.startY - piece.container.y) / scale;
     // 指で隠れないよう、タッチ操作のときだけピースを盤のマス 1 個ぶん上へ
     // ずらす。マウスでは指がないのでずらさない（`pointer.wasTouch` で見分ける）。
-    if (pointer.wasTouch) offsetY += LAYOUT.board.cell;
+    if (pointer.wasTouch) offsetY += this.layout.board.cell;
 
     const snapshot = this.snapshot();
     if (piece.location === 'board') this.board = remove(this.board, piece.name);
@@ -478,7 +488,7 @@ export default class GameScene extends Phaser.Scene {
    * 盤の上に見えているのに指は盤の外」がずれて起きる。
    */
   dropSpot() {
-    const { x, y, cell } = LAYOUT.board;
+    const { x, y, cell } = this.layout.board;
     const container = this.drag.piece.container;
     const overBoard = container.x >= x && container.x < x + this.board.cols * cell
       && container.y >= y && container.y < y + this.board.rows * cell;
@@ -490,8 +500,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   showGhost(piece, row, col) {
-    const cell = LAYOUT.board.cell;
-    this.ghost.setPosition(LAYOUT.board.x + col * cell, LAYOUT.board.y + row * cell);
+    const cell = this.layout.board.cell;
+    this.ghost.setPosition(this.layout.board.x + col * cell, this.layout.board.y + row * cell);
     piece.cells.forEach(([dr, dc], index) => {
       const tile = this.ghostTiles[index];
       tile.setPosition(dc * cell, dr * cell);

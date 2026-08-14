@@ -5,7 +5,9 @@
  * 経過時間を渡すところまでを受け持ち、保存の成否には関わらない。
  */
 
-import { COLORS, FONT, LAYOUT, TEXT_COLORS } from '../config.js';
+import {
+  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, SCREEN, TEXT_COLORS,
+} from '../config.js';
 import { formatTime } from '../logic.js';
 import { saveBest } from '../storage.js';
 import * as audio from '../audio.js';
@@ -25,7 +27,7 @@ const STACK = [
  * 余りのうち上へ回す割合。横画面の 0.44 は今までどおりの位置になる値で、
  * 縦画面は余りが増えるぶん下だけが空くので、素直に中央へ置く（TODO-011）。
  */
-const STACK_BIAS = LAYOUT.portrait ? 0.5 : 0.44;
+const STACK_BIAS = SCREEN.portrait ? 0.5 : 0.44;
 
 /** 枠の上端から見た、中の 3 行の中心。 */
 const PANEL_ROWS = { time: 48, best: 106, hint: 140 };
@@ -42,12 +44,14 @@ export default class ClearScene extends Phaser.Scene {
 
   create() {
     this.cameras.main.setBackgroundColor(COLORS.background);
-    const record = saveBest(this.elapsed);
+    // 記録は盤ごとに分けてあるので、どの盤を解いたのかを `registry` から読む。
+    const board = BOARDS[this.registry.get(BOARD_REGISTRY_KEY)];
+    const record = saveBest(board.key, this.elapsed);
     audio.fanfare();
 
-    const cx = LAYOUT.width / 2;
-    const [titleTop, panelTop, buttonTop] = stackTops(STACK, LAYOUT.height, STACK_BIAS);
-    const panelWidth = Math.min(440, LAYOUT.width - LAYOUT.margin * 2);
+    const cx = SCREEN.width / 2;
+    const [titleTop, panelTop, buttonTop] = stackTops(STACK, SCREEN.height, STACK_BIAS);
+    const panelWidth = Math.min(440, SCREEN.width - SCREEN.margin * 2);
 
     this.add.text(cx, titleTop + STACK[0].height / 2, 'COMPLETE', {
       fontFamily: FONT.family,
@@ -63,7 +67,10 @@ export default class ClearScene extends Phaser.Scene {
       color: TEXT_COLORS.normal,
     }).setOrigin(0.5);
 
-    const bestLine = record.updated ? '自己最短を更新' : `最短 ${formatTime(record.best)}`;
+    // 記録は盤ごとなので、どちらの盤の記録かが分かるように盤の名前を添える。
+    const bestLine = record.updated
+      ? `${board.label} の自己最短を更新`
+      : `${board.label} の最短 ${formatTime(record.best)}`;
     this.add.text(cx, panelTop + PANEL_ROWS.best, bestLine, {
       fontFamily: FONT.family,
       fontSize: `${FONT.hud}px`,

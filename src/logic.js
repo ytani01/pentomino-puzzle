@@ -95,9 +95,15 @@ export function outlineEdges(cells) {
   return edges;
 }
 
-/** 盤のうちピースを置けるマスを、行優先で並べて返す（穴は含まない）。 */
+/**
+ * 盤のうちピースを置けるマスを、行優先で並べて返す（穴は含まない）。
+ * 穴の無い盤（`hole: null`）は、大きさ 0 の穴として同じ道を通す。
+ */
 export function boardCells(spec) {
-  const { row: holeRow, col: holeCol, rows: holeRows, cols: holeCols } = spec.hole;
+  const hole = spec.hole || { row: 0, col: 0, rows: 0, cols: 0 };
+  const {
+    row: holeRow, col: holeCol, rows: holeRows, cols: holeCols,
+  } = hole;
   const cells = [];
   for (let row = 0; row < spec.rows; row += 1) {
     for (let col = 0; col < spec.cols; col += 1) {
