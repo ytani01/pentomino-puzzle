@@ -9,13 +9,14 @@
 
 import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, HINT_RETRIES, INPUT, LAYOUTS,
-  OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, VERSION,
+  OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, SOLVE_CHECK_DELAY,
+  SOLVE_CHECK_LIMIT, TEXT_COLORS, VERSION,
 } from '../config.js';
 import {
   canPlace, createBoard, flip, formatTime, isSolved, nextTurn, normalize, outlineEdges,
   place, remove, sameShape, shapeSize,
 } from '../logic.js';
-import { hintPlacement } from '../solver.js';
+import { hintPlacement, solve } from '../solver.js';
 import * as audio from '../audio.js';
 import { createButton, createPanel } from '../ui.js';
 import { darken, pieceColor, TEX } from './boot.js';
@@ -49,6 +50,12 @@ export default class GameScene extends Phaser.Scene {
     // 直前に出したヒント。[一手戻す] → [ヒント] で同じ手を繰り返さないために
     // 覚えておく（TODO-017）。一手戻しても消さない。
     this.lastHint = null;
+    // 解の有無を教えるモード（TODO-013）。既定は切。`usedCheck` はヒントと
+    // 同じく「求解に頼った」印で、クリアの画面まで持ち回る。
+    this.checking = false;
+    this.usedCheck = false;
+    this.checkState = null;
+    this.checkTimer = null;
     this.playing = true;
     this.pending = null;
     this.pendingTap = null;
@@ -175,9 +182,10 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 上部のメニューバー。縦画面では横幅が足りず、時間の表示とボタン 5 個が
-   * 1 段に並ばないので 2 段に折り返す（`this.layout.hud.rows`。TODO-011）。
-   * 段の数だけで分かれるように書いてあるので、向きをここで見る必要はない。
+   * 上部のメニューバー。縦画面では横幅が足りず、時間の表示とボタン 6 個が
+   * 1 段に並ばないので折り返す（`this.layout.hud`。TODO-011、TODO-013）。
+   * 何個ずつ何段目からかは配置（`config.js`）が決めるので、向きをここで見る
+   * 必要はない。
    */
   createHud() {
     const hud = this.layout.hud;
@@ -190,40 +198,58 @@ export default class GameScene extends Phaser.Scene {
       color: TEXT_COLORS.normal,
     }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
 
-    this.remainText = this.add.text(hud.x + hud.padding + 110, rowY(0), '', {
+    this.remainText = this.add.text(hud.x + hud.padding + hud.remainX, rowY(0), '', {
       fontFamily: FONT.family,
       fontSize: `${FONT.hud}px`,
       color: TEXT_COLORS.dim,
     }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
 
+    // 解の有無（TODO-013）。切のうちは空にしておくので、モードを使わなければ
+    // 今までどおりの見た目のまま。横画面では同じ段にボタンが続くので小さめ。
+    this.checkText = this.add.text(hud.x + hud.padding + hud.statusX, rowY(0), '', {
+      fontFamily: FONT.family,
+      fontSize: `${FONT.small}px`,
+      color: TEXT_COLORS.dim,
+    }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
+
+    // 前半 3 つが「解くのを助けるもの」、後半 3 つが「遊び方を変えるもの」。
+    // 縦画面ではこの 3 つずつがそのまま 1 段になる。
     const labels = [
-      '一手戻す', 'ヒント', 'やり直し', audio.isMuted() ? '音 OFF' : '音 ON', 'タイトルへ',
+      '一手戻す', 'ヒント', '詰み表示',
+      'やり直し', audio.isMuted() ? '音 OFF' : '音 ON', 'タイトルへ',
     ];
     const actions = [
       () => this.undo(),
       () => this.useHint(),
+      () => this.toggleCheck(),
       () => this.restart(),
       () => this.toggleMute(),
       () => this.confirmToTitle(),
     ];
-    // ボタンは最後の段に置く。1 段なら時間の表示と並ぶので右へ寄せ、
-    // 2 段なら段まるごとをボタンが使うので中央へ置く。
-    const total = labels.length * hud.buttonWidth + (labels.length - 1) * hud.gap;
-    const left = hud.rows > 1
-      ? hud.x + (hud.width - total) / 2
-      : hud.x + hud.width - hud.padding - total;
-    this.buttons = labels.map((label, index) => createButton(this, {
-      x: left + hud.buttonWidth / 2 + index * (hud.buttonWidth + hud.gap),
-      y: rowY(hud.rows - 1),
-      width: hud.buttonWidth,
-      height: hud.buttonHeight,
-      label,
-      fontSize: FONT.small,
-      onClick: actions[index],
-    }).setDepth(DEPTH.hud));
+    // ボタンだけの段は中央へ、時間の表示と分け合う段（横画面の 1 段目）は右へ寄せる。
+    const perRow = hud.buttonsPerRow;
+    const centered = hud.firstButtonRow > 0;
+    this.buttons = labels.map((label, index) => {
+      const row = Math.floor(index / perRow);
+      const count = Math.min(perRow, labels.length - row * perRow);
+      const total = count * hud.buttonWidth + (count - 1) * hud.gap;
+      const left = centered
+        ? hud.x + (hud.width - total) / 2
+        : hud.x + hud.width - hud.padding - total;
+      return createButton(this, {
+        x: left + hud.buttonWidth / 2 + (index % perRow) * (hud.buttonWidth + hud.gap),
+        y: rowY(hud.firstButtonRow + row),
+        width: hud.buttonWidth,
+        height: hud.buttonHeight,
+        label,
+        fontSize: FONT.small,
+        onClick: actions[index],
+      }).setDepth(DEPTH.hud);
+    });
     this.undoButton = this.buttons[0];
     this.hintButton = this.buttons[1];
-    this.muteButton = this.buttons[3];
+    this.checkButton = this.buttons[2];
+    this.muteButton = this.buttons[4];
   }
 
   createVersionText() {
@@ -721,6 +747,75 @@ export default class GameScene extends Phaser.Scene {
       && sameShape(last.cells, placement.cells);
   }
 
+  // ---- 解の有無を教えるモード（TODO-013）-------------------------------
+
+  /**
+   * 入／切を切り替える。ラベルは変えず、選んである状態（`setSelected`）で出す
+   * ──「音 ON／音 OFF」のように文字で持つと、切のときに何の入／切なのかは
+   * 分かっても、今どちらなのかを読み違えやすいため。
+   */
+  toggleCheck() {
+    audio.button();
+    this.checking = !this.checking;
+    this.checkButton.setSelected(this.checking);
+    if (this.checking) {
+      // 一度でも入にしたら、求解に頼ったものとして扱う（TODO-020 へ渡す）。
+      this.usedCheck = true;
+      this.scheduleCheck();
+      return;
+    }
+    this.cancelCheck();
+    this.checkState = null;
+    this.checkText.setText('');
+  }
+
+  /**
+   * 盤が変わるたびに呼ぶ。その場では回さず `SOLVE_CHECK_DELAY` だけ待つのは、
+   * 置いたピースが収まる動きの最中に画面を止めないため。待っている間に次の
+   * 変更が来たら予約を取り直すので、続けて操作したぶんは 1 回にまとまる。
+   */
+  scheduleCheck() {
+    this.cancelCheck();
+    if (!this.checking) return;
+    this.checkTimer = this.time.delayedCall(SOLVE_CHECK_DELAY, () => {
+      this.checkTimer = null;
+      this.runCheck();
+    });
+  }
+
+  cancelCheck() {
+    if (this.checkTimer) this.checkTimer.remove();
+    this.checkTimer = null;
+  }
+
+  /**
+   * 残りのピースで最後まで置けるかを調べて出す。上限を `SOLVE_CHECK_LIMIT` まで
+   * 下げてあるので（根拠は `config.js`）、**打ち切ったときは「詰み」と言えない**。
+   * `solve()` が `reason` で区別してくれるので、そのまま言い方を分ける。
+   */
+  runCheck() {
+    const names = this.pieces.filter((piece) => piece.location === 'tray').map((p) => p.name);
+    if (names.length === 0) {
+      this.checkState = null;
+      this.checkText.setText('');
+      return;
+    }
+    const result = solve(this.board, names, { limit: SOLVE_CHECK_LIMIT });
+    let state = 'dead';
+    if (result.ok) state = 'ok';
+    else if (result.reason === 'limit') state = 'unknown';
+
+    // 音は詰みに変わった瞬間だけ。毎回鳴らすと置くたびに鳴って邪魔になる。
+    if (state === 'dead' && this.checkState !== 'dead') audio.invalid();
+    this.checkState = state;
+
+    const text = { ok: '解ける', dead: 'もう解けない', unknown: '分からない' };
+    const color = {
+      ok: TEXT_COLORS.dim, dead: TEXT_COLORS.danger, unknown: TEXT_COLORS.disabled,
+    };
+    this.checkText.setText(text[state]).setColor(color[state]);
+  }
+
   restart() {
     audio.button();
     this.scene.restart();
@@ -754,6 +849,9 @@ export default class GameScene extends Phaser.Scene {
     this.remainText.setText(`残り ${left}`);
     this.undoButton.setEnabled(this.playing && this.history.length > 0);
     this.hintButton.setEnabled(this.playing && left > 0);
+    // 盤が変わるところは置く・外す・向きを変える・戻す・ヒントのどれも
+    // ここを通るので、解の有無を調べ直す入口をここ 1 つにまとめてある。
+    this.scheduleCheck();
   }
 
   showMessage(text) {
@@ -771,7 +869,9 @@ export default class GameScene extends Phaser.Scene {
     this.refreshHud();
     this.showMessage('完成');
     this.time.delayedCall(700, () => {
-      this.scene.start('Clear', { ms: this.elapsed, usedHint: this.usedHint });
+      this.scene.start('Clear', {
+        ms: this.elapsed, usedHint: this.usedHint, usedCheck: this.usedCheck,
+      });
     });
   }
 }

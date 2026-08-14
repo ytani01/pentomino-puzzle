@@ -40,6 +40,7 @@ export default class ClearScene extends Phaser.Scene {
   init(data) {
     this.elapsed = data && typeof data.ms === 'number' ? data.ms : 0;
     this.usedHint = !!(data && data.usedHint);
+    this.usedCheck = !!(data && data.usedCheck);
   }
 
   create() {
@@ -77,9 +78,13 @@ export default class ClearScene extends Phaser.Scene {
       color: record.updated ? TEXT_COLORS.accent : TEXT_COLORS.dim,
     }).setOrigin(0.5);
 
-    // ヒントを使ったかどうかは、記録の扱いを変えるほどではないが伝えておく。
-    if (this.usedHint) {
-      this.add.text(cx, panelTop + PANEL_ROWS.hint, 'ヒントを使った', {
+    // 求解に頼ったかどうかは、記録の扱いを変えるほどではないが伝えておく
+    // （どちらも「自力ではない」と見なすかは TODO-020 で決め直す）。
+    const helps = [];
+    if (this.usedHint) helps.push('ヒント');
+    if (this.usedCheck) helps.push('詰み表示');
+    if (helps.length > 0) {
+      this.add.text(cx, panelTop + PANEL_ROWS.hint, `${helps.join('と')}を使った`, {
         fontFamily: FONT.family,
         fontSize: `${FONT.small}px`,
         color: TEXT_COLORS.dim,

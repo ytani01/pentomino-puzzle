@@ -171,6 +171,14 @@ const PANEL_PAD = 10;      // 枠と、その中身の間
 const GAP = 12;            // 枠どうしの間
 const HUD_TOP = 10;        // 画面の上端と HUD の間
 const HUD_ROW = 52;        // HUD 1 段ぶんの高さ
+const HUD_PAD = 24;        // HUD の枠と、その中身の間
+const HUD_GAP = 10;        // ボタンどうしの間
+const HUD_BUTTONS = 6;     // HUD に並ぶボタンの数（`game.js` の `labels` と合わせる）
+const HUD_BUTTON_MAX = 104; // ボタン 1 個の幅。場所が足りなければここから詰める
+const HUD_BUTTON_HEIGHT = 40;
+const HUD_REMAIN_X = 110;  // 段の中身の左端から見た「残り n」の位置
+const HUD_STATUS_X = 210;  // 同じく、解の有無（TODO-013）の位置
+const HUD_STATUS_W = 100;  // その文字が使う幅。「もう解けない」6 文字ぶん（`FONT.small`）
 const MESSAGE_BAND = 34;   // 画面の下端に空ける、メッセージ 1 行ぶんの帯
 const TRAY_SPAN = 5;       // ペントミノは縦横どちらにも最大 5 マス（`I` の向き次第）
 const TRAY_SLOT_PAD = 12;  // トレイの 1 スロットで、ピースの周りに空ける分
@@ -217,19 +225,35 @@ function screenSize(portrait) {
 export function makeLayout({ portrait, board }) {
   const { width, height } = screenSize(portrait);
 
-  // 縦画面は横幅が狭く、ボタン 5 個と時間の表示が 1 段に並ばないので 2 段にする。
-  const hudRows = portrait ? 2 : 1;
+  // 縦画面は横幅が狭く、ボタン 6 個が 1 段に並ばないので 3 個ずつ折り返す
+  // （TODO-013 でボタンが 6 個になり、幅を詰めても 1 段には収まらなくなった）。
+  const buttonsPerRow = portrait ? 3 : HUD_BUTTONS;
+  const buttonRows = Math.ceil(HUD_BUTTONS / buttonsPerRow);
+  // 横画面はボタンが時間・残り・解の有無と同じ段に並ぶ。縦画面は文字の段を別に持つ。
+  const hudRows = portrait ? buttonRows + 1 : buttonRows;
+  const hudWidth = width - MARGIN * 2;
+  // ボタンの左端の下限。同じ段に文字が並ぶ横画面だけ、その分を空ける。
+  const buttonsLeft = portrait ? 0 : HUD_PAD + HUD_STATUS_X + HUD_STATUS_W + HUD_GAP;
+  // 幅は上限から詰める。横画面の 6 個は 104 では文字とぶつかるので 85 まで縮む。
+  const buttonWidth = Math.min(HUD_BUTTON_MAX, Math.floor(
+    ((hudWidth - HUD_PAD - buttonsLeft) - HUD_GAP * (buttonsPerRow - 1)) / buttonsPerRow,
+  ));
   const hud = {
     x: MARGIN,
     y: HUD_TOP,
-    width: width - MARGIN * 2,
+    width: hudWidth,
     height: HUD_ROW * hudRows,
     rows: hudRows,
     rowHeight: HUD_ROW,
-    padding: 24,
-    gap: 10,
-    buttonWidth: 104,
-    buttonHeight: 40,
+    padding: HUD_PAD,
+    gap: HUD_GAP,
+    buttonWidth,
+    buttonHeight: HUD_BUTTON_HEIGHT,
+    buttonsPerRow,
+    // ボタンが始まる段。0 なら文字と同じ段に並ぶ（横画面）。
+    firstButtonRow: hudRows - buttonRows,
+    remainX: HUD_REMAIN_X,
+    statusX: HUD_STATUS_X,
   };
 
   // HUD の下からメッセージの帯の上までが、盤とトレイで分け合う範囲。
@@ -451,6 +475,39 @@ export const INPUT = {
  * 変えたときに画面が固まらないようにするため。
  */
 export const SOLVER_LIMIT = 8000000;
+
+/**
+ * 「解の有無を教えるモード」の打ち切り上限（TODO-013）。
+ *
+ * このモードは**置く・外すのたびに求解する**ので、`SOLVER_LIMIT` のままでは
+ * 待たされる。実測（1 個だけ置いた盤面をすべて総当たり）では:
+ *
+ * - 重いのは**盤にピースが 1 個だけのとき**だけ。8×8 で詰みの盤面の最悪が
+ *   500ms、2 個置くと 55ms、3 個で 3ms まで落ちる（正しい解をなぞる 11 手は
+ *   合計 28ms）。上限を下げる意味があるのは、事実上この 1 手目・2 手目だけ
+ * - 8×8 で詰みの 700 通りを「詰み」と言い切れる割合は、10 万回で 88.3%、
+ *   20 万回で 96.9%、30 万回で 98.9%、50 万回で 100%
+ *
+ * この 30 万回で回したときの実測（置き方すべて。上が解ける／詰みと言い切れた／
+ * 分からない）:
+ *
+ * - 8×8 … 1568 通りのうち 868 / 692 / 8。詰み側の 98.9% を言い切れる。最悪 241ms
+ * - 6×10 … 2056 通りのうち 1805 / 166 / 85。詰み側は 66.1% どまり。最悪 238ms
+ *
+ * **言い切れなかったぶんは「詰み」ではなく「分からない」と出す**（`solve()` の
+ * `reason` が `'limit'`）。6×10 で 3 分の 1 ほど取りこぼすが、そもそも 1 手目で
+ * 詰む置き方が 2056 通り中 251 通りと少なく、待たされないほうを優先している。
+ */
+export const SOLVE_CHECK_LIMIT = 300000;
+
+/**
+ * 盤が変わってから、上のモードが調べ始めるまでの待ち（ミリ秒）。
+ *
+ * その場で回さないのは、置いたピースが収まる動き（`INPUT.returnTweenMs`）の
+ * 最中に画面が止まらないようにするため。続けて操作したときに毎手ぶん
+ * 回さずに済む間引きも兼ねる（待っている間に次の変更が来たら取り直す）。
+ */
+export const SOLVE_CHECK_DELAY = 250;
 
 /**
  * 直前と同じヒントが出たときに、探索順を混ぜて引き直す回数（TODO-017）。
