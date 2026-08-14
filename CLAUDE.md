@@ -79,6 +79,10 @@ GitHub 上での設定・公開手順は [docs/developer.md](docs/developer.md) 
   行を丸ごと文字列一致で探す。**この行の書き方を変えたら
   `.github/workflows/pages.yml` も直す**（見つからなければジョブが失敗して
   気づけるようにしてある。`dev` のまま静かに公開されることはない）
+- **タグ付けまでは Claude が行い、push は利用者が行う。** `git tag vX.Y.Z -m "..."`
+  で作るところまでで止め、`git push origin vX.Y.Z` は実行せずコマンドを
+  提示する（push は GitHub Pages の公開ワークフローを実際に動かす、
+  取り消しにくい操作のため）
 
 ## 作業の進め方
 
