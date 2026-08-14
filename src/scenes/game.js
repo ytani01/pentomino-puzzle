@@ -8,7 +8,7 @@
  */
 
 import {
-  BOARD_SPEC, COLORS, FONT, INPUT, LAYOUT, PIECES, TEXT_COLORS,
+  BOARD_SPEC, COLORS, FONT, INPUT, LAYOUT, PIECES, TEXT_COLORS, VERSION,
 } from '../config.js';
 import {
   canPlace, createBoard, flip, formatTime, isSolved, normalize, place, remove,
@@ -48,6 +48,7 @@ export default class GameScene extends Phaser.Scene {
     this.createHud();
     this.createMessage();
     this.createConfirmDialog();
+    this.createVersionText();
 
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
@@ -165,6 +166,14 @@ export default class GameScene extends Phaser.Scene {
     this.undoButton = this.buttons[0];
     this.hintButton = this.buttons[1];
     this.muteButton = this.buttons[3];
+  }
+
+  createVersionText() {
+    this.add.text(LAYOUT.width - 12, LAYOUT.height - 12, VERSION, {
+      fontFamily: FONT.family,
+      fontSize: `${FONT.small}px`,
+      color: TEXT_COLORS.dim,
+    }).setOrigin(1, 1).setAlpha(0.6);
   }
 
   createMessage() {
