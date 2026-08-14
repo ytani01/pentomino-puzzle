@@ -1,0 +1,66 @@
+# CLAUDE.md
+
+このリポジトリで作業するときの指針（Claude Code 用）。
+
+## プロジェクト概要
+
+Pentomino Puzzle — ブラウザで遊ぶペントミノの敷き詰めパズル。
+8×8 の中央 2×2 を穴にした 60 マスへ、ペントミノ 12 種をすべて置く。
+
+- **ビルド工程を持たない。** 依存は Phaser 3.90.0（CDN、バージョン固定）だけで、
+  **新しいライブラリを追加しない**。Node.js も npm も要らない
+- **画像・音声アセットを持たない。** 絵は Graphics API で実行時に生成し（`src/scenes/boot.js`）、
+  効果音は Web Audio API で合成する（`src/audio.js`）
+- 自動テストは `tests.html` の 1 層だけ（依存なし）。リンタ・型チェックは入れていない
+- Phaser は CDN からグローバルとして読み込む。自前のコードだけを ES Modules で分割する。
+  そのため **`file://` では動かない**（確認は必ずローカルサーバ経由で）
+
+## 実行と確認
+
+```bash
+python3 -m http.server 8765
+#   http://localhost:8765/           … パズル本体
+#   http://localhost:8765/tests.html … 計算のテスト
+```
+
+`src/main.js` は `window.game` に Phaser のインスタンスを入れてある。
+ブラウザのコンソールや自動操作から `window.game.scene.getScene('Game')` で
+状態を覗ける（ゲーム本体はこれを参照しない）。
+
+## 規約
+
+- **`setTimeout` / `setInterval` を使わない。** 遅延実行は `scene.time.delayedCall()`、
+  アニメーションは `scene.tweens`（シーンを切り替えたときに止められず、
+  前の画面の処理が残るため）。Web Audio の予約（`ctx.currentTime + t`）は別
+- **状態はシーンのプロパティに持たせる。** モジュールのトップレベルに
+  書き換わる `let` を置かない（例外は `src/audio.js` の AudioContext と
+  ミュートの状態。ゲームの進行とは別に持つ必要があるもの）
+- **数値と色は `src/config.js` に集約する。** 色をコードへ直接書かない。
+  CSS 側（`index.html`）が持つのは画面の地の色だけ
+- **Phaser に依存しない計算は `src/logic.js` と `src/solver.js` に置く。**
+  `tests.html` から確かめられるようにするため。ここに DOM や Phaser を持ち込まない
+- **盤面は書き換えず、作り直して返す。** Undo の履歴が壊れないようにするため
+- JSDoc には「何をするか」でなく **「なぜそうするのか」** を書く。
+  中身のない `/** */` を残さない
+
+## ファイル構成
+
+| ファイル | 役割 |
+|---|---|
+| `index.html` | HTML / CSS、Phaser の読み込み、起動できなかったときの案内 |
+| `src/main.js` | Phaser の設定とシーンの登録 |
+| `src/config.js` | 盤面の定義、12 種のピースの形と色、マスの大きさ、レイアウト |
+| `src/logic.js` | 向きの生成・正規化、配置判定、盤面の更新、時間の整形（純関数） |
+| `src/solver.js` | ヒント用の求解（純関数） |
+| `src/audio.js` | 効果音の合成。最初のユーザー操作で `unlock()` を呼ぶ |
+| `src/storage.js` | クリア記録（最短時間）の保存（失敗しても遊べるようにする） |
+| `src/scenes/boot.js` | マス目テクスチャの生成。ピースの色ごとに 1 枚 |
+| `src/scenes/title.js` | タイトル |
+| `src/scenes/game.js` | 本編。Phaser とのつなぎに徹し、判定は `logic.js` に任せる |
+| `src/scenes/clear.js` | クリア表示と記録の更新 |
+| `tests.html` | 計算のテスト（ブラウザで開くだけ） |
+
+## 作業の進め方
+
+`TODO.md` に項目を立ててから着手する（決着したものは `archives/todo/` へ）。
+詳しくはユーザー全体の `CLAUDE.md` に従う。
