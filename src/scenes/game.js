@@ -12,8 +12,8 @@ import {
   OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, VERSION,
 } from '../config.js';
 import {
-  canPlace, createBoard, flip, formatTime, isSolved, normalize, outlineEdges, place,
-  remove, rotateCw, sameShape, shapeSize,
+  canPlace, createBoard, flip, formatTime, isSolved, nextTurn, normalize, outlineEdges,
+  place, remove, sameShape, shapeSize,
 } from '../logic.js';
 import { hintPlacement } from '../solver.js';
 import * as audio from '../audio.js';
@@ -405,9 +405,9 @@ export default class GameScene extends Phaser.Scene {
     if (moved > INPUT.dragThreshold) this.startDrag(pointer);
   }
 
-  /** タップは既定で回転だが、`INPUT.doubleTapMs` 以内に同じピースへ 2 回目の
-   *  タップが来たら反転に差し替える。1 回目の回転をその猶予ぶん遅らせて
-   *  待つことで、反転の直前に絵が跳ねないようにしている。 */
+  /** タップは既定で「次の向き」へ進めるが、`INPUT.doubleTapMs` 以内に同じ
+   *  ピースへ 2 回目のタップが来たら反転に差し替える。1 回目をその猶予ぶん
+   *  遅らせて待つことで、反転の直前に絵が跳ねないようにしている。 */
   onPointerUp(pointer) {
     if (this.drag) {
       this.dropDrag();
@@ -436,7 +436,7 @@ export default class GameScene extends Phaser.Scene {
       y: pointer.y,
       timer: this.time.delayedCall(INPUT.doubleTapMs, () => {
         this.pendingTap = null;
-        this.applyOrientation(piece, normalize(rotateCw(piece.cells)), audio.rotate);
+        this.turnPiece(piece);
       }),
     };
   }
@@ -579,6 +579,19 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // ---- 向きの変更 -----------------------------------------------------
+
+  /**
+   * タップ 1 つで次の向きへ進める（TODO-019）。`turnOrder()` の並びは
+   * 90° 回転と、その場の裏返しが混ざるので、どちらの動きになったかを
+   * 見て音を選ぶ。X のように向きが 1 通りしかないピースは変化しないので、
+   * 回転の音だけが鳴る（タップが届いたことは伝わる）。
+   */
+  turnPiece(piece) {
+    const next = nextTurn(piece.cells);
+    const flipped = !sameShape(next, piece.cells)
+      && sameShape(next, normalize(flip(piece.cells)));
+    this.applyOrientation(piece, next, flipped ? audio.flip : audio.rotate);
+  }
 
   /**
    * 回転・反転をまとめて受ける。盤に置いてあるピースはその場で向きを変えるので、

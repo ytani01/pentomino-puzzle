@@ -40,7 +40,8 @@
 <script type="module">
 import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, SOLVER_LIMIT } from './src/config.js';
 import {
-  normalize, rotateCw, flip, sameShape, orientations, shapeSize, outlineEdges,
+  normalize, rotateCw, flip, sameShape, orientations, turnOrder, nextTurn,
+  shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
 } from './src/logic.js';
@@ -201,6 +202,56 @@ test('同じ向きが 2 つ出てこない', () => {
       }
     }
   }
+});
+
+test('turnOrder は orientations と同じ向きを、重複なく並べる', () => {
+  for (const piece of PIECES) {
+    const order = turnOrder(piece.cells);
+    const known = orientations(piece.cells);
+    assertSame(order.length, known.length, `${piece.name} の数が違う`);
+    for (const shape of order) {
+      assert(known.some((one) => sameShape(one, shape)), `${piece.name} に知らない向き`);
+    }
+    for (let i = 0; i < order.length; i += 1) {
+      for (let j = i + 1; j < order.length; j += 1) {
+        assert(!sameShape(order[i], order[j]), `${piece.name} に同じ向きが 2 つある`);
+      }
+    }
+  }
+});
+
+test('turnOrder の隣どうしは、90° 回転かその場の裏返しで移れる', () => {
+  for (const piece of PIECES) {
+    const order = turnOrder(piece.cells);
+    if (order.length < 2) continue;   // X は 1 通りしかないので巡りようがない
+    for (let i = 0; i < order.length; i += 1) {
+      const from = order[i];
+      const to = order[(i + 1) % order.length];
+      const ok = sameShape(to, rotateCw(from)) || sameShape(to, flip(from));
+      assert(ok, `${piece.name} の ${i} 番目から次へ飛んでいる`);
+    }
+  }
+});
+
+test('nextTurn を向きの数だけ繰り返すと元へ戻り、途中で全部を通る', () => {
+  for (const piece of PIECES) {
+    const start = normalize(piece.cells);
+    const seen = [];
+    let current = start;
+    for (let i = 0; i < orientations(piece.cells).length; i += 1) {
+      seen.push(current);
+      current = nextTurn(current);
+    }
+    assert(sameShape(current, start), `${piece.name} が戻らない`);
+    for (const shape of orientations(piece.cells)) {
+      assert(seen.some((one) => sameShape(one, shape)), `${piece.name} に通らない向き`);
+    }
+  }
+});
+
+test('X は nextTurn でも向きが変わらない', () => {
+  const start = normalize(cellsOf('X'));
+  assert(sameShape(nextTurn(start), start), 'X の向きが変わった');
 });
 
 test('どの向きも 5 マスのまま', () => {

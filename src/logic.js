@@ -63,6 +63,61 @@ export function orientations(cells) {
   return found;
 }
 
+/** 向きどうしを並べ替えるための鍵。マスは 0〜4 なので桁が揃い、文字列の比較で足りる。 */
+function shapeKey(cells) {
+  return cells.map(([row, col]) => `${row}${col}`).join('');
+}
+
+/**
+ * その形の向き全部から、いつも同じ 1 つを選ぶ。巡りの起点をここに固定しないと、
+ * 「今の向き」から数え始めることになり、巡りが表側の 4 通りだけで閉じてしまう。
+ */
+function baseTurn(cells) {
+  let base = null;
+  for (const shape of orientations(cells)) {
+    if (base === null || shapeKey(shape) < shapeKey(base)) base = shape;
+  }
+  return base;
+}
+
+/**
+ * タップで順に巡るときの向きの並び（TODO-019）。
+ *
+ * `orientations()` の並びをそのまま使うと、表を 4 回転したあと裏の起点へ
+ * 移るところで、絵が「別の角度の鏡像」へ飛んで見える。ここでは裏の起点を
+ * 「表の最後の向きをその場で裏返したもの」に取るので、隣り合う向きの
+ * 変化は必ず 90° 回転か、その場の裏返しのどちらかになる
+ * （最後から先頭へ戻るところも裏返しになる）。
+ *
+ * 探索の順を変えると `solver.js` の実測値が変わってしまうので、
+ * `orientations()` 自体の並びには手を入れずに別の関数として持つ。
+ */
+export function turnOrder(cells) {
+  const order = [];
+  let current = baseTurn(cells);
+  for (let side = 0; side < 2; side += 1) {
+    let last = current;
+    for (let turn = 0; turn < 4; turn += 1) {
+      if (!order.some((known) => sameShape(known, current))) order.push(current);
+      last = current;
+      current = rotateCw(current);
+    }
+    current = flip(last);
+  }
+  return order;
+}
+
+/**
+ * 今の向きの次を返す。並びの最後まで来たら先頭へ戻る。
+ * X のように向きが 1 通りしかないピースは、同じ向きがそのまま返る。
+ */
+export function nextTurn(cells) {
+  const order = turnOrder(cells);
+  const shape = normalize(cells);
+  const index = order.findIndex((known) => sameShape(known, shape));
+  return order[(index + 1) % order.length];
+}
+
 /** 正規形から、その向きの外接矩形の大きさを返す。トレイでの中央寄せに使う。 */
 export function shapeSize(cells) {
   let rows = 0;
