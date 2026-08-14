@@ -27,6 +27,67 @@ python3 -m http.server 8765
 ブラウザのコンソールや自動操作から `window.game.scene.getScene('Game')` で
 状態を覗ける（ゲーム本体はこれを参照しない）。
 
+### 画面を撮って確かめる
+
+見た目の確認（スマホの横画面ではみ出さないか、など）は、Playwright に同梱の
+Chromium を headless で動かして撮る。**この環境では Claude のブラウザ拡張
+（claude-in-chrome）も Playwright MCP も使えなかった**（拡張は未接続、MCP は
+`chrome` チャンネルを探して見つからない）。同梱の Chromium だけは入っている。
+
+```bash
+CHROME=$(echo ~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome)
+```
+
+タイトル画面のように、開いただけの状態でよければ `--screenshot` で足りる。
+
+```bash
+$CHROME --headless=new --disable-gpu --hide-scrollbars \
+  --window-size=667,375 --virtual-time-budget=6000 \
+  --screenshot=out.png http://localhost:8765/
+```
+
+ゲーム本編のように**画面を進めてから撮る**ときは、`--remote-debugging-port`
+付きで起動し、CDP を直接叩く。Node.js には WebSocket が組み込みで入っているので、
+npm への追加インストールは要らない（このリポジトリに依存を増やさないため）。
+
+```javascript
+// node shot.mjs <port> <幅> <高さ> <出力先>
+import fs from 'node:fs';
+const [,, port, w, h, out] = process.argv;
+const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+const ws = new WebSocket(targets.find(x => x.type === 'page').webSocketDebuggerUrl);
+let id = 0; const pend = new Map();
+const send = (method, params) => new Promise(r => {
+  const i = ++id; pend.set(i, r); ws.send(JSON.stringify({id: i, method, params}));
+});
+ws.onmessage = e => {
+  const m = JSON.parse(e.data);
+  if (m.id && pend.has(m.id)) { pend.get(m.id)(m.result); pend.delete(m.id); }
+};
+await new Promise(r => ws.onopen = r);
+// mobile: true にするとスマホとして扱われる（画面の大きさだけでなく操作系も）
+await send('Emulation.setDeviceMetricsOverride',
+           {width: +w, height: +h, deviceScaleFactor: 1, mobile: true});
+await send('Page.navigate', {url: 'http://localhost:8765/'});
+await new Promise(r => setTimeout(r, 3000));   // Phaser の起動を待つ
+await send('Runtime.evaluate',
+           {expression: "window.game.scene.getScene('Title').scene.start('Game')"});
+await new Promise(r => setTimeout(r, 2500));   // 画面が組み上がるのを待つ
+fs.writeFileSync(out, Buffer.from((await send('Page.captureScreenshot',
+                                              {format: 'png'})).data, 'base64'));
+ws.close();
+```
+
+- 起動は `$CHROME --headless=new --disable-gpu --hide-scrollbars \`
+  `--remote-debugging-port=9222 --user-data-dir=<一時ディレクトリ> about:blank &`。
+  一度立てれば、上のスクリプトを幅・高さを変えて何度も呼べる
+- スマホ横画面の確認に使った大きさ: `568x320`（iPhone SE 初代）、`667x375`、
+  `844x390`、`915x412`。**一番厳しいのは 568x320**
+- 撮り終えたら Chromium を止める。`pgrep -f` は**自分自身にマッチする**ので、
+  止まったかどうかは `ps -eo pid,comm | grep -i chrome` で確かめる
+  （`pgrep` の出力が毎回違う PID になるのは、消し残りではなく `pgrep` 自身）
+- WebGL 由来の `GPU stall due to ReadPixels` が大量に出るが、画像は撮れている
+
 ## 規約
 
 - **`setTimeout` / `setInterval` を使わない。** 遅延実行は `scene.time.delayedCall()`、
