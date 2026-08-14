@@ -25,6 +25,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 解のデータ（src/data/*.js）は tools/gen-solutions.mjs が作ってコミットして
+      # ある。データとコードがずれると間違ったヒントを静かに出すので、公開の前に
+      # 作り直して突き合わせる（TODO-022）。6×10 の数え上げに数分かかるが、
+      # 動くのはタグを押したときだけ。
+      #
+      # Node を入れ直すのは、`src/*.js` を Node から import するのに
+      # 構文検出（v22.7 以降）が要るため。ubuntu-latest の既定より確実に新しくする。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: 解のデータがコードと合っているかを調べる
+        run: node tools/gen-solutions.mjs --check
+
       - name: タグ名を VERSION に埋め込む
         run: |
           set -eu

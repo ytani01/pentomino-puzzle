@@ -9,8 +9,9 @@ import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, SCREEN, TEXT_COLORS,
 } from '../config.js';
 import { formatTime } from '../logic.js';
+import { cachedSolutions } from '../solutions.js';
 import {
-  addHistory, loadBest, saveBest, shouldRecord,
+  addFound, addHistory, loadBest, saveBest, shouldRecord,
 } from '../storage.js';
 import * as audio from '../audio.js';
 import { createButton, createPanel, stackTops } from '../ui.js';
@@ -21,7 +22,7 @@ import { createButton, createPanel, stackTops } from '../ui.js';
  */
 const STACK = [
   { key: 'title', height: 52, gap: 44 },
-  { key: 'panel', height: 170, gap: 40 },
+  { key: 'panel', height: 190, gap: 40 },
   { key: 'buttons', height: 52, gap: 0 },
 ];
 
@@ -31,8 +32,13 @@ const STACK = [
  */
 const STACK_BIAS = SCREEN.portrait ? 0.5 : 0.44;
 
-/** 枠の上端から見た、中の 3 行の中心。 */
-const PANEL_ROWS = { time: 48, best: 106, hint: 140 };
+/**
+ * 枠の上端から見た、中の 4 行の中心。`number`（何番の解か。TODO-022）を
+ * 足したぶん枠を 20 だけ高くしてある（`STACK` の `panel`）。
+ */
+const PANEL_ROWS = {
+  time: 46, number: 92, best: 128, hint: 160,
+};
 
 export default class ClearScene extends Phaser.Scene {
   constructor() {
@@ -43,8 +49,8 @@ export default class ClearScene extends Phaser.Scene {
     this.elapsed = data && typeof data.ms === 'number' ? data.ms : 0;
     this.usedHint = !!(data && data.usedHint);
     this.usedCheck = !!(data && data.usedCheck);
-    // 完成した盤面（`logic.js` の `boardKey()` の出力）。履歴に残すのに使う。
-    this.cells = data && typeof data.cells === 'string' ? data.cells : null;
+    // 何番の解か（代表形の番号。TODO-022）。表示にも記録にも使う。
+    this.no = data && Number.isInteger(data.no) && data.no > 0 ? data.no : null;
   }
 
   create() {
@@ -57,11 +63,16 @@ export default class ClearScene extends Phaser.Scene {
     const record = recordable
       ? saveBest(board.key, this.elapsed)
       : { best: loadBest(board.key), updated: false };
+    // 全解のデータ（TODO-022）。本編を通ってきた時点で読み込み済みなので、
+    // ここでは待たずに取り出すだけ。万一 null なら番号の行を出さず、
+    // 記録にも残さない（番号の無い件は残せない）。
+    const solutions = cachedSolutions(this.registry, board);
     // クリアした回を履歴へ 1 件足す（TODO-008）。最短時間の更新とは別に、
     // 更新しなかった回も残す（あとから完成形を見比べるためのもの）。
-    // 盤面が渡ってこなかったときは足さない（`cells` の無い件は残せない）。
-    if (recordable && this.cells !== null) {
-      addHistory(board.key, { at: Date.now(), ms: this.elapsed, cells: this.cells });
+    // 見つけた解の番号は履歴とは別にも貯める（達成度に使う。TODO-022）。
+    if (recordable && this.no !== null && solutions !== null) {
+      addHistory(board.key, { at: Date.now(), ms: this.elapsed, no: this.no }, solutions);
+      addFound(board.key, this.no, solutions.canonical.length);
     }
     audio.fanfare();
 
@@ -82,6 +93,18 @@ export default class ClearScene extends Phaser.Scene {
       fontSize: '46px',
       color: TEXT_COLORS.normal,
     }).setOrigin(0.5);
+
+    // 何番の解を見つけたか（TODO-022）。回転・反転して置いても同じ番号になる
+    // ので、盤を回して並べ直しただけの解は同じ番号として出る。分母（解の総数）
+    // は盤で違う（8×8 は 65、6×10 は 2339）ので、盤の名前を添える。
+    if (this.no !== null && solutions !== null) {
+      this.add.text(cx, panelTop + PANEL_ROWS.number,
+                    `正解の ${this.no} 番（${board.label} の全 ${solutions.canonical.length} 解）`, {
+                      fontFamily: FONT.family,
+                      fontSize: `${FONT.body}px`,
+                      color: TEXT_COLORS.normal,
+                    }).setOrigin(0.5);
+    }
 
     // 記録は盤ごとなので、どちらの盤の記録かが分かるように盤の名前を添える。
     // ヒント・詰み表示のどちらかを使った回は、記録を更新しなかったことが

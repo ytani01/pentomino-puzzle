@@ -99,7 +99,7 @@ ws.close();
   ミュートの状態。ゲームの進行とは別に持つ必要があるもの）
 - **数値と色は `src/config.js` に集約する。** 色をコードへ直接書かない。
   CSS 側（`index.html`）が持つのは画面の地の色だけ
-- **Phaser に依存しない計算は `src/logic.js` と `src/solver.js` に置く。**
+- **Phaser に依存しない計算は `src/logic.js` と `src/solutions.js` に置く。**
   `tests.html` から確かめられるようにするため。ここに DOM や Phaser を持ち込まない
 - **盤面は書き換えず、作り直して返す。** Undo の履歴が壊れないようにするため
 - **ブラウザネイティブの `confirm()` / `alert()` / `prompt()` を使わない。**
@@ -119,15 +119,18 @@ ws.close();
 | `src/main.js` | Phaser の設定とシーンの登録 |
 | `src/config.js` | 盤面の定義、12 種のピースの形と色、マスの大きさ、レイアウト |
 | `src/logic.js` | 向きの生成・正規化、配置判定、盤面の更新、対称な解の代表形（TODO-012）、時間の整形（純関数） |
-| `src/solver.js` | ヒント用の求解（純関数） |
+| `src/solutions.js` | 全解のデータの読み込み（動的 import）と、盤面との照合・ヒント（TODO-022） |
+| `src/data/8x8.js` ・ `src/data/6x10.js` | 盤ごとの全解（代表形 65 件 / 2339 件）。**手で書き換えない** |
 | `src/audio.js` | 効果音の合成。最初のユーザー操作で `unlock()` を呼ぶ |
-| `src/storage.js` | クリア記録（最短時間と履歴）の保存（失敗しても遊べるようにする） |
+| `src/storage.js` | クリア記録（最短時間・履歴・見つけた解の番号）の保存（失敗しても遊べるようにする） |
 | `src/ui.js` | ボタンと枠の組み立て。4 つのシーンが同じ見た目を使うため |
 | `src/scenes/boot.js` | マス目テクスチャの生成。ピースの色ごとに 1 枚 |
 | `src/scenes/title.js` | タイトル |
 | `src/scenes/game.js` | 本編。Phaser とのつなぎに徹し、判定は `logic.js` に任せる |
 | `src/scenes/clear.js` | クリア表示と記録の更新 |
-| `src/scenes/records.js` | クリア記録の一覧と、選んだ回の完成形（TODO-008） |
+| `src/scenes/records.js` | クリア記録の一覧、選んだ回の完成形（TODO-008）、達成度（TODO-022） |
+| `tools/enumerate.mjs` | 全解の数え上げ（開発時のみ。元は `src/solver.js`） |
+| `tools/gen-solutions.mjs` | `src/data/*.js` を作る／突き合わせる（開発時のみ） |
 | `tests.html` | 計算のテスト（ブラウザで開くだけ） |
 | `.github/workflows/pages.yml` | タグを押したときに GitHub Pages へ公開する |
 
@@ -138,6 +141,10 @@ GitHub 上での設定・公開手順は
 画面の部位の呼び名（盤・トレイ・スロットなど）は
 [同じファイルの「画面の用語」](docs/developer.md#画面の用語)にまとめてある。
 
+- **公開の前に `node tools/gen-solutions.mjs --check` が走る**（`pages.yml`）。
+  `src/data/*.js` を作り直して突き合わせ、食い違えばジョブが失敗する（TODO-022）。
+  `logic.js` の向きの生成や `config.js` のピース定義を触ったら、
+  `node tools/gen-solutions.mjs` で作り直して一緒にコミットすること
 - `src/config.js` の `VERSION`（既定は `'dev'`）を、`.github/workflows/pages.yml` が
   タグ名へ書き換えてから公開する。ローカルで直接開いた画面は `dev` のまま
   （公開前の見た目と本番の見た目が違う。これは許容している）

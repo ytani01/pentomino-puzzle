@@ -1,6 +1,6 @@
 /**
  * 本編。Phaser とのつなぎに徹し、置けるかどうかの判定は `logic.js`、
- * ヒントの求解は `solver.js` に任せる。
+ * ヒントと解の有無は `solutions.js`（全解のデータ）に任せる。
  *
  * 盤面（`this.board`）は模型で、画面に見えているのはピースの Container のほう。
  * 二重持ちに見えるが、盤面のほうは Undo の履歴や求解へそのまま渡せる形にしておき、
@@ -8,15 +8,16 @@
  */
 
 import {
-  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, HINT_RETRIES, INPUT, LAYOUTS,
-  OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, SOLVE_CHECK_DELAY,
-  SOLVE_CHECK_LIMIT, TEXT_COLORS, VERSION,
+  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, INPUT, LAYOUTS,
+  OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, VERSION,
 } from '../config.js';
 import {
   boardKey, canPlace, createBoard, flip, formatTime, isSolved, nextTurn, normalize, outlineEdges,
   place, remove, sameShape, shapeSize,
 } from '../logic.js';
-import { hintPlacement, solve } from '../solver.js';
+import {
+  ensureSolutions, hasSolution, hintFrom, solutionNumber,
+} from '../solutions.js';
 import * as audio from '../audio.js';
 import { createButton, createPanel } from '../ui.js';
 import { darken, pieceColor, TEX } from './boot.js';
@@ -47,15 +48,11 @@ export default class GameScene extends Phaser.Scene {
     this.history = [];
     this.elapsed = 0;
     this.usedHint = false;
-    // 直前に出したヒント。[一手戻す] → [ヒント] で同じ手を繰り返さないために
-    // 覚えておく（TODO-017）。一手戻しても消さない。
-    this.lastHint = null;
     // 解の有無を教えるモード（TODO-013）。既定は切。`usedCheck` はヒントと
-    // 同じく「求解に頼った」印で、クリアの画面まで持ち回る。
+    // 同じく「答えに頼った」印で、クリアの画面まで持ち回る。
     this.checking = false;
     this.usedCheck = false;
     this.checkState = null;
-    this.checkTimer = null;
     this.playing = true;
     this.pending = null;
     this.pendingTap = null;
@@ -71,6 +68,16 @@ export default class GameScene extends Phaser.Scene {
     this.createMessage();
     this.createConfirmDialog();
     this.createVersionText();
+
+    // 全解のデータ（TODO-022）。6×10 は 139KB あるので動的 import で読む。
+    // 届くまで [ヒント] と [詰み表示] は押せない（`refreshHud()` が見る）。
+    // シーンを離れたあとに届くことがあるので、生きているかを確かめてから使う。
+    this.solutions = null;
+    ensureSolutions(this.registry, this.spec).then((solutions) => {
+      if (!this.scene.isActive()) return;
+      this.solutions = solutions;
+      this.refreshHud();
+    });
 
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
@@ -692,16 +699,18 @@ export default class GameScene extends Phaser.Scene {
 
   // ---- ボタンの働き ---------------------------------------------------
 
+  /**
+   * ヒントを 1 手ぶん置く。全解のデータから条件に合う解を無作為に選ぶだけなので、
+   * 待たされることも「時間内に見つけられなかった」も無い（TODO-022）。
+   */
   useHint() {
-    const names = this.pieces.filter((piece) => piece.location === 'tray').map((p) => p.name);
-    if (names.length === 0) return;
+    const left = this.pieces.filter((piece) => piece.location === 'tray').length;
+    if (left === 0 || !this.solutions) return;
 
-    const result = this.findHint(names);
+    const result = hintFrom(this.solutions, this.board);
     if (!result.ok) {
       audio.invalid();
-      this.showMessage(result.reason === 'limit'
-        ? '時間内に置き方を見つけられなかった'
-        : 'この形からは完成できない');
+      this.showMessage('この形からは完成できない');
       return;
     }
 
@@ -715,36 +724,11 @@ export default class GameScene extends Phaser.Scene {
     this.board = place(this.board, name, cells, row, col);
     this.refreshPiece(piece);
     this.settlePiece(piece, true);
-    this.lastHint = result.placement;
     this.usedHint = true;
     audio.hint();
     this.showMessage(`${name} を置いた`);
     this.refreshHud();
     this.checkSolved();
-  }
-
-  /**
-   * 直前と同じ手を避けたヒントを求める（TODO-017）。探索順を混ぜて引き直すが、
-   * 終盤は違う手がそもそも無いことがあるので、`HINT_RETRIES` 回で諦めて
-   * 同じ手を返す（何も出さないより、同じでも出したほうが役に立つ）。
-   */
-  findHint(names) {
-    let result = hintPlacement(this.board, names, { shuffle: true });
-    for (let retry = 0; retry < HINT_RETRIES; retry += 1) {
-      if (!result.ok || !this.isLastHint(result.placement)) break;
-      result = hintPlacement(this.board, names, { shuffle: true });
-    }
-    return result;
-  }
-
-  /** ピース・向き・位置がそろって一致したときだけ「同じ手」と見なす。 */
-  isLastHint(placement) {
-    const last = this.lastHint;
-    if (!last || !placement) return false;
-    return last.name === placement.name
-      && last.row === placement.row
-      && last.col === placement.col
-      && sameShape(last.cells, placement.cells);
   }
 
   // ---- 解の有無を教えるモード（TODO-013）-------------------------------
@@ -759,60 +743,40 @@ export default class GameScene extends Phaser.Scene {
     this.checking = !this.checking;
     this.checkButton.setSelected(this.checking);
     if (this.checking) {
-      // 一度でも入にしたら、求解に頼ったものとして扱う（TODO-020 へ渡す）。
+      // 一度でも入にしたら、答えに頼ったものとして扱う（TODO-020 へ渡す）。
       this.usedCheck = true;
-      this.scheduleCheck();
+      this.runCheck();
       return;
     }
-    this.cancelCheck();
     this.checkState = null;
     this.checkText.setText('');
   }
 
   /**
-   * 盤が変わるたびに呼ぶ。その場では回さず `SOLVE_CHECK_DELAY` だけ待つのは、
-   * 置いたピースが収まる動きの最中に画面を止めないため。待っている間に次の
-   * 変更が来たら予約を取り直すので、続けて操作したぶんは 1 回にまとまる。
-   */
-  scheduleCheck() {
-    this.cancelCheck();
-    if (!this.checking) return;
-    this.checkTimer = this.time.delayedCall(SOLVE_CHECK_DELAY, () => {
-      this.checkTimer = null;
-      this.runCheck();
-    });
-  }
-
-  cancelCheck() {
-    if (this.checkTimer) this.checkTimer.remove();
-    this.checkTimer = null;
-  }
-
-  /**
-   * 残りのピースで最後まで置けるかを調べて出す。上限を `SOLVE_CHECK_LIMIT` まで
-   * 下げてあるので（根拠は `config.js`）、**打ち切ったときは「詰み」と言えない**。
-   * `solve()` が `reason` で区別してくれるので、そのまま言い方を分ける。
+   * 残りのピースで最後まで置けるかを出す。全解のデータを線形になめるだけで
+   * 0.1ms もかからないので、**盤が変わったその場で調べる**（TODO-022）。
+   *
+   * 前は上限まで探索して 0.3 秒近く画面が止まっていたため、置いたピースが
+   * 収まる動きを邪魔しないよう `SOLVE_CHECK_DELAY` だけ待ってから回していた。
+   * 上限で打ち切ったときに「詰み」と言い切れず「？？？」と出していたのも、
+   * データがあれば必ず言い切れるので消えた。
    */
   runCheck() {
-    const names = this.pieces.filter((piece) => piece.location === 'tray').map((p) => p.name);
-    if (names.length === 0) {
+    if (!this.checking) return;
+    const left = this.pieces.filter((piece) => piece.location === 'tray').length;
+    if (left === 0 || !this.solutions) {
       this.checkState = null;
       this.checkText.setText('');
       return;
     }
-    const result = solve(this.board, names, { limit: SOLVE_CHECK_LIMIT });
-    let state = 'dead';
-    if (result.ok) state = 'ok';
-    else if (result.reason === 'limit') state = 'unknown';
+    const state = hasSolution(this.solutions, this.board) ? 'ok' : 'dead';
 
     // 音は詰みに変わった瞬間だけ。毎回鳴らすと置くたびに鳴って邪魔になる。
     if (state === 'dead' && this.checkState !== 'dead') audio.invalid();
     this.checkState = state;
 
-    const text = { ok: '解ける', dead: '解なし', unknown: '？？？' };
-    const color = {
-      ok: TEXT_COLORS.dim, dead: TEXT_COLORS.danger, unknown: TEXT_COLORS.disabled,
-    };
+    const text = { ok: '解ける', dead: '解なし' };
+    const color = { ok: TEXT_COLORS.dim, dead: TEXT_COLORS.danger };
     this.checkText.setText(text[state]).setColor(color[state]);
   }
 
@@ -848,10 +812,12 @@ export default class GameScene extends Phaser.Scene {
     const left = this.pieces.filter((piece) => piece.location === 'tray').length;
     this.remainText.setText(`残り ${left}`);
     this.undoButton.setEnabled(this.playing && this.history.length > 0);
-    this.hintButton.setEnabled(this.playing && left > 0);
+    // 全解のデータが届くまでは、ヒントも詰み表示も出せない（TODO-022）。
+    this.hintButton.setEnabled(this.playing && left > 0 && this.solutions !== null);
+    this.checkButton.setEnabled(this.solutions !== null);
     // 盤が変わるところは置く・外す・向きを変える・戻す・ヒントのどれも
     // ここを通るので、解の有無を調べ直す入口をここ 1 つにまとめてある。
-    this.scheduleCheck();
+    this.runCheck();
   }
 
   showMessage(text) {
@@ -873,9 +839,10 @@ export default class GameScene extends Phaser.Scene {
         ms: this.elapsed,
         usedHint: this.usedHint,
         usedCheck: this.usedCheck,
-        // 完成形は履歴に残す（TODO-008）。残すかどうかを決めるのは `clear.js`
-        // なので、ここは盤面を文字列にして渡すところまで。
-        cells: boardKey(this.board),
+        // 何番の解かを渡す（TODO-022）。記録に残すかどうかを決めるのは
+        // `clear.js` なので、ここは番号を引くところまで。データが届く前に
+        // 解き切ることもありうるので、そのときは `null` を渡す。
+        no: this.solutions ? solutionNumber(this.solutions, boardKey(this.board)) : null,
       });
     });
   }

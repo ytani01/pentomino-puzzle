@@ -31,14 +31,14 @@
 <body>
 <h1>Pentomino Puzzle — テスト</h1>
 <p class="note">
-  <code>src/logic.js</code>・<code>src/solver.js</code>・<code>src/config.js</code> の計算を確かめる。
-  Phaser にも DOM にも触らない部分だけが対象。
+  <code>src/logic.js</code>・<code>src/solutions.js</code>・<code>src/config.js</code> の計算と、
+  <code>src/data/*.js</code>（全解のデータ）を確かめる。Phaser にも DOM にも触らない部分だけが対象。
 </p>
 <div id="summary">実行中…</div>
 <div id="results"></div>
 
 <script type="module">
-import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT, SOLVER_LIMIT, SOLVE_CHECK_LIMIT } from './src/config.js';
+import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT } from './src/config.js';
 import {
   normalize, rotateCw, flip, sameShape, orientations, turnOrder, nextTurn,
   shapeSize, outlineEdges,
@@ -46,9 +46,15 @@ import {
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
 } from './src/logic.js';
-import { solve, hintPlacement } from './src/solver.js';
 import {
-  sanitizeHistory, loadHistory, addHistory, clearHistory, loadBest, shouldRecord,
+  buildSolutions, consistentSolutions, hasSolution, hintFrom, placementIn,
+  solutionCells, solutionNumber,
+} from './src/solutions.js';
+import { SOLUTIONS as SOLUTIONS_8X8 } from './src/data/8x8.js';
+import { SOLUTIONS as SOLUTIONS_6X10 } from './src/data/6x10.js';
+import {
+  sanitizeHistory, sanitizeFound, migrateHistory, loadHistory, addHistory,
+  clearHistory, loadFound, addFound, clearFound, loadBest, shouldRecord,
 } from './src/storage.js';
 
 // ---- ごく小さなテストの土台 ----------------------------------------------
@@ -128,10 +134,6 @@ test('12 種の色が重なっていない', () => {
 
 test('置けるマスの数はピース 12 種ぶんとちょうど同じ', () => {
   assertSame(PLAYABLE_CELLS, PIECES.length * PIECE_SIZE, '60 マス');
-});
-
-test('求解の打ち切り上限が正の数として決まっている', () => {
-  assert(Number.isFinite(SOLVER_LIMIT) && SOLVER_LIMIT > 0, `上限が変: ${SOLVER_LIMIT}`);
 });
 
 test('BOARDS は 8×8 と 6×10 を持ち、既定の盤がその中にある', () => {
@@ -312,14 +314,43 @@ test('outlineEdges は向きを変えても本数が変わらない', () => {
 // ---- logic：盤面 ---------------------------------------------------------
 //
 // createBoard / boardCells / canPlace / place / remove / isSolved /
-// regionsFitPieces / solve は盤の spec を受け取るので、8×8 と 6×10 の
-// 両方でループして回す（TODO-009）。盤ごとの求解結果（fullSolution）は
-// 盤面グループと solver グループの両方で使うので、先にまとめて作る。
+// regionsFitPieces は盤の spec を受け取るので、8×8 と 6×10 の両方で
+// ループして回す（TODO-009）。
+//
+// 「実際の解 1 つ」は求解して作るのをやめ、**データの 1 行目**から組み立てる
+// （TODO-022）。盤面グループ・データのグループ・照合のグループで使うので、
+// 先にまとめて作っておく。
 
 const BOARD_LIST = Object.values(BOARDS);
+
+/** 盤ごとの全解のデータ。動的 import と違って、テストでは両方まとめて読む。 */
+const DATA = { '8x8': SOLUTIONS_8X8, '6x10': SOLUTIONS_6X10 };
+
+/** 文献にある「本質的に異なる解」の数。データが合っているかの拠りどころ。 */
+const KNOWN_COUNTS = { '8x8': { all: 520, canonical: 65 }, '6x10': { all: 9356, canonical: 2339 } };
+
+/** 解の文字列を、12 個ぶんの置き方（`{ name, cells, row, col }`）へ分解する。 */
+function placementsOf(spec, cells) {
+  return NAMES.map((name) => placementIn(cells, spec.cols, name));
+}
+
+/** 解の文字列から盤面を組み立てる。1 手ずつ `place()` を通すので置き方の検証も兼ねる。 */
+function boardOf(spec, cells) {
+  return placementsOf(spec, cells)
+    .reduce((acc, p) => place(acc, p.name, p.cells, p.row, p.col), createBoard(spec));
+}
+
 const boardStates = BOARD_LIST.map((spec) => {
   const emptyBoard = createBoard(spec);
-  return { spec, emptyBoard, fullSolution: solve(emptyBoard, NAMES) };
+  const canonical = DATA[spec.key];
+  return {
+    spec,
+    emptyBoard,
+    canonical,
+    solutions: buildSolutions(spec, canonical),
+    placements: placementsOf(spec, canonical[0]),
+    solved: boardOf(spec, canonical[0]),
+  };
 });
 
 group('src/logic.js — 盤面');
@@ -431,12 +462,10 @@ for (const spec of BOARD_LIST) {
 }
 
 for (const state of boardStates) {
-  const { spec, emptyBoard, fullSolution } = state;
+  const { spec, emptyBoard, solved } = state;
 
   test(`isSolved は空きマスが無いときだけ真（${spec.label}）`, () => {
     assert(!isSolved(emptyBoard), '空の盤で真になった');
-    const solved = fullSolution.placements
-      .reduce((acc, p) => place(acc, p.name, p.cells, p.row, p.col), emptyBoard);
     assert(isSolved(solved), '埋めた盤で偽になった');
   });
 }
@@ -521,9 +550,7 @@ for (const spec of BOARD_LIST) {
 }
 
 for (const state of boardStates) {
-  const { spec, emptyBoard, fullSolution } = state;
-  const solved = fullSolution.placements
-    .reduce((acc, p) => place(acc, p.name, p.cells, p.row, p.col), emptyBoard);
+  const { spec, emptyBoard, solved } = state;
 
   test(`写した解も、同じピース 12 種でちょうど埋まった盤面のまま（${spec.label}）`, () => {
     // ピース名を移すだけなので、写った先の形も同じピースの別の向きになる。
@@ -572,15 +599,9 @@ for (const state of boardStates) {
   });
 
   test(`代表形が同じなのは、対称で写り合う解だけ（${spec.label}）`, () => {
-    // 探索順を混ぜて解をいくつか集め、「代表形が同じ」と「対称で写り合う」が
-    // 一致することを確かめる。全解を数え上げるのは重いので、標本で見る。
-    const samples = [solved];
-    for (let i = 0; i < 6; i += 1) {
-      const result = solve(emptyBoard, NAMES, { shuffle: true });
-      assert(result.ok, `解が出なかった: ${result.reason}`);
-      samples.push(result.placements
-        .reduce((acc, p) => place(acc, p.name, p.cells, p.row, p.col), emptyBoard));
-    }
+    // 「代表形が同じ」と「対称で写り合う」が一致することを確かめる。全件で
+    // 総当たりすると 2339×2339 になるので、データの先頭 7 件で見る。
+    const samples = state.canonical.slice(0, 7).map((cells) => boardOf(spec, cells));
     let distinct = 0;
     for (let i = 0; i < samples.length; i += 1) {
       for (let j = i + 1; j < samples.length; j += 1) {
@@ -596,73 +617,154 @@ for (const state of boardStates) {
   });
 }
 
-// ---- solver -------------------------------------------------------------
+// ---- data：全解のデータ（TODO-022）--------------------------------------
+//
+// `src/data/*.js` は `tools/gen-solutions.mjs` が作る。**作り直して突き合わせる
+// 検査は公開のとき（`pages.yml`）に回し**、ここでは生成し直さずに済む軽いほう
+// ——件数と、各行が本当に解になっているか——を確かめる。
 
-group('src/solver.js — ヒント用の求解');
+group('src/data — 全解のデータ');
 
 for (const state of boardStates) {
-  const { spec, emptyBoard, fullSolution } = state;
+  const { spec, canonical } = state;
+  const known = KNOWN_COUNTS[spec.key];
 
-  test(`空の盤面から解が 1 つ求まる（${spec.label}）`, () => {
-    assert(fullSolution.ok, `解が出なかった: ${fullSolution.reason}`);
-    assertSame(fullSolution.placements.length, 12, 'ピースの数');
-    assertSame(
-      fullSolution.placements.map((p) => p.name).sort().join(''),
-      NAMES.slice().sort().join(''),
-      '12 種すべてを使っていない',
-    );
+  test(`代表形の件数が ${known.canonical} 件（${spec.label}）`, () => {
+    assertSame(canonical.length, known.canonical, '件数');
   });
 
-  test(`その解が盤面をちょうど埋める（重なりも空きも無い）（${spec.label}）`, () => {
+  test(`どの行も盤の大きさどおりの長さで、穴の位置が合っている（${spec.label}）`, () => {
+    const holes = boardKey(createBoard(spec)).split('')
+      .map((ch, i) => (ch === HOLE ? i : -1)).filter((i) => i >= 0);
+    for (const cells of canonical) {
+      assertSame(cells.length, spec.rows * spec.cols, `長さ: ${cells}`);
+      for (const index of holes) {
+        assert(cells[index] === HOLE, `穴 ${index} が埋まっている: ${cells}`);
+      }
+      assertSame(cells.split('').filter((ch) => ch === HOLE).length, holes.length,
+        `穴の数が合わない: ${cells}`);
+    }
+  });
+
+  test(`どの行も 12 種が 1 個ずつで、5 マスずつ使っている（${spec.label}）`, () => {
+    for (const cells of canonical) {
+      const counts = new Map();
+      for (const ch of cells) {
+        if (ch === HOLE) continue;
+        counts.set(ch, (counts.get(ch) || 0) + 1);
+      }
+      assertSame([...counts.keys()].sort().join(''), NAMES.slice().sort().join(''),
+        `使っているピース: ${cells}`);
+      for (const [name, count] of counts) {
+        assertSame(count, PIECE_SIZE, `${name} のマス数: ${cells}`);
+      }
+    }
+  });
+
+  test(`どの行も、各ピースの形が元の形の回転・反転になっている（${spec.label}）`, () => {
+    // ここが「本当に解になっているか」の要。マス数が合っていても、
+    // 5 マスがばらばらの位置にあってはペントミノの解ではない。
+    // 向きは 12 種ぶんを先に作っておく（行ごとに作り直すと桁違いに遅くなる）。
+    const known2 = new Map(NAMES.map((name) => [
+      name,
+      new Set(orientations(cellsOf(name)).map((shape) => JSON.stringify(shape))),
+    ]));
+    for (const cells of canonical) {
+      for (const name of NAMES) {
+        const placement = placementIn(cells, spec.cols, name);
+        assert(known2.get(name).has(JSON.stringify(placement.cells)),
+          `${name} の形が変: ${cells}`);
+      }
+    }
+  });
+
+  test(`どの行もそれ自身が代表形（${spec.label}）`, () => {
+    for (const cells of canonical) {
+      assertSame(canonicalCellsKey(cells, spec), cells, `代表形になっていない: ${cells}`);
+    }
+  });
+
+  test(`重複が無く、文字列の昇順に並んでいる（${spec.label}）`, () => {
+    // 並びがそのまま解の番号になるので、作り直すたびに変わっては困る。
+    assertSame(new Set(canonical).size, canonical.length, '重複がある');
+    for (let i = 1; i < canonical.length; i += 1) {
+      assert(canonical[i - 1] < canonical[i],
+        `${i - 1} と ${i} の順が逆: ${canonical[i - 1]} / ${canonical[i]}`);
+    }
+  });
+}
+
+// ---- solutions：照合とヒント（TODO-022）----------------------------------
+
+group('src/solutions.js — 照合とヒント');
+
+for (const state of boardStates) {
+  const {
+    spec, emptyBoard, canonical, solutions, placements, solved,
+  } = state;
+  const known = KNOWN_COUNTS[spec.key];
+
+  test(`回転・反転まで展開すると全 ${known.all} 解になる（${spec.label}）`, () => {
+    assertSame(solutions.keys.length, known.all, '展開後の件数');
+    assertSame(solutions.numbers.size, known.all, '番号を引ける件数');
+  });
+
+  test(`展開した解の番号が 1〜${known.canonical} を覆っている（${spec.label}）`, () => {
+    const numbers = new Set(solutions.numbers.values());
+    assertSame(numbers.size, canonical.length, '番号の異なり数');
+    assertSame(Math.min(...numbers), 1, '一番小さい番号');
+    assertSame(Math.max(...numbers), canonical.length, '一番大きい番号');
+  });
+
+  test(`対称で写した解も同じ番号になる（${spec.label}）`, () => {
+    const base = solutionNumber(solutions, boardKey(solved));
+    assertSame(base, 1, '1 行目なので 1 番のはず');
+    for (const sym of boardSymmetries(solved)) {
+      assertSame(solutionNumber(solutions, boardKey(transformBoard(solved, sym))), base,
+        `${sym.turns}/${sym.flipped} で別の番号になった`);
+    }
+  });
+
+  test(`番号から代表形を引き直せる（${spec.label}）`, () => {
+    for (const no of [1, 2, canonical.length]) {
+      assertSame(solutionCells(solutions, no), canonical[no - 1], `${no} 番`);
+      assertSame(solutionNumber(solutions, solutionCells(solutions, no)), no, `${no} 番の往復`);
+    }
+    assertSame(solutionCells(solutions, canonical.length + 1), null, 'はみ出した番号');
+    assertSame(solutionNumber(solutions, 'x'.repeat(spec.rows * spec.cols)), null, '無い盤面');
+  });
+
+  test(`空の盤面には全 ${known.all} 解が当てはまる（${spec.label}）`, () => {
+    assertSame(consistentSolutions(solutions, emptyBoard).length, known.all, '件数');
+    assert(hasSolution(solutions, emptyBoard), '解けないと言われた');
+  });
+
+  test(`途中まで置いた盤面には、その続きになる解だけが残る（${spec.label}）`, () => {
+    // 正しい解の 6 手ぶんを置き、残った候補がどれもその 6 手を含むか。
     let board = emptyBoard;
-    for (const p of fullSolution.placements) {
-      const check = canPlace(board, p.cells, p.row, p.col);
-      assert(check.ok, `${p.name} が置けない: ${check.reason}`);
-      board = place(board, p.name, p.cells, p.row, p.col);
-    }
-    assert(isSolved(board), '空きマスが残った');
-    assertSame(placedNames(board).length, 12, '盤に並んだピースの数');
-  });
-
-  test(`解の各ピースは、その向きが元の形の回転・反転になっている（${spec.label}）`, () => {
-    for (const p of fullSolution.placements) {
-      const known = orientations(cellsOf(p.name));
-      assert(known.some((shape) => sameShape(shape, p.cells)), `${p.name} の向きが変`);
+    for (const p of placements.slice(0, 6)) board = place(board, p.name, p.cells, p.row, p.col);
+    const candidates = consistentSolutions(solutions, board);
+    assert(candidates.length > 0, '続きが 1 つも出なかった');
+    assert(candidates.includes(boardKey(solved)), 'なぞっている解そのものが候補に無い');
+    for (const cells of candidates) {
+      for (let i = 0; i < board.grid.length; i += 1) {
+        const value = board.grid[i];
+        if (value !== null && value !== HOLE) assertSame(cells[i], value, `${i} マス目が食い違う`);
+      }
     }
   });
 
-  test(`solve は渡した盤面を書き換えない（${spec.label}）`, () => {
-    const board = createBoard(spec);
-    const before = board.grid.slice();
-    solve(board, NAMES);
-    assertSame(board.grid, before);
-  });
-
-  test(`詰みの盤面では解なしを返す（${spec.label}）`, () => {
+  test(`詰みの盤面には 1 つも当てはまらない（${spec.label}）`, () => {
     // F を左上へ置くと (0,0) が 1 マス残り、5 マスのピースでは埋められない。
     const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
-    const result = solve(board, NAMES.filter((name) => name !== 'F'));
-    assert(!result.ok, '解が出てしまった');
-    assertSame(result.reason, 'unsolvable', '理由');
+    assertSame(consistentSolutions(solutions, board).length, 0, '候補が残った');
+    assert(!hasSolution(solutions, board), '解けると言われた');
   });
 
-  test(`ピースの数と空きマスが釣り合わないときも解なし（${spec.label}）`, () => {
-    const result = solve(createBoard(spec), NAMES.slice(0, 11));
-    assert(!result.ok, '解が出てしまった');
-    assertSame(result.reason, 'unsolvable', '理由');
-  });
-
-  test(`試行回数の上限を超えたら limit として打ち切る（${spec.label}）`, () => {
-    const result = solve(createBoard(spec), NAMES, { limit: 10 });
-    assert(!result.ok, '打ち切られなかった');
-    assertSame(result.reason, 'limit', '理由');
-    assert(result.tries <= 11, `試行回数が上限を大きく超えた: ${result.tries}`);
-  });
-
-  test(`hintPlacement は一番若い空きマスを覆う 1 手を返す（${spec.label}）`, () => {
+  test(`hintFrom は一番若い空きマスを覆う 1 手を返す（${spec.label}）`, () => {
     const board = place(createBoard(spec), 'X', cellsOf('X'), 0, 2);
-    const result = hintPlacement(board, NAMES.filter((name) => name !== 'X'));
-    assert(result.ok, `ヒントが出なかった: ${result.reason}`);
+    const result = hintFrom(solutions, board);
+    assert(result.ok, 'ヒントが出なかった');
     const target = emptyCells(board)[0];
     const covers = result.placement.cells
       .some(([dr, dc]) => result.placement.row + dr === target[0]
@@ -672,114 +774,37 @@ for (const state of boardStates) {
       '返ってきた置き方が盤に合わない');
   });
 
-  test(`hintPlacement は詰みの盤面で理由付きの解なしを返す（${spec.label}）`, () => {
+  test(`hintFrom は詰みの盤面で解なしを返す（${spec.label}）`, () => {
     const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
-    const result = hintPlacement(board, NAMES.filter((name) => name !== 'F'));
+    const result = hintFrom(solutions, board);
     assert(!result.ok, '解が出てしまった');
-    assertSame(result.reason, 'unsolvable');
     assertSame(result.placement, null);
   });
 
-  test(`途中まで埋めた盤面からも最後まで解ける（${spec.label}）`, () => {
-    // 実際に遊んでいる途中の形（正しい解の 4 手ぶん）から続きが求まるか。
-    let board = emptyBoard;
-    const used = [];
-    for (const p of fullSolution.placements.slice(0, 4)) {
-      board = place(board, p.name, p.cells, p.row, p.col);
-      used.push(p.name);
-    }
-    const result = solve(board, NAMES.filter((name) => !used.includes(name)));
-    assert(result.ok, `続きが解けなかった: ${result.reason}`);
-    assertSame(result.placements.length, 8, '残りのピースの数');
-  });
-
-  // ---- 探索順を混ぜる（TODO-017）----------------------------------------
-
-  test(`shuffle を付けても盤面をちょうど埋める解が返る（${spec.label}）`, () => {
-    const result = solve(emptyBoard, NAMES, { shuffle: true });
-    assert(result.ok, `解が出なかった: ${result.reason}`);
-    let board = emptyBoard;
-    for (const p of result.placements) {
-      const check = canPlace(board, p.cells, p.row, p.col);
-      assert(check.ok, `${p.name} が置けない: ${check.reason}`);
-      board = place(board, p.name, p.cells, p.row, p.col);
-    }
-    assert(isSolved(board), '空きマスが残った');
-  });
-
-  test(`shuffle は渡した盤面もピース名の配列も書き換えない（${spec.label}）`, () => {
-    const board = createBoard(spec);
-    const before = board.grid.slice();
-    const names = NAMES.slice();
-    solve(board, names, { shuffle: true });
-    assertSame(board.grid, before, '盤面');
-    assertSame(names, NAMES.slice(), 'ピース名の並び');
-  });
-
-  test(`同じ乱数を渡せば同じ解が返る（${spec.label}）`, () => {
-    // 乱数を差し替えられないと、混ぜたときの挙動をテストで押さえられない。
-    const fixed = () => 0.5;
-    const a = solve(emptyBoard, NAMES, { shuffle: true, random: fixed });
-    const b = solve(emptyBoard, NAMES, { shuffle: true, random: fixed });
-    assertSame(a.placements.map((p) => `${p.name}@${p.row},${p.col}`),
-      b.placements.map((p) => `${p.name}@${p.row},${p.col}`));
-  });
-
-  test(`shuffle を付けたヒントは何度か呼ぶと違う手も返る（${spec.label}）`, () => {
-    // [一手戻す] → [ヒント] で毎回同じ手にならないことの裏付け（TODO-017）。
-    // 乱数なので「必ず違う」とは言えず、10 回で 2 種類以上出れば足りるとする。
+  test(`hintFrom は選ぶ解を差し替えると違う手も返す（${spec.label}）`, () => {
+    // 乱数を差し替えられないと、無作為に選んでいることをテストで押さえられない。
     const seen = new Set();
-    for (let i = 0; i < 10; i += 1) {
-      const result = hintPlacement(emptyBoard, NAMES, { shuffle: true });
-      assert(result.ok, `ヒントが出なかった: ${result.reason}`);
+    for (const at of [0, 0.25, 0.5, 0.75, 0.99]) {
+      const result = hintFrom(solutions, emptyBoard, () => at);
+      assert(result.ok, 'ヒントが出なかった');
       const p = result.placement;
       seen.add(`${p.name}@${p.row},${p.col}:${p.cells.map((c) => c.join('')).join('-')}`);
     }
-    assert(seen.size > 1, `10 回とも同じ手だった: ${[...seen][0]}`);
+    assert(seen.size > 1, `5 通り試して同じ手だった: ${[...seen][0]}`);
   });
 
-  // ---- 解の有無を教えるモード（TODO-013）--------------------------------
-  //
-  // このモードは上限を `SOLVE_CHECK_LIMIT` まで下げて回すので、下げた上限でも
-  // 言い切れる場面が残っていることを押さえる。1 個だけ置いた詰みの盤面には
-  // 下げた上限では言い切れないものもあり（8×8 で 1% ほど）、それは
-  // 「分からない」と出す決まりなのでテストの対象にしない。
-
-  test(`詰みの盤面は、下げた上限でも詰みと言い切れる（${spec.label}）`, () => {
-    const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
-    const result = solve(board, NAMES.filter((name) => name !== 'F'),
-      { limit: SOLVE_CHECK_LIMIT });
-    assert(!result.ok, '解が出てしまった');
-    assertSame(result.reason, 'unsolvable', '打ち切られた（詰みと言えていない）');
-  });
-
-  test(`空の盤面は、下げた上限でも解けると言い切れる（${spec.label}）`, () => {
-    const result = solve(emptyBoard, NAMES, { limit: SOLVE_CHECK_LIMIT });
-    assert(result.ok, `解が出なかった: ${result.reason}`);
-    assert(result.tries <= SOLVE_CHECK_LIMIT, `上限を超えた: ${result.tries}`);
-  });
-
-  test(`遊んでいる途中の盤面も、下げた上限で最後まで解ける（${spec.label}）`, () => {
-    // 正しい解を 1 手ずつなぞり、どの手からでも上限内で続きが求まるか。
+  test(`hintFrom を最後まで繰り返すと盤が埋まる（${spec.label}）`, () => {
+    // 遊ぶ側は 1 手ずつしか受け取らないので、12 手ぶん繰り返せることを見る。
     let board = emptyBoard;
-    const used = [];
-    for (const p of fullSolution.placements) {
+    for (let i = 0; i < 12; i += 1) {
+      const result = hintFrom(solutions, board);
+      assert(result.ok, `${i + 1} 手目でヒントが出なかった`);
+      const p = result.placement;
+      assert(canPlace(board, p.cells, p.row, p.col).ok, `${i + 1} 手目が置けない`);
       board = place(board, p.name, p.cells, p.row, p.col);
-      used.push(p.name);
-      const rest = NAMES.filter((name) => !used.includes(name));
-      if (rest.length === 0) break;
-      const result = solve(board, rest, { limit: SOLVE_CHECK_LIMIT });
-      assert(result.ok, `${used.length} 手目で続きが出なかった: ${result.reason}`);
     }
-  });
-
-  test(`shuffle でも上限まで使い切らない（${spec.label}）`, () => {
-    // 混ぜると枝刈りの効き方が変わる。実測では最悪でも上限の 2 割ほど（TODO-017）。
-    for (let i = 0; i < 5; i += 1) {
-      const result = solve(emptyBoard, NAMES, { shuffle: true });
-      assert(result.reason !== 'limit', `上限で打ち切られた: ${result.tries}`);
-      assert(result.tries < SOLVER_LIMIT / 2, `試行回数が多すぎる: ${result.tries}`);
-    }
+    assert(isSolved(board), '空きマスが残った');
+    assert(solutionNumber(solutions, boardKey(board)) !== null, '出来上がりがデータに無い');
   });
 }
 
@@ -792,8 +817,8 @@ group('src/storage.js — 履歴の検証（sanitizeHistory）');
 test('正しい配列はそのまま通る', () => {
   const board = BOARDS['8x8'];
   const entries = [
-    { at: 1000, ms: 2000, cells: '.'.repeat(64) },
-    { at: 2000, ms: 3000, cells: '.'.repeat(64) },
+    { at: 1000, ms: 2000, no: 1 },
+    { at: 2000, ms: 3000, no: 65 },
   ];
   assertSame(sanitizeHistory(entries, board), entries);
 });
@@ -811,21 +836,42 @@ test('配列でない値（オブジェクト・null・数値）を渡すと空�
 
 test('at / ms が負・0・NaN・文字列の件は捨てられる', () => {
   const board = BOARDS['8x8'];
-  const cells = '.'.repeat(64);
   const bad = [
-    { at: -1, ms: 100, cells },
-    { at: 0, ms: 100, cells },
-    { at: NaN, ms: 100, cells },
-    { at: '1000', ms: 100, cells },
-    { at: 1000, ms: -1, cells },
-    { at: 1000, ms: 0, cells },
-    { at: 1000, ms: NaN, cells },
-    { at: 1000, ms: '100', cells },
+    { at: -1, ms: 100, no: 1 },
+    { at: 0, ms: 100, no: 1 },
+    { at: NaN, ms: 100, no: 1 },
+    { at: '1000', ms: 100, no: 1 },
+    { at: 1000, ms: -1, no: 1 },
+    { at: 1000, ms: 0, no: 1 },
+    { at: 1000, ms: NaN, no: 1 },
+    { at: 1000, ms: '100', no: 1 },
   ];
   assertSame(sanitizeHistory(bad, board), []);
 });
 
-test('cells が文字列でない件、長さが合わない件は捨てられる（8×8 は 64 文字）', () => {
+test('no が整数でない・0 以下の件は捨てられる（TODO-022）', () => {
+  const board = BOARDS['8x8'];
+  const bad = [
+    { at: 1000, ms: 100, no: 0 },
+    { at: 1000, ms: 100, no: -1 },
+    { at: 1000, ms: 100, no: 1.5 },
+    { at: 1000, ms: 100, no: '1' },
+    { at: 1000, ms: 100, no: null },
+    { at: 1000, ms: 100 },
+  ];
+  assertSame(sanitizeHistory(bad, board), []);
+});
+
+// TODO-022 より前に保存した件は `cells` を持つ。番号へ読み替えられるように、
+// ここでは捨てずに通す（読み替えは `migrateHistory()` の仕事）。
+
+test('古い形（cells を持つ件）も、長さが合っていれば通る', () => {
+  const board = BOARDS['8x8'];
+  const entry = { at: 1000, ms: 100, cells: '.'.repeat(64) };
+  assertSame(sanitizeHistory([entry], board), [entry]);
+});
+
+test('古い形で cells が文字列でない件、長さが合わない件は捨てられる（8×8 は 64 文字）', () => {
   const board = BOARDS['8x8'];
   const bad = [
     { at: 1000, ms: 100, cells: 64 },
@@ -837,7 +883,7 @@ test('cells が文字列でない件、長さが合わない件は捨てられ�
   assertSame(sanitizeHistory(bad, board), []);
 });
 
-test('cells が文字列でない件、長さが合わない件は捨てられる（6×10 は 60 文字）', () => {
+test('古い形で cells の長さが合わない件は捨てられる（6×10 は 60 文字）', () => {
   const board = BOARDS['6x10'];
   const bad = [
     { at: 1000, ms: 100, cells: '.'.repeat(59) },
@@ -849,9 +895,9 @@ test('cells が文字列でない件、長さが合わない件は捨てられ�
 
 test('正しい件と壊れた件が混ざっていたら、正しい件だけが並び順を保って残る', () => {
   const board = BOARDS['8x8'];
-  const good1 = { at: 1000, ms: 100, cells: '.'.repeat(64) };
-  const good2 = { at: 2000, ms: 200, cells: '.'.repeat(64) };
-  const bad = { at: -1, ms: 100, cells: '.'.repeat(64) };
+  const good1 = { at: 1000, ms: 100, no: 3 };
+  const good2 = { at: 2000, ms: 200, no: 4 };
+  const bad = { at: -1, ms: 100, no: 5 };
   assertSame(sanitizeHistory([good1, bad, good2], board), [good1, good2]);
 });
 
@@ -859,11 +905,70 @@ test('HISTORY_LIMIT を超える件数を渡すと先頭から 50 件に切ら�
   const board = BOARDS['8x8'];
   const entries = [];
   for (let i = 0; i < HISTORY_LIMIT + 10; i += 1) {
-    entries.push({ at: 1000 + i, ms: 100, cells: '.'.repeat(64) });
+    entries.push({ at: 1000 + i, ms: 100, no: i + 1 });
   }
   const result = sanitizeHistory(entries, board);
   assertSame(result.length, HISTORY_LIMIT, '件数');
   assertSame(result, entries.slice(0, HISTORY_LIMIT), '先頭から残った');
+});
+
+// ---- storage：古い履歴の読み替え（TODO-022）------------------------------
+//
+// TODO-022 より前に保存した件は 60 マスぶんの文字列（`cells`）を持つ。
+// 解のデータがあれば番号へ読み替えられるので、捨てずに済む。
+
+group('src/storage.js — 古い履歴の読み替え（migrateHistory）');
+
+for (const state of boardStates) {
+  const { spec, solutions, canonical } = state;
+
+  test(`古い形の件が番号へ読み替わる（${spec.label}）`, () => {
+    const entries = [{ at: 1000, ms: 100, cells: canonical[2] }];
+    assertSame(migrateHistory(entries, solutions), [{ at: 1000, ms: 100, no: 3 }]);
+  });
+
+  test(`回転・反転して保存されていた件も、同じ番号へ落ちる（${spec.label}）`, () => {
+    const board = boardOf(spec, canonical[2]);
+    for (const sym of boardSymmetries(board)) {
+      const cells = boardKey(transformBoard(board, sym));
+      assertSame(migrateHistory([{ at: 1000, ms: 100, cells }], solutions),
+        [{ at: 1000, ms: 100, no: 3 }], `${sym.turns}/${sym.flipped}`);
+    }
+  });
+
+  test(`データに無い盤面の件は捨てられる（${spec.label}）`, () => {
+    const cells = '.'.repeat(spec.rows * spec.cols);
+    assertSame(migrateHistory([{ at: 1000, ms: 100, cells }], solutions), []);
+  });
+
+  test(`番号を持つ件はそのまま通り、solutions が無ければ何もしない（${spec.label}）`, () => {
+    const entries = [{ at: 1000, ms: 100, no: 7 }];
+    assertSame(migrateHistory(entries, solutions), entries, '番号を持つ件');
+    const old = [{ at: 1000, ms: 100, cells: canonical[0] }];
+    assertSame(migrateHistory(old, null), old, 'solutions が無いとき');
+  });
+}
+
+// ---- storage：見つけた解の番号（TODO-022）--------------------------------
+
+group('src/storage.js — 見つけた解の番号（sanitizeFound）');
+
+test('正しい番号は昇順・重複なしになる', () => {
+  assertSame(sanitizeFound([3, 1, 3, 2], 65), [1, 2, 3]);
+});
+
+test('壊れた JSON・配列でない値は空の配列になる', () => {
+  for (const value of ['{壊れている', {}, null, 42]) {
+    assertSame(sanitizeFound(value, 65), [], `${JSON.stringify(value)} を通した`);
+  }
+});
+
+test('整数でない・0 以下・総数をはみ出した番号は捨てられる', () => {
+  assertSame(sanitizeFound([0, -1, 1.5, '2', null, 66, 65], 65), [65]);
+});
+
+test('JSON の文字列としても読める', () => {
+  assertSame(sanitizeFound('[2,1]', 65), [1, 2]);
 });
 
 // ---- storage：記録してよいか（TODO-020）----------------------------------
@@ -899,9 +1004,10 @@ group('src/storage.js — 保存して読み出す');
  * assert が落ちても戻せるよう `finally` で書き戻す。
  */
 function withCleanStorage(spec, fn) {
-  const keys = [spec.historyKey, spec.storageKey];
+  const keys = [spec.historyKey, spec.storageKey, spec.foundKey];
   const saved = keys.map((key) => window.localStorage.getItem(key));
   window.localStorage.removeItem(spec.historyKey);
+  window.localStorage.removeItem(spec.foundKey);
   try {
     fn();
   } finally {
@@ -912,60 +1018,27 @@ function withCleanStorage(spec, fn) {
   }
 }
 
-/**
- * 代表形が互いに重ならない `cells` を `count` 個作る（テスト用）。
- *
- * 空いているマス 2 か所へ違う印（`I`・`L`）を置いた盤を候補にする。1 か所
- * だけの印だと、対称の通り数（最大 8）ぶんしか別の代表形が作れず、
- * `HISTORY_LIMIT + 1` 個そろわない。2 か所の組は候補がずっと多く、
- * TODO-021 の重複判定（`canonicalCellsKey`）で見て別物になるものだけを集める。
- */
-function distinctCellsList(spec, count) {
-  const board = createBoard(spec);
-  const positions = board.grid.map((v, i) => (v === null ? i : -1)).filter((i) => i >= 0);
-  const seen = new Set();
-  const list = [];
-  outer:
-  for (const posA of positions) {
-    for (const posB of positions) {
-      if (posA === posB) continue;
-      const grid = board.grid.slice();
-      grid[posA] = 'I';
-      grid[posB] = 'L';
-      const cells = boardKey({ rows: spec.rows, cols: spec.cols, grid });
-      const key = canonicalCellsKey(cells, spec);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      list.push(cells);
-      if (list.length === count) break outer;
-    }
-  }
-  assert(list.length === count, `distinctCellsList: ${count} 個そろわなかった（${spec.label}）`);
-  return list;
-}
-
-for (const spec of BOARD_LIST) {
-  const cells = '.'.repeat(spec.rows * spec.cols);
+for (const state of boardStates) {
+  const { spec, solutions, canonical } = state;
+  const total = canonical.length;
 
   test(`addHistory で足したものが loadHistory で新しい順に返る（${spec.label}）`, () => {
-    const [cellsA, cellsB] = distinctCellsList(spec, 2);
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 5000, cells: cellsA });
-      addHistory(spec.key, { at: 2000, ms: 6000, cells: cellsB });
+      addHistory(spec.key, { at: 1000, ms: 5000, no: 1 }, solutions);
+      addHistory(spec.key, { at: 2000, ms: 6000, no: 2 }, solutions);
       assertSame(loadHistory(spec.key).map((e) => e.at), [2000, 1000], '新しい順');
     });
   });
 
   test(`51 件目を足すと一番古い件が落ち、件数が 50 のままになる（${spec.label}）`, () => {
-    const distinct = distinctCellsList(spec, HISTORY_LIMIT + 1);
     withCleanStorage(spec, () => {
       for (let i = 0; i < HISTORY_LIMIT; i += 1) {
-        addHistory(spec.key, { at: 1000 + i, ms: 100, cells: distinct[i] });
+        addHistory(spec.key, { at: 1000 + i, ms: 100, no: i + 1 }, solutions);
       }
       let list = loadHistory(spec.key);
       assertSame(list.length, HISTORY_LIMIT, '50 件目までの件数');
       assert(list.some((e) => e.at === 1000), '一番古い件がまだ残っているはず');
-      addHistory(spec.key, { at: 9999, ms: 100, cells: distinct[HISTORY_LIMIT] });
+      addHistory(spec.key, { at: 9999, ms: 100, no: HISTORY_LIMIT + 1 }, solutions);
       list = loadHistory(spec.key);
       assertSame(list.length, HISTORY_LIMIT, '51 件目を足した後の件数');
       assert(!list.some((e) => e.at === 1000), '一番古い件（at: 1000）が残っている');
@@ -973,36 +1046,47 @@ for (const spec of BOARD_LIST) {
     });
   });
 
-  test(`回転・反転で重なる盤面は既出として足されない（${spec.label}）`, () => {
+  test(`同じ番号の解は既出として足されない（${spec.label}）`, () => {
+    // 回転・反転しただけの解は同じ番号になるので、番号を見るだけで足りる（TODO-021）。
     withCleanStorage(spec, () => {
-      const board = createBoard(spec);
-      const pos = board.grid.findIndex((v) => v === null);
-      const grid = board.grid.slice();
-      grid[pos] = 'I';
-      const original = { rows: spec.rows, cols: spec.cols, grid };
-      const sym = boardSymmetries(original).find((s) => s.turns !== 0 || s.flipped);
-      assert(sym, `${spec.label} に恒等以外の対称が無い`);
-      const turnedCells = boardKey(transformBoard(original, sym));
-      addHistory(spec.key, { at: 1000, ms: 100, cells: boardKey(original) });
-      addHistory(spec.key, { at: 2000, ms: 200, cells: turnedCells });
+      addHistory(spec.key, { at: 1000, ms: 100, no: 5 }, solutions);
+      addHistory(spec.key, { at: 2000, ms: 200, no: 5 }, solutions);
       const list = loadHistory(spec.key);
-      assertSame(list.length, 1, '回転・反転しただけの盤面が別件になった');
+      assertSame(list.length, 1, '同じ番号が別件になった');
       assertSame(list[0].at, 1000, '既にある件が書き換わった');
     });
   });
 
-  test(`違うパターンは別件として残る（${spec.label}）`, () => {
-    const [cellsA, cellsB] = distinctCellsList(spec, 2);
+  test(`違う番号は別件として残る（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, cells: cellsA });
-      addHistory(spec.key, { at: 2000, ms: 100, cells: cellsB });
-      assertSame(loadHistory(spec.key).length, 2, '違うパターンなのに 1 件にまとまった');
+      addHistory(spec.key, { at: 1000, ms: 100, no: 5 }, solutions);
+      addHistory(spec.key, { at: 2000, ms: 100, no: 6 }, solutions);
+      assertSame(loadHistory(spec.key).length, 2, '違う番号なのに 1 件にまとまった');
+    });
+  });
+
+  test(`古い形で保存してあった件も、solutions を渡せば番号で読める（${spec.label}）`, () => {
+    // TODO-022 より前の版が書いた履歴を、そのまま localStorage へ置いて読む。
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.historyKey, JSON.stringify([
+        { at: 2000, ms: 200, cells: canonical[1] },
+        { at: 1000, ms: 100, cells: canonical[0] },
+      ]));
+      assertSame(loadHistory(spec.key, solutions), [
+        { at: 2000, ms: 200, no: 2 },
+        { at: 1000, ms: 100, no: 1 },
+      ], '読み替えられていない');
+      // 書き戻すと番号へ揃う（古い形がいつまでも残らない）。
+      addHistory(spec.key, { at: 3000, ms: 300, no: 3 }, solutions);
+      const raw = JSON.parse(window.localStorage.getItem(spec.historyKey));
+      assert(raw.every((e) => typeof e.no === 'number' && e.cells === undefined),
+        `古い形が残っている: ${JSON.stringify(raw)}`);
     });
   });
 
   test(`clearHistory の後は空の配列になる（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, cells });
+      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
       clearHistory(spec.key);
       assertSame(loadHistory(spec.key), []);
     });
@@ -1011,9 +1095,35 @@ for (const spec of BOARD_LIST) {
   test(`clearHistory は最短時間（loadBest）を消さない（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
       window.localStorage.setItem(spec.storageKey, '12345');
-      addHistory(spec.key, { at: 1000, ms: 100, cells });
+      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
       clearHistory(spec.key);
       assertSame(loadBest(spec.key), 12345, '最短時間が消えた');
+    });
+  });
+
+  test(`addFound は同じ番号を二度足さず、昇順で返る（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      addFound(spec.key, 3, total);
+      addFound(spec.key, 1, total);
+      addFound(spec.key, 3, total);
+      assertSame(loadFound(spec.key, total), [1, 3]);
+    });
+  });
+
+  test(`addFound は履歴の 50 件を超えても貯まる（${spec.label}）`, () => {
+    // 達成度を履歴の異なり数で代用できない理由そのもの（TODO-022）。
+    const count = Math.min(total, HISTORY_LIMIT + 5);
+    withCleanStorage(spec, () => {
+      for (let no = 1; no <= count; no += 1) addFound(spec.key, no, total);
+      assertSame(loadFound(spec.key, total).length, count, '件数');
+    });
+  });
+
+  test(`clearFound の後は空の配列になる（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      addFound(spec.key, 1, total);
+      clearFound(spec.key);
+      assertSame(loadFound(spec.key, total), []);
     });
   });
 }
@@ -1055,10 +1165,11 @@ summary.textContent = failed === 0
 
 const note = document.createElement('p');
 note.className = 'note';
-const triesNote = boardStates
-  .map(({ spec, fullSolution }) => `${spec.label} は ${fullSolution.tries} 回`)
+const dataNote = boardStates
+  .map(({ spec, canonical, solutions }) => (
+    `${spec.label} は代表形 ${canonical.length} 件（展開すると ${solutions.keys.length} 解）`))
   .join('、');
-note.textContent = `参考: 空の盤面の求解に要した試行回数 — ${triesNote}（上限 ${SOLVER_LIMIT}）。`;
+note.textContent = `参考: 読み込んだ全解のデータ — ${dataNote}。`;
 results.appendChild(note);
 </script>
 </body>

@@ -89,7 +89,7 @@ function baseTurn(cells) {
  * 変化は必ず 90° 回転か、その場の裏返しのどちらかになる
  * （最後から先頭へ戻るところも裏返しになる）。
  *
- * 探索の順を変えると `solver.js` の実測値が変わってしまうので、
+ * 探索の順を変えると `tools/enumerate.mjs` の数え上げの当たり方が変わるので、
  * `orientations()` 自体の並びには手を入れずに別の関数として持つ。
  */
 export function turnOrder(cells) {

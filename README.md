@@ -31,8 +31,12 @@ python3 -m http.server 8765
 
 置けない場所で離すと、赤く光って元の場所へ戻る。
 **詰み表示**を入にすると、置く・外すたびに残りのピースで最後まで置けるかを
-調べ、「解ける」「もう解けない」を HUD に出す（調べきれなければ「分からない」）。
-クリアまでの最短時間はブラウザに保存される。
+調べ、「解ける」「解なし」を HUD に出す。**ヒントと詰み表示は全解のデータを
+引くだけ**なので待たされない（`src/data/`）。
+
+クリアすると「正解の何番か」が出る。回転・反転して置いても同じ番号になる。
+最短時間とクリアした解はブラウザに保存され、**記録**の画面で見返せる
+（何解のうち何解を見つけたかも出る）。
 
 ## テスト
 
@@ -41,8 +45,9 @@ python3 -m http.server 8765
 #   http://localhost:8765/tests.html
 ```
 
-`src/logic.js` の計算（向きの生成・配置判定・盤面の更新）と `src/solver.js` の求解、
-`src/config.js` のピース定義を検査する。Phaser には触れない。
+`src/logic.js` の計算（向きの生成・配置判定・盤面の更新）、`src/solutions.js` の
+照合とヒント、`src/storage.js` の記録、`src/config.js` のピース定義、そして
+`src/data/*.js`（全解のデータ）を検査する。Phaser には触れない。
 
 ## 構成
 
@@ -52,16 +57,30 @@ src/
   main.js             Phaser の起動
   config.js           盤面・ピース・色・レイアウトの定数
   logic.js            Phaser に依存しない計算（tests.html の対象）
-  solver.js           ヒント用の求解（tests.html の対象）
+  solutions.js        全解のデータの読み込みと照合（tests.html の対象）
+  data/
+    8x8.js            8×8 の全解（65 件）。tools/gen-solutions.mjs が作る
+    6x10.js           6×10 の全解（2339 件）。同上
   audio.js            Web Audio API による効果音
   storage.js          クリア記録の保存
-  ui.js               ボタンと枠（3 つのシーンで共通）
+  ui.js               ボタンと枠（4 つのシーンで共通）
   scenes/
     boot.js           マス目テクスチャの生成
     title.js          タイトル
     game.js           本編
     clear.js          クリア表示
+    records.js        クリア記録の一覧
+tools/                開発時にだけ使う（公開しない）
+  enumerate.mjs       全解の数え上げ
+  gen-solutions.mjs   src/data/*.js を作る／突き合わせる
 tests.html            計算のテスト
+```
+
+`src/data/*.js` は**手で書き換えない**。作り直すときは Node で走らせる。
+
+```bash
+node tools/gen-solutions.mjs           # 作り直して書き出す
+node tools/gen-solutions.mjs --check   # 今あるものと突き合わせる（公開時の検査と同じ）
 ```
 
 ## ライセンス

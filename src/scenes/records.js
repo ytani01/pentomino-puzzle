@@ -18,7 +18,10 @@ import {
   PALETTE_REGISTRY_KEY, PIECES, SCREEN, TEXT_COLORS,
 } from '../config.js';
 import { formatTime } from '../logic.js';
-import { clearHistory, loadHistory } from '../storage.js';
+import { ensureSolutions, solutionCells } from '../solutions.js';
+import {
+  clearFound, clearHistory, loadFound, loadHistory,
+} from '../storage.js';
 import * as audio from '../audio.js';
 import { createButton, createChoiceRow, createPanel } from '../ui.js';
 import { darken, pieceColor } from './boot.js';
@@ -40,6 +43,7 @@ const L = SCREEN.portrait
     rowsPerPage: 10,
     detailY: 626,
     boardBox: { x: 40, y: 650, width: 560, height: 380 },
+    achieveY: 1044,
     buttonsY: 1080,
   }
   : {
@@ -51,6 +55,7 @@ const L = SCREEN.portrait
     rowsPerPage: 9,
     detailY: 520,
     boardBox: { x: 480, y: 132, width: 440, height: 360 },
+    achieveY: 550,
     buttonsY: 588,
   };
 
@@ -104,6 +109,10 @@ export default class RecordsScene extends Phaser.Scene {
     this.boardKey = this.registry.get(BOARD_REGISTRY_KEY);
     this.palette = PALETTES[this.registry.get(PALETTE_REGISTRY_KEY)];
     this.entries = [];
+    // 見ている盤の全解のデータ（TODO-022）。読み込むまでは null で、
+    // 完成形と達成度はそのあいだ出せない（一覧の日時と時間だけ先に出る）。
+    this.solutions = null;
+    this.found = [];
     this.page = 0;
     this.selected = 0;
 
@@ -206,7 +215,7 @@ export default class RecordsScene extends Phaser.Scene {
     }).setOrigin(0.5);
   }
 
-  /** 選んだ 1 件の見出しと、完成形を描く場所。 */
+  /** 選んだ 1 件の見出しと、完成形を描く場所、そして達成度。 */
   createDetail() {
     this.detailText = this.add.text(
       L.boardBox.x + L.boardBox.width / 2, L.detailY, '', {
@@ -216,6 +225,15 @@ export default class RecordsScene extends Phaser.Scene {
       },
     ).setOrigin(0.5);
     this.mini = this.add.graphics();
+    // 達成度（TODO-022）。分母は盤で違う（8×8 は 65、6×10 は 2339）ので、
+    // どちらの盤の話かが分かるように盤の名前を頭に付ける。
+    this.achieveText = this.add.text(
+      L.boardBox.x + L.boardBox.width / 2, L.achieveY, '', {
+        fontFamily: FONT.family,
+        fontSize: `${FONT.small}px`,
+        color: TEXT_COLORS.dim,
+      },
+    ).setOrigin(0.5);
   }
 
   /**
@@ -312,22 +330,42 @@ export default class RecordsScene extends Phaser.Scene {
     this.confirmParts.forEach((part) => part.setVisible(false));
   }
 
+  /** 履歴と、達成度に使う「見つけた解の番号」をまとめて消す（TODO-022）。 */
   doClear() {
     audio.button();
     clearHistory(this.boardKey);
+    clearFound(this.boardKey);
     this.confirmParts.forEach((part) => part.setVisible(false));
     this.reload();
   }
 
   // ---- 表示 -------------------------------------------------------------
 
-  /** 盤を切り替えた・消したときに、履歴を読み直して先頭から見せ直す。 */
+  /**
+   * 盤を切り替えた・消したときに、履歴を読み直して先頭から見せ直す。
+   *
+   * 完成形は番号から引くので、全解のデータが要る（TODO-022）。読み込みを
+   * 待つあいだも一覧の日時と時間は出せるので、先に一度描いてから届いたぶんを
+   * 足す。待っている間にさらに盤を切り替えられることがあるので、**届いた
+   * ときに見ている盤が変わっていたら捨てる**。
+   */
   reload() {
+    const spec = BOARDS[this.boardKey];
+    this.solutions = null;
+    this.found = [];
     this.entries = loadHistory(this.boardKey);
     this.page = 0;
     this.selected = 0;
     this.boardButtons.forEach((button) => button.setSelected(button.choiceKey === this.boardKey));
     this.refresh();
+
+    ensureSolutions(this.registry, spec).then((solutions) => {
+      if (!this.scene.isActive() || this.boardKey !== spec.key) return;
+      this.solutions = solutions;
+      this.entries = loadHistory(this.boardKey, solutions);
+      this.found = loadFound(this.boardKey, solutions.canonical.length);
+      this.refresh();
+    });
   }
 
   pageCount() {
@@ -355,8 +393,17 @@ export default class RecordsScene extends Phaser.Scene {
     this.clearButton.setEnabled(!empty);
 
     const entry = this.entries[this.selected];
-    this.detailText.setText(entry ? `${formatDate(entry.at)}　${formatTime(entry.ms)}` : '');
+    // 何番の解かも添える（TODO-022）。一覧の行は日時と時間だけで揃えたいので、
+    // 番号は選んだ 1 件の見出しにだけ出す。番号はデータが届いてから付く
+    // （古い形の件は読み替えたあとに入る）ので、無いうちは日時と時間だけ。
+    const detail = entry ? `${formatDate(entry.at)}　${formatTime(entry.ms)}` : '';
+    this.detailText.setText(entry && entry.no ? `${detail}　${entry.no} 番` : detail);
     this.drawMini(entry);
+
+    // 達成度。データが届くまでは分母が分からないので何も出さない。
+    this.achieveText.setText(this.solutions === null
+      ? ''
+      : `${BOARDS[this.boardKey].label} … ${this.solutions.canonical.length} 解中 ${this.found.length} 解`);
   }
 
   /**
@@ -367,10 +414,15 @@ export default class RecordsScene extends Phaser.Scene {
    * 無いため。縮小して貼ると立体の帯や光の筋がつぶれ、かえって塊の境目が
    * 分かりにくくなる。**ピースの境目が見分けられること**だけを目当てに、
    * 塗りと、隣が別のピースになる辺の線だけで描く。
+   *
+   * 描く盤面は**番号から引く**（TODO-022）。履歴には 60 マスぶんの文字列を
+   * 持たなくなったので、データが届くまでは描けない。
    */
   drawMini(entry) {
     this.mini.clear();
-    if (!entry) return;
+    if (!entry || this.solutions === null) return;
+    const cells = solutionCells(this.solutions, entry.no);
+    if (cells === null) return;
     const board = BOARDS[this.boardKey];
     const box = L.boardBox;
     const cell = Math.min(
@@ -382,7 +434,7 @@ export default class RecordsScene extends Phaser.Scene {
     const at = (row, col) => (
       row < 0 || col < 0 || row >= board.rows || col >= board.cols
         ? null
-        : entry.cells[row * board.cols + col]
+        : cells[row * board.cols + col]
     );
 
     for (let row = 0; row < board.rows; row += 1) {
