@@ -44,6 +44,7 @@ import {
   shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
+  SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard,
 } from './src/logic.js';
 import { solve, hintPlacement } from './src/solver.js';
 
@@ -458,6 +459,127 @@ test('formatTime は mm:ss、1 時間を超えたら h:mm:ss', () => {
   assertSame(formatTime(599000), '09:59');
   assertSame(formatTime(3661000), '1:01:01');
 });
+
+// ---- logic：対称な解の重複除去（TODO-012）--------------------------------
+
+group('src/logic.js — 対称な解の重複除去');
+
+test('SYMMETRIES は回転 4 × 反転 2 の 8 通りで、重なりが無い', () => {
+  assertSame(SYMMETRIES.length, 8, '通り数');
+  const keys = SYMMETRIES.map((sym) => `${sym.turns}/${sym.flipped}`);
+  assertSame(new Set(keys).size, 8, '同じ変換が 2 つある');
+});
+
+test('boardKey は空きを . に、穴を HOLE に、置いたマスをピース名にする', () => {
+  const board = place(createBoard(BOARDS['8x8']), 'I', cellsOf('I'), 0, 0);
+  const key = boardKey(board);
+  assertSame(key.length, 64, '長さ');
+  assertSame(key[0], 'I', '(0,0) に置いた I');
+  assertSame(key[1], '.', '(0,1) は空き');
+  assertSame(key[3 * 8 + 3], HOLE, '中央 2×2 の穴');
+});
+
+test('8×8（中央 2×2 が穴）は 8 通りすべてが形を保つ', () => {
+  assertSame(boardSymmetries(createBoard(BOARDS['8x8'])).length, 8, '通り数');
+});
+
+test('6×10（穴なし）は 90° 回転が形を変え、4 通りだけが形を保つ', () => {
+  const list = boardSymmetries(createBoard(BOARDS['6x10']));
+  assertSame(list.length, 4, '通り数');
+  // 残るのは恒等・180° 回転と、それぞれの反転（＝左右反転と上下反転）。
+  assertSame(list.map((sym) => `${sym.turns}/${sym.flipped}`).sort(),
+    ['0/false', '0/true', '2/false', '2/true'], '残った変換');
+});
+
+for (const spec of BOARD_LIST) {
+  test(`transformBoard は元の盤面を書き換えずに写す（${spec.label}）`, () => {
+    const board = place(createBoard(spec), 'I', cellsOf('I'), 0, 0);
+    const before = board.grid.slice();
+    const turned = transformBoard(board, { turns: 1 });
+    assertSame(board.grid, before, '元の盤面が変わった');
+    assert(turned !== board, '同じ盤面を返している');
+    assertSame(turned.rows, spec.cols, '回転で行と列が入れ替わっていない');
+    assertSame(turned.cols, spec.rows, '同上');
+    assertSame(turned.grid.filter((v) => v === 'I').length, 5, '置いたマスが消えた');
+  });
+
+  test(`transformBoard を 4 回転で元へ戻る（${spec.label}）`, () => {
+    const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
+    let turned = board;
+    for (let i = 0; i < 4; i += 1) turned = transformBoard(turned, { turns: 1 });
+    assertSame(boardKey(turned), boardKey(board), '戻らない');
+  });
+
+  test(`transformBoard の反転を 2 回で元へ戻る（${spec.label}）`, () => {
+    const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
+    const back = transformBoard(transformBoard(board, { flipped: true }), { flipped: true });
+    assertSame(boardKey(back), boardKey(board), '戻らない');
+  });
+}
+
+for (const state of boardStates) {
+  const { spec, emptyBoard, fullSolution } = state;
+  const solved = fullSolution.placements
+    .reduce((acc, p) => place(acc, p.name, p.cells, p.row, p.col), emptyBoard);
+
+  test(`写した解も、同じピース 12 種でちょうど埋まった盤面のまま（${spec.label}）`, () => {
+    // ピース名を移すだけなので、写った先の形も同じピースの別の向きになる。
+    for (const sym of boardSymmetries(solved)) {
+      const turned = transformBoard(solved, sym);
+      assert(isSolved(turned), `${sym.turns}/${sym.flipped} で空きマスが出た`);
+      assertSame(placedNames(turned).slice().sort().join(''), NAMES.slice().sort().join(''),
+        `${sym.turns}/${sym.flipped} でピースが変わった`);
+      for (const name of NAMES) {
+        assertSame(turned.grid.filter((v) => v === name).length, PIECE_SIZE,
+          `${sym.turns}/${sym.flipped} の ${name} のマス数`);
+      }
+    }
+  });
+
+  test(`対称で写した解は、どれも同じ代表形へ落ちる（${spec.label}）`, () => {
+    const base = boardKey(canonicalBoard(solved));
+    for (const sym of boardSymmetries(solved)) {
+      const turned = transformBoard(solved, sym);
+      assertSame(boardKey(canonicalBoard(turned)), base, `${sym.turns}/${sym.flipped} が別の代表形`);
+    }
+  });
+
+  test(`代表形をもう一度代表形にしても変わらない（${spec.label}）`, () => {
+    const canon = canonicalBoard(solved);
+    assertSame(boardKey(canonicalBoard(canon)), boardKey(canon), '2 度目で変わった');
+  });
+
+  test(`代表形は盤の形（大きさと穴の位置）を保つ（${spec.label}）`, () => {
+    const canon = canonicalBoard(solved);
+    assertSame({ rows: canon.rows, cols: canon.cols }, { rows: spec.rows, cols: spec.cols }, '大きさ');
+    const holes = (b) => b.grid.map((v, i) => (v === HOLE ? i : -1)).filter((i) => i >= 0);
+    assertSame(holes(canon), holes(createBoard(spec)), '穴の位置');
+  });
+
+  test(`代表形が同じなのは、対称で写り合う解だけ（${spec.label}）`, () => {
+    // 探索順を混ぜて解をいくつか集め、「代表形が同じ」と「対称で写り合う」が
+    // 一致することを確かめる。全解を数え上げるのは重いので、標本で見る。
+    const samples = [solved];
+    for (let i = 0; i < 6; i += 1) {
+      const result = solve(emptyBoard, NAMES, { shuffle: true });
+      assert(result.ok, `解が出なかった: ${result.reason}`);
+      samples.push(result.placements
+        .reduce((acc, p) => place(acc, p.name, p.cells, p.row, p.col), emptyBoard));
+    }
+    let distinct = 0;
+    for (let i = 0; i < samples.length; i += 1) {
+      for (let j = i + 1; j < samples.length; j += 1) {
+        const sameCanon = boardKey(canonicalBoard(samples[i])) === boardKey(canonicalBoard(samples[j]));
+        const related = boardSymmetries(samples[i])
+          .some((sym) => boardKey(transformBoard(samples[i], sym)) === boardKey(samples[j]));
+        assertSame(sameCanon, related, `${i} と ${j} で食い違った`);
+        if (!sameCanon) distinct += 1;
+      }
+    }
+    // 全部が同じ代表形なら、上の突き合わせが素通りしてしまう。
+    assert(distinct > 0, '集めた解がすべて同じものだった');
+  });
+}
 
 // ---- solver -------------------------------------------------------------
 

@@ -287,6 +287,104 @@ export function regionsFitPieces(board) {
   return emptyRegionSizes(board).every((size) => size % PIECE_SIZE === 0);
 }
 
+/**
+ * 盤面を右 90° 回転した盤面を新しく作る。行と列が入れ替わる。
+ * `(行, 列) → (列, 行数-1-行)` で、`rotateCw()` と同じ向きの回転になる。
+ */
+function rotateBoardCw(board) {
+  const grid = new Array(board.grid.length);
+  for (let row = 0; row < board.rows; row += 1) {
+    for (let col = 0; col < board.cols; col += 1) {
+      grid[col * board.rows + (board.rows - 1 - row)] = board.grid[row * board.cols + col];
+    }
+  }
+  return { rows: board.cols, cols: board.rows, grid };
+}
+
+/** 盤面の左右を反転した盤面を新しく作る。上下の反転は回転 2 回と組み合わせて得る。 */
+function flipBoardLr(board) {
+  const grid = new Array(board.grid.length);
+  for (let row = 0; row < board.rows; row += 1) {
+    for (let col = 0; col < board.cols; col += 1) {
+      grid[row * board.cols + (board.cols - 1 - col)] = board.grid[row * board.cols + col];
+    }
+  }
+  return { rows: board.rows, cols: board.cols, grid };
+}
+
+/**
+ * 盤面に当てはめられる変換 8 通り（回転 4 × 反転 2）。
+ * `flipped` を先に、`turns` の回転をあとに掛ける。
+ */
+export const SYMMETRIES = [false, true].flatMap(
+  (flipped) => [0, 1, 2, 3].map((turns) => ({ turns, flipped })),
+);
+
+/**
+ * 盤面を 1 つの変換で写した盤面を新しく作る（元は書き換えない）。
+ *
+ * ピース名はそのまま移す。写った先の形も同じピースの別の向きなので
+ * （`orientations()` は回転・反転を全部含む）、解を写したものはやはり解になる。
+ */
+export function transformBoard(board, { turns = 0, flipped = false } = {}) {
+  let result = flipped
+    ? flipBoardLr(board)
+    : { rows: board.rows, cols: board.cols, grid: board.grid.slice() };
+  for (let turn = 0; turn < turns; turn += 1) result = rotateBoardCw(result);
+  return result;
+}
+
+/**
+ * 盤面を 1 本の文字列にする。空きは `.`、穴は `HOLE`、置いてあればピース名。
+ * 代表形を選ぶための比較と、盤の形が保たれるかの判定に使う。
+ */
+export function boardKey(board) {
+  return board.grid.map((value) => (value === null ? '.' : value)).join('');
+}
+
+/** 盤の形（大きさと穴の位置）だけを取り出した鍵。置いてあるピースは無視する。 */
+function shapeKeyOf(board) {
+  return `${board.rows}x${board.cols}:`
+    + board.grid.map((value) => (value === HOLE ? HOLE : '.')).join('');
+}
+
+/**
+ * その盤の**形を保つ**変換だけを返す（`SYMMETRIES` の部分集合。TODO-012）。
+ *
+ * 8 通りを決め打ちで盤ごとに書かず、実際に当てはめて穴の位置が一致するものを
+ * 残すのは、盤を足したときに書き足さずに済むようにするため。
+ * 8×8（中央 2×2 が穴）は 8 通りすべて、6×10（穴なし）は縦横が違うので
+ * 90° 回転が形を変え、恒等・180° 回転・左右反転・上下反転の 4 通りになる。
+ */
+export function boardSymmetries(board) {
+  const shape = shapeKeyOf(board);
+  return SYMMETRIES.filter((sym) => shapeKeyOf(transformBoard(board, sym)) === shape);
+}
+
+/**
+ * 回転・反転で重なる盤面から、いつも同じ 1 つを選んで返す（TODO-012）。
+ *
+ * 完成した解は、盤の形を保つ変換で写してもやはり解になる。そのままでは
+ * 見た目だけ違う同じ解を別々に数えてしまうので、**写した中で `boardKey()` が
+ * 一番小さいもの**を代表とする。X ピースの位置で決めるやり方は盤ごとに
+ * 条件を立て直すことになるので採らない（盤に依らないこちらを使う）。
+ *
+ * 途中の盤面にも当てはめられるが、意味を持つのは完成形どうしを見比べるとき。
+ */
+export function canonicalBoard(board) {
+  let best = null;
+  let bestKey = null;
+  for (const sym of boardSymmetries(board)) {
+    const turned = transformBoard(board, sym);
+    const key = boardKey(turned);
+    if (bestKey === null || key < bestKey) {
+      best = turned;
+      bestKey = key;
+    }
+  }
+  return best;
+}
+
 /** 経過時間の表示。1 時間を超えたら `h:mm:ss` に伸ばす。 */
 export function formatTime(ms) {
   const total = Math.max(0, Math.floor(ms / 1000));
