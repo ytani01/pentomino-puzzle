@@ -153,9 +153,9 @@ export const OUTLINE = {
   shadowAlpha: 0.3,
 };
 
-/** 操作の判定に使う時間と距離。タップ・長押し・ドラッグを 1 つの押下から見分ける。 */
+/** 操作の判定に使う時間と距離。タップ・ダブルタップ・ドラッグを見分ける。 */
 export const INPUT = {
-  longPressMs: 420,
+  doubleTapMs: 320,
   dragThreshold: 8,
   invalidFlashMs: 260,
   returnTweenMs: 180,

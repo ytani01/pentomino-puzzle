@@ -39,6 +39,7 @@ export default class GameScene extends Phaser.Scene {
     this.usedHint = false;
     this.playing = true;
     this.pending = null;
+    this.pendingTap = null;
     this.drag = null;
     this.messageTimer = null;
 
@@ -57,6 +58,7 @@ export default class GameScene extends Phaser.Scene {
     // シーンを離れるときに持ち越しの押下状態を捨てる（次に来たとき掴んだままになる）。
     // `once` なのは、やり直しで `create()` を通るたびに登録が積み上がらないようにするため。
     this.events.once('shutdown', this.cancelPending, this);
+    this.events.once('shutdown', this.cancelPendingTap, this);
 
     this.refreshHud();
   }
@@ -361,20 +363,8 @@ export default class GameScene extends Phaser.Scene {
       piece,
       startX: pointer.x,
       startY: pointer.y,
-      locked: false,
       consumed: false,
-      timer: this.time.delayedCall(INPUT.longPressMs, () => this.onLongPress()),
     };
-  }
-
-  /** 長押しは反転。ここで掴み直しを禁じるのは、反転の後にドラッグへ移ると
-   *  掴んでいたマスが別の場所へ動いてしまい、指と絵がずれるため。 */
-  onLongPress() {
-    const pending = this.pending;
-    if (!pending || this.drag) return;
-    pending.locked = true;
-    pending.consumed = true;
-    this.applyOrientation(pending.piece, normalize(flip(pending.piece.cells)), audio.flip);
   }
 
   onPointerMove(pointer) {
@@ -382,14 +372,17 @@ export default class GameScene extends Phaser.Scene {
       this.updateDrag(pointer);
       return;
     }
-    if (!this.pending || this.pending.locked) return;
+    if (!this.pending) return;
     const moved = Phaser.Math.Distance.Between(
       this.pending.startX, this.pending.startY, pointer.x, pointer.y,
     );
     if (moved > INPUT.dragThreshold) this.startDrag(pointer);
   }
 
-  onPointerUp(_pointer) {
+  /** タップは既定で回転だが、`INPUT.doubleTapMs` 以内に同じピースへ 2 回目の
+   *  タップが来たら反転に差し替える。1 回目の回転をその猶予ぶん遅らせて
+   *  待つことで、反転の直前に絵が跳ねないようにしている。 */
+  onPointerUp(pointer) {
     if (this.drag) {
       this.dropDrag();
       return;
@@ -397,18 +390,46 @@ export default class GameScene extends Phaser.Scene {
     const pending = this.pending;
     this.cancelPending();
     if (!pending || pending.consumed) return;
-    this.applyOrientation(pending.piece, normalize(rotateCw(pending.piece.cells)), audio.rotate);
+    const piece = pending.piece;
+
+    const waiting = this.pendingTap;
+    if (waiting && waiting.piece === piece) {
+      const moved = Phaser.Math.Distance.Between(waiting.x, waiting.y, pointer.x, pointer.y);
+      if (moved <= INPUT.dragThreshold) {
+        waiting.timer.remove();
+        this.pendingTap = null;
+        this.applyOrientation(piece, normalize(flip(piece.cells)), audio.flip);
+        return;
+      }
+    }
+
+    if (this.pendingTap) this.pendingTap.timer.remove();
+    this.pendingTap = {
+      piece,
+      x: pointer.x,
+      y: pointer.y,
+      timer: this.time.delayedCall(INPUT.doubleTapMs, () => {
+        this.pendingTap = null;
+        this.applyOrientation(piece, normalize(rotateCw(piece.cells)), audio.rotate);
+      }),
+    };
   }
 
   cancelPending() {
-    if (this.pending && this.pending.timer) this.pending.timer.remove();
     this.pending = null;
+  }
+
+  /** 待機中の 1 回目のタップを、次のドラッグやシーン終了で捨てる。 */
+  cancelPendingTap() {
+    if (this.pendingTap) this.pendingTap.timer.remove();
+    this.pendingTap = null;
   }
 
   startDrag(pointer) {
     const pending = this.pending;
     const piece = pending.piece;
     this.cancelPending();
+    if (this.pendingTap && this.pendingTap.piece === piece) this.cancelPendingTap();
 
     // 掴んだ点を拡大率ぶん割り戻して覚える。トレイの縮小表示から盤の大きさへ
     // 広がっても、指の下にあるマスが変わらないようにするため。
