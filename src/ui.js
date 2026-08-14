@@ -1,7 +1,7 @@
 /**
  * 画面部品（ボタンと枠）の組み立て。
  *
- * タイトル・本編・クリアの 3 シーンが同じ見た目のボタンを使うので、
+ * タイトル・本編・クリア・記録の 4 シーンが同じ見た目のボタンを使うので、
  * 同じ描画をシーンごとに書かずに済むようここへ寄せた。
  * 状態はモジュールに持たず、作った Container のプロパティに持たせる。
  */
@@ -39,6 +39,44 @@ export function createPanel(scene, x, y, width, height, radius = 10) {
   g.lineStyle(2, COLORS.panelEdge, 1);
   g.strokeRoundedRect(x, y, width, height, radius);
   return g;
+}
+
+/**
+ * 選ぶボタン 1 個の大きさと間隔、行の頭に置くラベルの幅。
+ * ラベルの幅は 1 文字ぶんに間隔を足した値。
+ */
+const CHOICE_BUTTON = { width: 120, height: 40, gap: 16, labelWidth: 40 };
+
+/**
+ * ラベル 1 つと、選択肢ぶんのボタンを 1 行に並べる。中心を `(cx, y)` に置く。
+ * 戻り値のボタンには選択肢のキーを持たせ、選び直したときの塗り分けに使う。
+ *
+ * タイトルの盤・色の選択だけだった頃はあちらの private メソッドだったが、
+ * 記録の画面（TODO-008）も盤を切り替えるのに同じ行を使うのでここへ寄せた。
+ * 「今どれが選ばれているか」の見え方を 2 つの画面で揃えるため。
+ */
+export function createChoiceRow(scene, cx, y, label, choices, onSelect) {
+  const buttons = choices.length * CHOICE_BUTTON.width
+    + (choices.length - 1) * CHOICE_BUTTON.gap;
+  const left = cx - (CHOICE_BUTTON.labelWidth + buttons) / 2;
+  scene.add.text(left, y, label, {
+    fontFamily: FONT.family,
+    fontSize: `${FONT.body}px`,
+    color: TEXT_COLORS.dim,
+  }).setOrigin(0, 0.5);
+  return choices.map((choice, index) => {
+    const button = createButton(scene, {
+      x: left + CHOICE_BUTTON.labelWidth + CHOICE_BUTTON.width / 2
+        + index * (CHOICE_BUTTON.width + CHOICE_BUTTON.gap),
+      y,
+      width: CHOICE_BUTTON.width,
+      height: CHOICE_BUTTON.height,
+      label: choice.label,
+      onClick: () => onSelect(choice),
+    });
+    button.choiceKey = choice.key;
+    return button;
+  });
 }
 
 /**

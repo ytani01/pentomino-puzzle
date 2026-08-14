@@ -9,7 +9,7 @@ import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, SCREEN, TEXT_COLORS,
 } from '../config.js';
 import { formatTime } from '../logic.js';
-import { saveBest } from '../storage.js';
+import { addHistory, saveBest } from '../storage.js';
 import * as audio from '../audio.js';
 import { createButton, createPanel, stackTops } from '../ui.js';
 
@@ -41,6 +41,8 @@ export default class ClearScene extends Phaser.Scene {
     this.elapsed = data && typeof data.ms === 'number' ? data.ms : 0;
     this.usedHint = !!(data && data.usedHint);
     this.usedCheck = !!(data && data.usedCheck);
+    // 完成した盤面（`logic.js` の `boardKey()` の出力）。履歴に残すのに使う。
+    this.cells = data && typeof data.cells === 'string' ? data.cells : null;
   }
 
   create() {
@@ -48,6 +50,12 @@ export default class ClearScene extends Phaser.Scene {
     // 記録は盤ごとに分けてあるので、どの盤を解いたのかを `registry` から読む。
     const board = BOARDS[this.registry.get(BOARD_REGISTRY_KEY)];
     const record = saveBest(board.key, this.elapsed);
+    // クリアした回を履歴へ 1 件足す（TODO-008）。最短時間の更新とは別に、
+    // 更新しなかった回も残す（あとから完成形を見比べるためのもの）。
+    // 盤面が渡ってこなかったときは足さない（`cells` の無い件は残せない）。
+    if (this.cells !== null) {
+      addHistory(board.key, { at: Date.now(), ms: this.elapsed, cells: this.cells });
+    }
     audio.fanfare();
 
     const cx = SCREEN.width / 2;

@@ -13,31 +13,28 @@ import {
 import { formatTime } from '../logic.js';
 import { loadBest, savePalette } from '../storage.js';
 import * as audio from '../audio.js';
-import { createButton, createPanel, stackTops } from '../ui.js';
+import { createButton, createChoiceRow, createPanel, stackTops } from '../ui.js';
 
 /**
  * 上から順に積む部品。`height` は部品の高さ、`gap` は次の部品までの間隔で、
- * どちらも横画面での今までの見え方をそのまま写した値（TODO-011）。
- * 縦画面では画面が高くなるぶんだけ、この塊ごと下へずれる。
+ * どちらも横画面での見え方を写した値（TODO-011）。縦画面では画面が高くなる
+ * ぶんだけ、この塊ごと下へずれる。
+ *
+ * 記録の画面へ行く行（`records`）を足したぶん（TODO-008）、横画面では
+ * 640 に収まらなくなるので、`howTo` / `palette` / `best` のあとの間隔を
+ * 詰めてある（合わせて 604 で、下端に 10 ほど余る）。
  */
 const STACK = [
   { key: 'title', height: 52, gap: 8 },
   { key: 'subtitle', height: 28, gap: 38 },
-  { key: 'howTo', height: 176, gap: 18 },
+  { key: 'howTo', height: 176, gap: 10 },
   { key: 'size', height: 40, gap: 10 },
-  { key: 'palette', height: 40, gap: 18 },
-  { key: 'best', height: 24, gap: 26 },
-  { key: 'start', height: 56, gap: 34 },
-  { key: 'keyHint', height: 18, gap: 0 },
+  { key: 'palette', height: 40, gap: 14 },
+  { key: 'best', height: 24, gap: 20 },
+  { key: 'start', height: 56, gap: 10 },
+  { key: 'keyHint', height: 18, gap: 20 },
+  { key: 'records', height: 40, gap: 0 },
 ];
-
-/**
- * 選ぶボタン 1 個の大きさと間隔、行の頭に置くラベルの幅。
- *
- * 盤と色の 2 行を同じ形にしてあるのは、どちらも「今どれが選ばれているか」を
- * 同じ見え方で示すため（TODO-015）。ラベルの幅は 1 文字ぶんに間隔を足した値。
- */
-const SIZE_BUTTON = { width: 120, height: 40, gap: 16, labelWidth: 40 };
 
 /**
  * 余りのうち上へ回す割合。横画面の 0.7 は今までどおりの位置になる値で、
@@ -100,12 +97,14 @@ export default class TitleScene extends Phaser.Scene {
 
     // 盤と色の組を選ぶ 2 行。どちらも選べるのはここだけで、遊んでいる最中は
     // 変えられない（途中の盤面を捨てる確認を出さずに済ませるため。TODO-009）。
-    this.boardButtons = this.createChoiceRow(cx, centerOf('size'), '盤',
-                                             Object.values(BOARDS),
-                                             (choice) => this.selectBoard(choice.key));
-    this.paletteButtons = this.createChoiceRow(cx, centerOf('palette'), '色',
-                                               Object.values(PALETTES),
-                                               (choice) => this.selectPalette(choice.key));
+    // 盤と色の 2 行を同じ形にしてあるのは、どちらも「今どれが選ばれているか」を
+    // 同じ見え方で示すため（TODO-015）。
+    this.boardButtons = createChoiceRow(this, cx, centerOf('size'), '盤',
+                                        Object.values(BOARDS),
+                                        (choice) => this.selectBoard(choice.key));
+    this.paletteButtons = createChoiceRow(this, cx, centerOf('palette'), '色',
+                                          Object.values(PALETTES),
+                                          (choice) => this.selectPalette(choice.key));
 
     this.bestText = this.add.text(cx, centerOf('best'), '', {
       fontFamily: FONT.family,
@@ -135,6 +134,21 @@ export default class TitleScene extends Phaser.Scene {
       color: TEXT_COLORS.dim,
     }).setOrigin(0.5);
 
+    // 記録の一覧（TODO-008）。盤はあちらでも切り替えられるので、ここで
+    // 選んでいる盤に関わらず 1 つのボタンから入れる。
+    createButton(this, {
+      x: cx,
+      y: centerOf('records'),
+      width: 160,
+      height: 40,
+      label: '記録',
+      onClick: () => {
+        audio.unlock();
+        audio.button();
+        this.scene.start('Records');
+      },
+    });
+
     this.input.keyboard.on('keydown-SPACE', this.start, this);
     this.input.keyboard.on('keydown-ENTER', this.start, this);
 
@@ -143,34 +157,6 @@ export default class TitleScene extends Phaser.Scene {
       fontSize: `${FONT.small}px`,
       color: TEXT_COLORS.dim,
     }).setOrigin(1, 1).setAlpha(0.6);
-  }
-
-  /**
-   * ラベル 1 つと、選択肢ぶんのボタンを 1 行に並べる。
-   * 戻り値のボタンには選択肢のキーを持たせ、選び直したときの塗り分けに使う。
-   */
-  createChoiceRow(cx, y, label, choices, onSelect) {
-    const buttons = choices.length * SIZE_BUTTON.width
-      + (choices.length - 1) * SIZE_BUTTON.gap;
-    const left = cx - (SIZE_BUTTON.labelWidth + buttons) / 2;
-    this.add.text(left, y, label, {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.body}px`,
-      color: TEXT_COLORS.dim,
-    }).setOrigin(0, 0.5);
-    return choices.map((choice, index) => {
-      const button = createButton(this, {
-        x: left + SIZE_BUTTON.labelWidth + SIZE_BUTTON.width / 2
-          + index * (SIZE_BUTTON.width + SIZE_BUTTON.gap),
-        y,
-        width: SIZE_BUTTON.width,
-        height: SIZE_BUTTON.height,
-        label: choice.label,
-        onClick: () => onSelect(choice),
-      });
-      button.choiceKey = choice.key;
-      return button;
-    });
   }
 
   /** 盤を選び直す。選んだ盤は `registry` に置き、他のシーンがそこから読む。 */

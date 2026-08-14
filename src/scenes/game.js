@@ -13,7 +13,7 @@ import {
   SOLVE_CHECK_LIMIT, TEXT_COLORS, VERSION,
 } from '../config.js';
 import {
-  canPlace, createBoard, flip, formatTime, isSolved, nextTurn, normalize, outlineEdges,
+  boardKey, canPlace, createBoard, flip, formatTime, isSolved, nextTurn, normalize, outlineEdges,
   place, remove, sameShape, shapeSize,
 } from '../logic.js';
 import { hintPlacement, solve } from '../solver.js';
@@ -870,7 +870,12 @@ export default class GameScene extends Phaser.Scene {
     this.showMessage('完成');
     this.time.delayedCall(700, () => {
       this.scene.start('Clear', {
-        ms: this.elapsed, usedHint: this.usedHint, usedCheck: this.usedCheck,
+        ms: this.elapsed,
+        usedHint: this.usedHint,
+        usedCheck: this.usedCheck,
+        // 完成形は履歴に残す（TODO-008）。残すかどうかを決めるのは `clear.js`
+        // なので、ここは盤面を文字列にして渡すところまで。
+        cells: boardKey(this.board),
       });
     });
   }
