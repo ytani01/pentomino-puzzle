@@ -96,6 +96,9 @@ export const LAYOUT = {
   tray: { x: 500, y: 84, width: 426, height: 500, cols: 3, rows: 4, cell: 22 },
   trayPanel: { x: 490, y: 74, width: 446, height: 520 },
   message: { x: 480, y: 612 },
+  confirm: {
+    width: 360, height: 170, buttonWidth: 120, buttonHeight: 40, gap: 16,
+  },
 };
 
 /** マス目テクスチャの描き方。ピースの色ごとに 1 枚を `boot.js` が作る。 */

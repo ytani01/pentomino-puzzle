@@ -19,8 +19,10 @@ import * as audio from '../audio.js';
 import { createButton, createPanel } from '../ui.js';
 import { TEX } from './boot.js';
 
-/** 重なりの順。盤の上にピース、ドラッグ中のピースはさらに上、HUD が一番上。 */
-const DEPTH = { board: 0, ghost: 5, piece: 10, dragging: 20, hud: 30 };
+/** 重なりの順。盤の上にピース、ドラッグ中のピースはさらに上、確認ダイアログが最前面。 */
+const DEPTH = {
+  board: 0, ghost: 5, piece: 10, dragging: 20, hud: 30, confirm: 40,
+};
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -45,6 +47,7 @@ export default class GameScene extends Phaser.Scene {
     this.createPieces();
     this.createHud();
     this.createMessage();
+    this.createConfirmDialog();
 
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
@@ -138,12 +141,15 @@ export default class GameScene extends Phaser.Scene {
       color: TEXT_COLORS.dim,
     }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
 
-    const labels = ['一手戻す', 'ヒント', 'やり直し', audio.isMuted() ? '音 OFF' : '音 ON'];
+    const labels = [
+      '一手戻す', 'ヒント', 'やり直し', audio.isMuted() ? '音 OFF' : '音 ON', 'タイトルへ',
+    ];
     const actions = [
       () => this.undo(),
       () => this.useHint(),
       () => this.restart(),
       () => this.toggleMute(),
+      () => this.confirmToTitle(),
     ];
     const total = labels.length * hud.buttonWidth + (labels.length - 1) * hud.gap;
     const left = hud.x + hud.width - hud.padding - total;
@@ -167,6 +173,59 @@ export default class GameScene extends Phaser.Scene {
       fontSize: `${FONT.body}px`,
       color: TEXT_COLORS.dim,
     }).setOrigin(0.5).setDepth(DEPTH.hud);
+  }
+
+  /**
+   * タイトルへ戻る前の確認。ブラウザの `confirm()` は使わない方針（CLAUDE.md）
+   * なので、Canvas 内に自前で組む。背景の帯は画面全体を覆う当たり判定を持たせて、
+   * 開いている間はピースやほかのボタンへクリックが抜けないようにする
+   * （Phaser の入力は既定で最前面の対象だけに配る `topOnly` なので、これで足りる）。
+   */
+  createConfirmDialog() {
+    const cfg = LAYOUT.confirm;
+    const x = (LAYOUT.width - cfg.width) / 2;
+    const y = (LAYOUT.height - cfg.height) / 2;
+
+    this.confirmParts = [];
+
+    const backdrop = this.add.rectangle(0, 0, LAYOUT.width, LAYOUT.height, 0x000000, 0.55)
+      .setOrigin(0).setDepth(DEPTH.confirm).setInteractive().setVisible(false);
+    this.confirmParts.push(backdrop);
+
+    this.confirmParts.push(
+      createPanel(this, x, y, cfg.width, cfg.height).setDepth(DEPTH.confirm).setVisible(false),
+    );
+
+    this.confirmParts.push(
+      this.add.text(x + cfg.width / 2, y + 50, 'タイトルへ戻りますか？\n今の進み方は失われます', {
+        fontFamily: FONT.family,
+        fontSize: `${FONT.body}px`,
+        color: TEXT_COLORS.normal,
+        align: 'center',
+      }).setOrigin(0.5).setDepth(DEPTH.confirm).setVisible(false),
+    );
+
+    const buttonY = y + cfg.height - 40;
+    const totalWidth = cfg.buttonWidth * 2 + cfg.gap;
+    const left = x + (cfg.width - totalWidth) / 2;
+    this.confirmParts.push(createButton(this, {
+      x: left + cfg.buttonWidth / 2,
+      y: buttonY,
+      width: cfg.buttonWidth,
+      height: cfg.buttonHeight,
+      label: '戻る',
+      fontSize: FONT.small,
+      onClick: () => this.goToTitle(),
+    }).setDepth(DEPTH.confirm).setVisible(false));
+    this.confirmParts.push(createButton(this, {
+      x: left + cfg.buttonWidth + cfg.gap + cfg.buttonWidth / 2,
+      y: buttonY,
+      width: cfg.buttonWidth,
+      height: cfg.buttonHeight,
+      label: 'やめる',
+      fontSize: FONT.small,
+      onClick: () => this.hideConfirm(),
+    }).setDepth(DEPTH.confirm).setVisible(false));
   }
 
   // ---- ピースの見た目 -------------------------------------------------
@@ -503,6 +562,21 @@ export default class GameScene extends Phaser.Scene {
     const muted = audio.toggleMuted();
     this.muteButton.setLabel(muted ? '音 OFF' : '音 ON');
     if (!muted) audio.button();
+  }
+
+  confirmToTitle() {
+    audio.button();
+    this.confirmParts.forEach((part) => part.setVisible(true));
+  }
+
+  hideConfirm() {
+    audio.button();
+    this.confirmParts.forEach((part) => part.setVisible(false));
+  }
+
+  goToTitle() {
+    audio.button();
+    this.scene.start('Title');
   }
 
   // ---- 進行 -----------------------------------------------------------
