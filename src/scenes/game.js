@@ -19,9 +19,10 @@ import * as audio from '../audio.js';
 import { createButton, createPanel } from '../ui.js';
 import { TEX } from './boot.js';
 
-/** 重なりの順。盤の上にピース、ドラッグ中のピースはさらに上、確認ダイアログが最前面。 */
+/** 重なりの順。盤の上にピース、トレイの当たり判定はその上、ドラッグ中の
+ *  ピースはさらに上、確認ダイアログが最前面。 */
 const DEPTH = {
-  board: 0, ghost: 5, piece: 10, dragging: 20, hud: 30, confirm: 40,
+  board: 0, ghost: 5, piece: 10, traySlot: 15, dragging: 20, hud: 30, confirm: 40,
 };
 
 export default class GameScene extends Phaser.Scene {
@@ -45,6 +46,7 @@ export default class GameScene extends Phaser.Scene {
     this.drawTray();
     this.createGhost();
     this.createPieces();
+    this.createTraySlots();
     this.createHud();
     this.createMessage();
     this.createConfirmDialog();
@@ -122,6 +124,29 @@ export default class GameScene extends Phaser.Scene {
       this.refreshPiece(piece);
       this.layoutPiece(piece);
       return piece;
+    });
+  }
+
+  /**
+   * トレイのスロット全体を当たり判定にする。ピースの絵は 11px 幅の細い形にも
+   * なりうるが（`I` の縦向きなど）、指のタップ目標としては狭すぎるため、
+   * スロット全体を覆う透明な矩形で受ける。`piece.slot` は作られてから
+   * 変わらないので、矩形とピースは 1 対 1 のまま固定でよい。
+   */
+  createTraySlots() {
+    const tray = LAYOUT.tray;
+    const slotWidth = tray.width / tray.cols;
+    const slotHeight = tray.height / tray.rows;
+    this.pieces.forEach((piece) => {
+      const centerX = tray.x + (piece.slot % tray.cols) * slotWidth + slotWidth / 2;
+      const centerY = tray.y + Math.floor(piece.slot / tray.cols) * slotHeight + slotHeight / 2;
+      const hit = this.add.rectangle(centerX, centerY, slotWidth, slotHeight, 0x000000, 0)
+        .setDepth(DEPTH.traySlot)
+        .setInteractive({ useHandCursor: true });
+      hit.on('pointerdown', (pointer) => {
+        if (piece.location !== 'tray') return;
+        this.onPiecePointerDown(piece, pointer);
+      });
     });
   }
 
@@ -323,9 +348,9 @@ export default class GameScene extends Phaser.Scene {
     if (moved > INPUT.dragThreshold) this.startDrag(pointer);
   }
 
-  onPointerUp(pointer) {
+  onPointerUp(_pointer) {
     if (this.drag) {
-      this.dropDrag(pointer);
+      this.dropDrag();
       return;
     }
     const pending = this.pending;
@@ -348,7 +373,10 @@ export default class GameScene extends Phaser.Scene {
     // 広がっても、指の下にあるマスが変わらないようにするため。
     const scale = piece.container.scaleX;
     const offsetX = (pending.startX - piece.container.x) / scale;
-    const offsetY = (pending.startY - piece.container.y) / scale;
+    let offsetY = (pending.startY - piece.container.y) / scale;
+    // 指で隠れないよう、タッチ操作のときだけピースを盤のマス 1 個ぶん上へ
+    // ずらす。マウスでは指がないのでずらさない（`pointer.wasTouch` で見分ける）。
+    if (pointer.wasTouch) offsetY += LAYOUT.board.cell;
 
     const snapshot = this.snapshot();
     if (piece.location === 'board') this.board = remove(this.board, piece.name);
@@ -364,7 +392,7 @@ export default class GameScene extends Phaser.Scene {
     const { piece, offsetX, offsetY } = this.drag;
     piece.container.setPosition(pointer.x - offsetX, pointer.y - offsetY);
 
-    const spot = this.dropSpot(pointer);
+    const spot = this.dropSpot();
     if (spot && canPlace(this.board, piece.cells, spot.row, spot.col).ok) {
       this.showGhost(piece, spot.row, spot.col);
     } else {
@@ -372,13 +400,18 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  /** ドラッグ中の Container の位置から、置こうとしている盤の升目を求める。 */
-  dropSpot(pointer) {
+  /**
+   * ドラッグ中の Container の位置から、置こうとしている盤の升目を求める。
+   * 「盤の上か」も指の位置ではなく Container で見る。タッチ中はピースを
+   * 指より上へずらしてあるので、指の位置で見ると盤の下端で「ピースは
+   * 盤の上に見えているのに指は盤の外」がずれて起きる。
+   */
+  dropSpot() {
     const { x, y, cell } = LAYOUT.board;
-    const overBoard = pointer.x >= x && pointer.x < x + this.board.cols * cell
-      && pointer.y >= y && pointer.y < y + this.board.rows * cell;
-    if (!overBoard) return null;
     const container = this.drag.piece.container;
+    const overBoard = container.x >= x && container.x < x + this.board.cols * cell
+      && container.y >= y && container.y < y + this.board.rows * cell;
+    if (!overBoard) return null;
     return {
       row: Math.round((container.y - y) / cell),
       col: Math.round((container.x - x) / cell),
@@ -396,9 +429,9 @@ export default class GameScene extends Phaser.Scene {
     this.ghost.setVisible(true);
   }
 
-  dropDrag(pointer) {
+  dropDrag() {
     const { piece, snapshot } = this.drag;
-    const spot = this.dropSpot(pointer);
+    const spot = this.dropSpot();
     this.ghost.setVisible(false);
     this.drag = null;
 
