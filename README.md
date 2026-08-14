@@ -4,9 +4,11 @@
 
 **遊ぶ（公開版）**: https://ytani01.github.io/pentomino-puzzle/
 
-- **依存は Phaser 3.90.0 だけ**（CDN、バージョン固定）。Node.js も npm も要らない
+- **依存は Phaser 3.90.0 だけ**（CDN、バージョン固定）。npm は使わない
 - 画像・音声ファイルを持たない。絵は実行時に描き、効果音は Web Audio API で合成する
 - マウスでもタッチでも遊べる
+- **遊ぶのにも公開するのにも Node.js は要らない。** 要るのは
+  [全解のデータ](docs/developer.md#全解のデータ)を作り直すときだけ
 
 ## 遊ぶ
 
@@ -27,7 +29,7 @@ python3 -m http.server 8765
 | ピースを置く / 動かす | ドラッグ |
 | 右 90° 回転 | ピースをタップ |
 | 裏返す | ピースをダブルタップ |
-| 一手戻す / ヒント / 詰み表示 / やり直し / 音の ON・OFF | 画面のボタン |
+| 一手戻す / ヒント / 詰み表示 / やり直し / 音の ON・OFF / タイトルへ | 画面のボタン |
 
 置けない場所で離すと、赤く光って元の場所へ戻る。
 **詰み表示**を入にすると、置く・外すたびに残りのピースで最後まで置けるかを
@@ -73,15 +75,14 @@ src/
 tools/                開発時にだけ使う（公開しない）
   enumerate.mjs       全解の数え上げ
   gen-solutions.mjs   src/data/*.js を作る／突き合わせる
+  window-shim.mjs     Node から src/ を読むためのダミーの window
 tests.html            計算のテスト
+docs/developer.md     画面の用語、全解のデータ、GitHub 上の設定
+TODO.md               進行中の項目と、完了済みの目次（archives/todo/ に本体）
 ```
 
-`src/data/*.js` は**手で書き換えない**。作り直すときは Node で走らせる。
-
-```bash
-node tools/gen-solutions.mjs           # 作り直して書き出す
-node tools/gen-solutions.mjs --check   # 今あるものと突き合わせる（公開時の検査と同じ）
-```
+`src/data/*.js` は**手で書き換えない**。作り直し方と、いつ作り直すのかは
+[docs/developer.md の「全解のデータ」](docs/developer.md#全解のデータ)にある。
 
 ## ライセンス
 

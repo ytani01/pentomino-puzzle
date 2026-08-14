@@ -144,7 +144,9 @@ GitHub 上での設定・公開手順は
 - **公開の前に `node tools/gen-solutions.mjs --check` が走る**（`pages.yml`）。
   `src/data/*.js` を作り直して突き合わせ、食い違えばジョブが失敗する（TODO-022）。
   `logic.js` の向きの生成や `config.js` のピース定義を触ったら、
-  `node tools/gen-solutions.mjs` で作り直して一緒にコミットすること
+  `node tools/gen-solutions.mjs` で作り直して一緒にコミットすること。
+  作り直す条件と手順は
+  [docs/developer.md の「全解のデータ」](docs/developer.md#全解のデータ)にある
 - `src/config.js` の `VERSION`（既定は `'dev'`）を、`.github/workflows/pages.yml` が
   タグ名へ書き換えてから公開する。ローカルで直接開いた画面は `dev` のまま
   （公開前の見た目と本番の見た目が違う。これは許容している）
