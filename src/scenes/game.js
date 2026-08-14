@@ -809,7 +809,7 @@ export default class GameScene extends Phaser.Scene {
     if (state === 'dead' && this.checkState !== 'dead') audio.invalid();
     this.checkState = state;
 
-    const text = { ok: '解ける', dead: 'もう解けない', unknown: '分からない' };
+    const text = { ok: '解ける', dead: '解なし', unknown: '？？？' };
     const color = {
       ok: TEXT_COLORS.dim, dead: TEXT_COLORS.danger, unknown: TEXT_COLORS.disabled,
     };
