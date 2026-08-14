@@ -504,6 +504,60 @@ for (const state of boardStates) {
     assert(result.ok, `続きが解けなかった: ${result.reason}`);
     assertSame(result.placements.length, 8, '残りのピースの数');
   });
+
+  // ---- 探索順を混ぜる（TODO-017）----------------------------------------
+
+  test(`shuffle を付けても盤面をちょうど埋める解が返る（${spec.label}）`, () => {
+    const result = solve(emptyBoard, NAMES, { shuffle: true });
+    assert(result.ok, `解が出なかった: ${result.reason}`);
+    let board = emptyBoard;
+    for (const p of result.placements) {
+      const check = canPlace(board, p.cells, p.row, p.col);
+      assert(check.ok, `${p.name} が置けない: ${check.reason}`);
+      board = place(board, p.name, p.cells, p.row, p.col);
+    }
+    assert(isSolved(board), '空きマスが残った');
+  });
+
+  test(`shuffle は渡した盤面もピース名の配列も書き換えない（${spec.label}）`, () => {
+    const board = createBoard(spec);
+    const before = board.grid.slice();
+    const names = NAMES.slice();
+    solve(board, names, { shuffle: true });
+    assertSame(board.grid, before, '盤面');
+    assertSame(names, NAMES.slice(), 'ピース名の並び');
+  });
+
+  test(`同じ乱数を渡せば同じ解が返る（${spec.label}）`, () => {
+    // 乱数を差し替えられないと、混ぜたときの挙動をテストで押さえられない。
+    const fixed = () => 0.5;
+    const a = solve(emptyBoard, NAMES, { shuffle: true, random: fixed });
+    const b = solve(emptyBoard, NAMES, { shuffle: true, random: fixed });
+    assertSame(a.placements.map((p) => `${p.name}@${p.row},${p.col}`),
+      b.placements.map((p) => `${p.name}@${p.row},${p.col}`));
+  });
+
+  test(`shuffle を付けたヒントは何度か呼ぶと違う手も返る（${spec.label}）`, () => {
+    // [一手戻す] → [ヒント] で毎回同じ手にならないことの裏付け（TODO-017）。
+    // 乱数なので「必ず違う」とは言えず、10 回で 2 種類以上出れば足りるとする。
+    const seen = new Set();
+    for (let i = 0; i < 10; i += 1) {
+      const result = hintPlacement(emptyBoard, NAMES, { shuffle: true });
+      assert(result.ok, `ヒントが出なかった: ${result.reason}`);
+      const p = result.placement;
+      seen.add(`${p.name}@${p.row},${p.col}:${p.cells.map((c) => c.join('')).join('-')}`);
+    }
+    assert(seen.size > 1, `10 回とも同じ手だった: ${[...seen][0]}`);
+  });
+
+  test(`shuffle でも上限まで使い切らない（${spec.label}）`, () => {
+    // 混ぜると枝刈りの効き方が変わる。実測では最悪でも上限の 2 割ほど（TODO-017）。
+    for (let i = 0; i < 5; i += 1) {
+      const result = solve(emptyBoard, NAMES, { shuffle: true });
+      assert(result.reason !== 'limit', `上限で打ち切られた: ${result.tries}`);
+      assert(result.tries < SOLVER_LIMIT / 2, `試行回数が多すぎる: ${result.tries}`);
+    }
+  });
 }
 
 // ---- 結果の表示 ---------------------------------------------------------

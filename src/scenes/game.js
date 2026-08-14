@@ -8,8 +8,8 @@
  */
 
 import {
-  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, INPUT, LAYOUTS, OUTLINE, PALETTES,
-  PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, VERSION,
+  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, HINT_RETRIES, INPUT, LAYOUTS,
+  OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, VERSION,
 } from '../config.js';
 import {
   canPlace, createBoard, flip, formatTime, isSolved, normalize, outlineEdges, place,
@@ -46,6 +46,9 @@ export default class GameScene extends Phaser.Scene {
     this.history = [];
     this.elapsed = 0;
     this.usedHint = false;
+    // 直前に出したヒント。[一手戻す] → [ヒント] で同じ手を繰り返さないために
+    // 覚えておく（TODO-017）。一手戻しても消さない。
+    this.lastHint = null;
     this.playing = true;
     this.pending = null;
     this.pendingTap = null;
@@ -654,7 +657,7 @@ export default class GameScene extends Phaser.Scene {
     const names = this.pieces.filter((piece) => piece.location === 'tray').map((p) => p.name);
     if (names.length === 0) return;
 
-    const result = hintPlacement(this.board, names);
+    const result = this.findHint(names);
     if (!result.ok) {
       audio.invalid();
       this.showMessage(result.reason === 'limit'
@@ -673,11 +676,36 @@ export default class GameScene extends Phaser.Scene {
     this.board = place(this.board, name, cells, row, col);
     this.refreshPiece(piece);
     this.settlePiece(piece, true);
+    this.lastHint = result.placement;
     this.usedHint = true;
     audio.hint();
     this.showMessage(`${name} を置いた`);
     this.refreshHud();
     this.checkSolved();
+  }
+
+  /**
+   * 直前と同じ手を避けたヒントを求める（TODO-017）。探索順を混ぜて引き直すが、
+   * 終盤は違う手がそもそも無いことがあるので、`HINT_RETRIES` 回で諦めて
+   * 同じ手を返す（何も出さないより、同じでも出したほうが役に立つ）。
+   */
+  findHint(names) {
+    let result = hintPlacement(this.board, names, { shuffle: true });
+    for (let retry = 0; retry < HINT_RETRIES; retry += 1) {
+      if (!result.ok || !this.isLastHint(result.placement)) break;
+      result = hintPlacement(this.board, names, { shuffle: true });
+    }
+    return result;
+  }
+
+  /** ピース・向き・位置がそろって一致したときだけ「同じ手」と見なす。 */
+  isLastHint(placement) {
+    const last = this.lastHint;
+    if (!last || !placement) return false;
+    return last.name === placement.name
+      && last.row === placement.row
+      && last.col === placement.col
+      && sameShape(last.cells, placement.cells);
   }
 
   restart() {

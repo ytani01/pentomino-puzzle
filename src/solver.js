@@ -6,6 +6,10 @@
  *   - 空き領域を連結成分に分け、5 で割り切れない塊があればその枝を捨てる
  *
  * 探索は「1 解見つけたら止める」。全解を数える用途は持たない。
+ *
+ * 探索順は既定では固定で、同じ盤面からは必ず同じ解が返る。ヒントを続けて使うと
+ * 毎回同じ手になってしまうので、`shuffle` を渡すとピースと向きの試す順を混ぜる
+ * （TODO-017）。空きマスの若い順だけは混ぜない（枝刈りの前提のため）。
  */
 
 import { PIECES, PIECE_SIZE, SOLVER_LIMIT } from './config.js';
@@ -27,10 +31,13 @@ function cellsOf(name) {
  *
  * @param {object} board `logic.js` の盤面
  * @param {string[]} names 未使用のピース名
- * @param {{limit?: number}} [options] 試行回数の上限（既定は `SOLVER_LIMIT`）
+ * @param {{limit?: number, shuffle?: boolean, random?: () => number}} [options]
+ *   `limit` は試行回数の上限（既定は `SOLVER_LIMIT`）。`shuffle` を真にすると
+ *   ピースと向きの試す順を混ぜる。`random` はテストから決まった順を作るための差し替え。
  */
 export function solve(board, names, options = {}) {
   const limit = options.limit === undefined ? SOLVER_LIMIT : options.limit;
+  const random = options.random === undefined ? Math.random : options.random;
   const { rows, cols } = board;
   const grid = board.grid.slice();
 
@@ -42,8 +49,12 @@ export function solve(board, names, options = {}) {
   if (empty === 0) return { ok: true, placements: [], tries: 0, reason: null };
 
   // 向きは名前ごとに一度だけ作る。内側のループで作り直すと桁違いに遅くなる。
-  const shapes = new Map(names.map((name) => [name, orientations(cellsOf(name))]));
-  const unused = names.slice();
+  const shapes = new Map(names.map((name) => [
+    name,
+    options.shuffle ? shuffled(orientations(cellsOf(name)), random) : orientations(cellsOf(name)),
+  ]));
+  // ピースの順は探索の間 splice で出し入れするだけなので、最初に一度混ぜれば足りる。
+  const unused = options.shuffle ? shuffled(names, random) : names.slice();
   const placements = [];
   let tries = 0;
   let stopped = false;
@@ -95,6 +106,16 @@ export function solve(board, names, options = {}) {
   const ok = search();
   if (ok) return { ok: true, placements: placements.slice(), tries, reason: null };
   return { ok: false, placements: [], tries, reason: stopped ? 'limit' : 'unsolvable' };
+}
+
+/** 元の配列を残したまま順を混ぜる（呼ぶ側の `PIECES` などを書き換えないため）。 */
+function shuffled(list, random) {
+  const copy = list.slice();
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
 }
 
 /** 盤の範囲に収まり、どのマスも空いているか。求解の内側のループなので添字で回す。 */
@@ -150,6 +171,9 @@ function regionsFit(grid, rows, cols) {
 /**
  * ヒント 1 手ぶん。解ける置き方を求め、その最初の 1 ピースだけを返す。
  * 「どこを外せば解けるか」までは示さない（詰みは詰みと伝えるだけにする）。
+ *
+ * `options` はそのまま `solve()` に渡る。`shuffle` を付ければ呼ぶたびに違う手が
+ * 出やすくなるが、同じ手が返らないことまでは保証しない（避けるのは呼ぶ側の仕事）。
  */
 export function hintPlacement(board, names, options = {}) {
   const result = solve(board, names, options);

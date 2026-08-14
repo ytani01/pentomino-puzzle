@@ -453,6 +453,13 @@ export const INPUT = {
 export const SOLVER_LIMIT = 8000000;
 
 /**
+ * 直前と同じヒントが出たときに、探索順を混ぜて引き直す回数（TODO-017）。
+ * 終盤は残りのピースが少なく、そもそも違う手が無いことがある。引き直しは
+ * そのぶん待たせるので、有限で打ち切って同じ手を出す。
+ */
+export const HINT_RETRIES = 4;
+
+/**
  * 表示用のバージョン。タグを打って GitHub Pages へ公開するとき、
  * CI がこの行の `'dev'` をタグ名へ書き換える（`.github/workflows/pages.yml`）。
  * ローカルで直接開いたときは書き換わらないので `dev` のまま出る。
