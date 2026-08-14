@@ -385,6 +385,20 @@ export function canonicalBoard(board) {
   return best;
 }
 
+/**
+ * 履歴の `cells` 文字列（`boardKey()` の出力）を代表形の文字列にする（TODO-021）。
+ *
+ * 履歴の 1 件は盤ではなく文字列で持っているので、いったん盤へ戻してから
+ * `canonicalBoard()` に通す。`storage.js` に盤を組み立てる処理を書かず
+ * ここへ置くのは、Phaser に依存しない計算を `logic.js` に集める規約のため。
+ * `spec` は `{ rows, cols }` を持つ盤の定義（`BOARDS[key]` をそのまま渡せる）。
+ */
+export function canonicalCellsKey(cells, spec) {
+  const grid = Array.from(cells, (ch) => (ch === '.' ? null : ch));
+  const board = { rows: spec.rows, cols: spec.cols, grid };
+  return boardKey(canonicalBoard(board));
+}
+
 /** 経過時間の表示。1 時間を超えたら `h:mm:ss` に伸ばす。 */
 export function formatTime(ms) {
   const total = Math.max(0, Math.floor(ms / 1000));

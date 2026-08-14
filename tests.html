@@ -44,7 +44,7 @@ import {
   shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
-  SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard,
+  SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
 } from './src/logic.js';
 import { solve, hintPlacement } from './src/solver.js';
 import {
@@ -547,6 +547,18 @@ for (const state of boardStates) {
     }
   });
 
+  test(`canonicalCellsKey は文字列で渡しても同じ代表形を返す（${spec.label}）`, () => {
+    // 履歴の cells は盤ではなく文字列で持つ（TODO-021）。boardKey() を経由しても
+    // canonicalBoard() を直接使ったときと同じ代表形になることを確かめる。
+    const base = boardKey(canonicalBoard(solved));
+    assertSame(canonicalCellsKey(boardKey(solved), spec), base, '盤から出した代表形と食い違う');
+    for (const sym of boardSymmetries(solved)) {
+      const turned = transformBoard(solved, sym);
+      assertSame(canonicalCellsKey(boardKey(turned), spec), base,
+        `${sym.turns}/${sym.flipped} が別の代表形`);
+    }
+  });
+
   test(`代表形をもう一度代表形にしても変わらない（${spec.label}）`, () => {
     const canon = canonicalBoard(solved);
     assertSame(boardKey(canonicalBoard(canon)), boardKey(canon), '2 度目で変わった');
@@ -900,30 +912,91 @@ function withCleanStorage(spec, fn) {
   }
 }
 
+/**
+ * 代表形が互いに重ならない `cells` を `count` 個作る（テスト用）。
+ *
+ * 空いているマス 2 か所へ違う印（`I`・`L`）を置いた盤を候補にする。1 か所
+ * だけの印だと、対称の通り数（最大 8）ぶんしか別の代表形が作れず、
+ * `HISTORY_LIMIT + 1` 個そろわない。2 か所の組は候補がずっと多く、
+ * TODO-021 の重複判定（`canonicalCellsKey`）で見て別物になるものだけを集める。
+ */
+function distinctCellsList(spec, count) {
+  const board = createBoard(spec);
+  const positions = board.grid.map((v, i) => (v === null ? i : -1)).filter((i) => i >= 0);
+  const seen = new Set();
+  const list = [];
+  outer:
+  for (const posA of positions) {
+    for (const posB of positions) {
+      if (posA === posB) continue;
+      const grid = board.grid.slice();
+      grid[posA] = 'I';
+      grid[posB] = 'L';
+      const cells = boardKey({ rows: spec.rows, cols: spec.cols, grid });
+      const key = canonicalCellsKey(cells, spec);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push(cells);
+      if (list.length === count) break outer;
+    }
+  }
+  assert(list.length === count, `distinctCellsList: ${count} 個そろわなかった（${spec.label}）`);
+  return list;
+}
+
 for (const spec of BOARD_LIST) {
   const cells = '.'.repeat(spec.rows * spec.cols);
 
   test(`addHistory で足したものが loadHistory で新しい順に返る（${spec.label}）`, () => {
+    const [cellsA, cellsB] = distinctCellsList(spec, 2);
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 5000, cells });
-      addHistory(spec.key, { at: 2000, ms: 6000, cells });
+      addHistory(spec.key, { at: 1000, ms: 5000, cells: cellsA });
+      addHistory(spec.key, { at: 2000, ms: 6000, cells: cellsB });
       assertSame(loadHistory(spec.key).map((e) => e.at), [2000, 1000], '新しい順');
     });
   });
 
   test(`51 件目を足すと一番古い件が落ち、件数が 50 のままになる（${spec.label}）`, () => {
+    const distinct = distinctCellsList(spec, HISTORY_LIMIT + 1);
     withCleanStorage(spec, () => {
       for (let i = 0; i < HISTORY_LIMIT; i += 1) {
-        addHistory(spec.key, { at: 1000 + i, ms: 100, cells });
+        addHistory(spec.key, { at: 1000 + i, ms: 100, cells: distinct[i] });
       }
       let list = loadHistory(spec.key);
       assertSame(list.length, HISTORY_LIMIT, '50 件目までの件数');
       assert(list.some((e) => e.at === 1000), '一番古い件がまだ残っているはず');
-      addHistory(spec.key, { at: 9999, ms: 100, cells });
+      addHistory(spec.key, { at: 9999, ms: 100, cells: distinct[HISTORY_LIMIT] });
       list = loadHistory(spec.key);
       assertSame(list.length, HISTORY_LIMIT, '51 件目を足した後の件数');
       assert(!list.some((e) => e.at === 1000), '一番古い件（at: 1000）が残っている');
       assert(list.some((e) => e.at === 9999), '足した件が見当たらない');
+    });
+  });
+
+  test(`回転・反転で重なる盤面は既出として足されない（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      const board = createBoard(spec);
+      const pos = board.grid.findIndex((v) => v === null);
+      const grid = board.grid.slice();
+      grid[pos] = 'I';
+      const original = { rows: spec.rows, cols: spec.cols, grid };
+      const sym = boardSymmetries(original).find((s) => s.turns !== 0 || s.flipped);
+      assert(sym, `${spec.label} に恒等以外の対称が無い`);
+      const turnedCells = boardKey(transformBoard(original, sym));
+      addHistory(spec.key, { at: 1000, ms: 100, cells: boardKey(original) });
+      addHistory(spec.key, { at: 2000, ms: 200, cells: turnedCells });
+      const list = loadHistory(spec.key);
+      assertSame(list.length, 1, '回転・反転しただけの盤面が別件になった');
+      assertSame(list[0].at, 1000, '既にある件が書き換わった');
+    });
+  });
+
+  test(`違うパターンは別件として残る（${spec.label}）`, () => {
+    const [cellsA, cellsB] = distinctCellsList(spec, 2);
+    withCleanStorage(spec, () => {
+      addHistory(spec.key, { at: 1000, ms: 100, cells: cellsA });
+      addHistory(spec.key, { at: 2000, ms: 100, cells: cellsB });
+      assertSame(loadHistory(spec.key).length, 2, '違うパターンなのに 1 件にまとまった');
     });
   });
 

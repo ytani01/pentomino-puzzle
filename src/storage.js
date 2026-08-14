@@ -12,6 +12,7 @@ import {
   BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, HISTORY_LIMIT, PALETTES,
   PALETTE_STORAGE_KEY,
 } from './config.js';
+import { canonicalCellsKey } from './logic.js';
 
 /** 盤のキーから盤の定義を引く。知らない盤なら既定の盤として扱う。 */
 function boardOf(boardKey) {
@@ -161,10 +162,19 @@ export function loadHistory(boardKey) {
  *
  * あふれた古い件は捨てる（`HISTORY_LIMIT`）。保存に失敗しても配列は返すので、
  * その回の一覧は正しく出せる（`saveBest()` と同じ方針）。
+ *
+ * 回転・反転で重なる解が既にあれば足さない（TODO-021）。記録の意味は
+ * 「どのパターンをクリアしたか」で、時間で順位付けはしないため、
+ * 既にある件を書き換えることもしない。過去に積まれた重複はそのまま残す
+ * （これから足すぶんだけ避ける）。
  */
 export function addHistory(boardKey, entry) {
   const board = boardOf(boardKey);
-  const next = sanitizeHistory([entry, ...loadHistory(boardKey)], board);
+  const existing = loadHistory(boardKey);
+  const key = canonicalCellsKey(entry.cells, board);
+  const isDuplicate = existing.some((item) => canonicalCellsKey(item.cells, board) === key);
+  if (isDuplicate) return existing;
+  const next = sanitizeHistory([entry, ...existing], board);
   try {
     window.localStorage.setItem(board.historyKey, JSON.stringify(next));
   } catch (error) {
