@@ -38,7 +38,7 @@
 <div id="results"></div>
 
 <script type="module">
-import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, SOLVER_LIMIT, SOLVE_CHECK_LIMIT } from './src/config.js';
+import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT, SOLVER_LIMIT, SOLVE_CHECK_LIMIT } from './src/config.js';
 import {
   normalize, rotateCw, flip, sameShape, orientations, turnOrder, nextTurn,
   shapeSize, outlineEdges,
@@ -47,6 +47,9 @@ import {
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard,
 } from './src/logic.js';
 import { solve, hintPlacement } from './src/solver.js';
+import {
+  sanitizeHistory, loadHistory, addHistory, clearHistory, loadBest, shouldRecord,
+} from './src/storage.js';
 
 // ---- ごく小さなテストの土台 ----------------------------------------------
 // 依存を増やさないために自前で持つ。落ちた場所が分かればよいので、
@@ -765,6 +768,180 @@ for (const state of boardStates) {
       assert(result.reason !== 'limit', `上限で打ち切られた: ${result.tries}`);
       assert(result.tries < SOLVER_LIMIT / 2, `試行回数が多すぎる: ${result.tries}`);
     }
+  });
+}
+
+// ---- storage：履歴の検証（TODO-008）--------------------------------------
+//
+// sanitizeHistory は純関数なので localStorage を触らずに検証できる。
+
+group('src/storage.js — 履歴の検証（sanitizeHistory）');
+
+test('正しい配列はそのまま通る', () => {
+  const board = BOARDS['8x8'];
+  const entries = [
+    { at: 1000, ms: 2000, cells: '.'.repeat(64) },
+    { at: 2000, ms: 3000, cells: '.'.repeat(64) },
+  ];
+  assertSame(sanitizeHistory(entries, board), entries);
+});
+
+test('壊れた JSON の文字列を渡すと空の配列になる（例外にならない）', () => {
+  assertSame(sanitizeHistory('{壊れている', BOARDS['8x8']), []);
+});
+
+test('配列でない値（オブジェクト・null・数値）を渡すと空の配列になる', () => {
+  const board = BOARDS['8x8'];
+  for (const value of [{}, null, 42]) {
+    assertSame(sanitizeHistory(value, board), [], `${JSON.stringify(value)} を通した`);
+  }
+});
+
+test('at / ms が負・0・NaN・文字列の件は捨てられる', () => {
+  const board = BOARDS['8x8'];
+  const cells = '.'.repeat(64);
+  const bad = [
+    { at: -1, ms: 100, cells },
+    { at: 0, ms: 100, cells },
+    { at: NaN, ms: 100, cells },
+    { at: '1000', ms: 100, cells },
+    { at: 1000, ms: -1, cells },
+    { at: 1000, ms: 0, cells },
+    { at: 1000, ms: NaN, cells },
+    { at: 1000, ms: '100', cells },
+  ];
+  assertSame(sanitizeHistory(bad, board), []);
+});
+
+test('cells が文字列でない件、長さが合わない件は捨てられる（8×8 は 64 文字）', () => {
+  const board = BOARDS['8x8'];
+  const bad = [
+    { at: 1000, ms: 100, cells: 64 },
+    { at: 1000, ms: 100, cells: null },
+    { at: 1000, ms: 100, cells: '.'.repeat(63) },
+    { at: 1000, ms: 100, cells: '.'.repeat(65) },
+    { at: 1000, ms: 100, cells: '.'.repeat(60) },   // 6×10 の長さ
+  ];
+  assertSame(sanitizeHistory(bad, board), []);
+});
+
+test('cells が文字列でない件、長さが合わない件は捨てられる（6×10 は 60 文字）', () => {
+  const board = BOARDS['6x10'];
+  const bad = [
+    { at: 1000, ms: 100, cells: '.'.repeat(59) },
+    { at: 1000, ms: 100, cells: '.'.repeat(61) },
+    { at: 1000, ms: 100, cells: '.'.repeat(64) },   // 8×8 の長さ
+  ];
+  assertSame(sanitizeHistory(bad, board), []);
+});
+
+test('正しい件と壊れた件が混ざっていたら、正しい件だけが並び順を保って残る', () => {
+  const board = BOARDS['8x8'];
+  const good1 = { at: 1000, ms: 100, cells: '.'.repeat(64) };
+  const good2 = { at: 2000, ms: 200, cells: '.'.repeat(64) };
+  const bad = { at: -1, ms: 100, cells: '.'.repeat(64) };
+  assertSame(sanitizeHistory([good1, bad, good2], board), [good1, good2]);
+});
+
+test('HISTORY_LIMIT を超える件数を渡すと先頭から 50 件に切られる', () => {
+  const board = BOARDS['8x8'];
+  const entries = [];
+  for (let i = 0; i < HISTORY_LIMIT + 10; i += 1) {
+    entries.push({ at: 1000 + i, ms: 100, cells: '.'.repeat(64) });
+  }
+  const result = sanitizeHistory(entries, board);
+  assertSame(result.length, HISTORY_LIMIT, '件数');
+  assertSame(result, entries.slice(0, HISTORY_LIMIT), '先頭から残った');
+});
+
+// ---- storage：記録してよいか（TODO-020）----------------------------------
+
+group('src/storage.js — 記録してよいか（shouldRecord）');
+
+test('ヒントも詰み表示も使っていなければ記録してよい', () => {
+  assertSame(shouldRecord(false, false), true);
+});
+
+test('ヒントを使ったら記録しない', () => {
+  assertSame(shouldRecord(true, false), false);
+});
+
+test('詰み表示を使ったら記録しない', () => {
+  assertSame(shouldRecord(false, true), false);
+});
+
+test('両方使っても記録しない', () => {
+  assertSame(shouldRecord(true, true), false);
+});
+
+// ---- storage：保存して読み出す（TODO-008）--------------------------------
+//
+// ここだけ本物の localStorage を触る。利用者が実際に遊んだ記録を消さない
+// よう、対象キー（historyKey・storageKey の両方）をテストの前に退避し、
+// try/finally で必ず元へ戻す（途中で assert が落ちても戻すため）。
+
+group('src/storage.js — 保存して読み出す');
+
+/**
+ * その盤の保存先を空にして `fn` を走らせ、終わったら元の値へ戻す。
+ * assert が落ちても戻せるよう `finally` で書き戻す。
+ */
+function withCleanStorage(spec, fn) {
+  const keys = [spec.historyKey, spec.storageKey];
+  const saved = keys.map((key) => window.localStorage.getItem(key));
+  window.localStorage.removeItem(spec.historyKey);
+  try {
+    fn();
+  } finally {
+    keys.forEach((key, index) => {
+      if (saved[index] === null) window.localStorage.removeItem(key);
+      else window.localStorage.setItem(key, saved[index]);
+    });
+  }
+}
+
+for (const spec of BOARD_LIST) {
+  const cells = '.'.repeat(spec.rows * spec.cols);
+
+  test(`addHistory で足したものが loadHistory で新しい順に返る（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      addHistory(spec.key, { at: 1000, ms: 5000, cells });
+      addHistory(spec.key, { at: 2000, ms: 6000, cells });
+      assertSame(loadHistory(spec.key).map((e) => e.at), [2000, 1000], '新しい順');
+    });
+  });
+
+  test(`51 件目を足すと一番古い件が落ち、件数が 50 のままになる（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      for (let i = 0; i < HISTORY_LIMIT; i += 1) {
+        addHistory(spec.key, { at: 1000 + i, ms: 100, cells });
+      }
+      let list = loadHistory(spec.key);
+      assertSame(list.length, HISTORY_LIMIT, '50 件目までの件数');
+      assert(list.some((e) => e.at === 1000), '一番古い件がまだ残っているはず');
+      addHistory(spec.key, { at: 9999, ms: 100, cells });
+      list = loadHistory(spec.key);
+      assertSame(list.length, HISTORY_LIMIT, '51 件目を足した後の件数');
+      assert(!list.some((e) => e.at === 1000), '一番古い件（at: 1000）が残っている');
+      assert(list.some((e) => e.at === 9999), '足した件が見当たらない');
+    });
+  });
+
+  test(`clearHistory の後は空の配列になる（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      addHistory(spec.key, { at: 1000, ms: 100, cells });
+      clearHistory(spec.key);
+      assertSame(loadHistory(spec.key), []);
+    });
+  });
+
+  test(`clearHistory は最短時間（loadBest）を消さない（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.storageKey, '12345');
+      addHistory(spec.key, { at: 1000, ms: 100, cells });
+      clearHistory(spec.key);
+      assertSame(loadBest(spec.key), 12345, '最短時間が消えた');
+    });
   });
 }
 

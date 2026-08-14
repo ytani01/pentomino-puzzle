@@ -121,12 +121,13 @@ ws.close();
 | `src/logic.js` | 向きの生成・正規化、配置判定、盤面の更新、対称な解の代表形（TODO-012）、時間の整形（純関数） |
 | `src/solver.js` | ヒント用の求解（純関数） |
 | `src/audio.js` | 効果音の合成。最初のユーザー操作で `unlock()` を呼ぶ |
-| `src/storage.js` | クリア記録（最短時間）の保存（失敗しても遊べるようにする） |
-| `src/ui.js` | ボタンと枠の組み立て。3 つのシーンが同じ見た目を使うため |
+| `src/storage.js` | クリア記録（最短時間と履歴）の保存（失敗しても遊べるようにする） |
+| `src/ui.js` | ボタンと枠の組み立て。4 つのシーンが同じ見た目を使うため |
 | `src/scenes/boot.js` | マス目テクスチャの生成。ピースの色ごとに 1 枚 |
 | `src/scenes/title.js` | タイトル |
 | `src/scenes/game.js` | 本編。Phaser とのつなぎに徹し、判定は `logic.js` に任せる |
 | `src/scenes/clear.js` | クリア表示と記録の更新 |
+| `src/scenes/records.js` | クリア記録の一覧と、選んだ回の完成形（TODO-008） |
 | `tests.html` | 計算のテスト（ブラウザで開くだけ） |
 | `.github/workflows/pages.yml` | タグを押したときに GitHub Pages へ公開する |
 

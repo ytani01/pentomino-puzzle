@@ -16,6 +16,10 @@
  * `storageKey` を盤ごとに分けてあるのは、難しさの違う盤の最短時間を同じ記録に
  * 混ぜないため。8×8 だけ接尾辞が無いのは、盤が 1 つだった頃の記録を
  * そのまま引き継ぐため。
+ *
+ * `historyKey`（クリア記録の履歴。TODO-008）は**どちらも接尾辞を付けて揃えて
+ * ある**。引き継ぐ古い記録がそもそも無いので、`storageKey` の不揃いを新しい
+ * キーにまで持ち込む理由が無い。
  */
 export const BOARDS = {
   '8x8': {
@@ -26,6 +30,7 @@ export const BOARDS = {
     cols: 8,
     hole: { row: 3, col: 3, rows: 2, cols: 2 },
     storageKey: 'pentomino-puzzle/best-ms',
+    historyKey: 'pentomino-puzzle/history/8x8',
   },
   '6x10': {
     key: '6x10',
@@ -35,8 +40,19 @@ export const BOARDS = {
     cols: 10,
     hole: null,
     storageKey: 'pentomino-puzzle/best-ms/6x10',
+    historyKey: 'pentomino-puzzle/history/6x10',
   },
 };
+
+/**
+ * 盤 1 つぶんに残すクリア記録の件数（TODO-008）。あふれたら古いものから捨てる。
+ *
+ * 上限を置くのは、1 件が盤面 60 マスぶんの文字列を持つので、際限なく貯めると
+ * localStorage の容量（ふつう 5MB ほど）を無駄に埋めるため。一覧としても、
+ * 何百件も並ぶと目当ての回を探せない。50 件なら遊んだぶんをあらかた辿れて、
+ * 全部合わせても 5KB ほどに収まる。
+ */
+export const HISTORY_LIMIT = 50;
 
 /** 起動したときに選ばれている盤。 */
 export const DEFAULT_BOARD_KEY = '8x8';
