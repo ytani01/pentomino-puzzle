@@ -38,7 +38,7 @@ const HOW_TO_PLAY = [
   '',
   'ドラッグ … 置く / 動かす / 盤から外す',
   'タップ … 右へ 90° 回転',
-  '長押し … 裏返す',
+  'ダブルタップ … 裏返す',
 ];
 
 export default class TitleScene extends Phaser.Scene {
