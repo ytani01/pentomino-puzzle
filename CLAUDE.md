@@ -40,6 +40,12 @@ python3 -m http.server 8765
 - **Phaser に依存しない計算は `src/logic.js` と `src/solver.js` に置く。**
   `tests.html` から確かめられるようにするため。ここに DOM や Phaser を持ち込まない
 - **盤面は書き換えず、作り直して返す。** Undo の履歴が壊れないようにするため
+- **ブラウザネイティブの `confirm()` / `alert()` / `prompt()` を使わない。**
+  確認が要る操作は `src/ui.js` の `createButton` / `createPanel` を組み合わせ、
+  画面内（Phaser の Canvas 上）に確認用の表示を作る。ネイティブダイアログは
+  Canvas の外側に OS の見た目で出て浮くうえ、`confirm()` は同期的にブロッキング
+  するため、シーンの `update` ループや Tween、経過時間の計測が呼び出し中
+  止まってしまう
 - JSDoc には「何をするか」でなく **「なぜそうするのか」** を書く。
   中身のない `/** */` を残さない
 
