@@ -84,22 +84,164 @@ export const FONT = {
 };
 
 /**
- * 画面の配置。内部解像度は固定で、実際の表示は `Scale.FIT` が拡大縮小する。
- * 盤を左、未使用ピースのトレイを右に置く。
+ * 画面の配置を組み立てるための寸法。すべて内部解像度の座標系。
+ *
+ * ここにある数だけが「手で決めた値」で、枠やマスの大きさは `makeLayout()` が
+ * これらから計算する。見た目を詰めるときはこの表を触る。
  */
-export const LAYOUT = {
-  width: 960,
-  height: 640,
-  hud: { x: 16, y: 10, width: 928, height: 52, padding: 24, gap: 10, buttonWidth: 104, buttonHeight: 40 },
-  board: { x: 24, y: 84, cell: 64 },
-  boardPanel: { x: 14, y: 74, width: 532, height: 532 },
-  tray: { x: 560, y: 84, width: 366, height: 500, cols: 3, rows: 4, cell: 20 },
-  trayPanel: { x: 550, y: 74, width: 386, height: 520 },
-  message: { x: 480, y: 612 },
-  confirm: {
-    width: 360, height: 170, buttonWidth: 120, buttonHeight: 40, gap: 16,
-  },
-};
+const MARGIN = 14;         // 画面の縁と枠の間
+const PANEL_PAD = 10;      // 枠と、その中身の間
+const GAP = 12;            // 枠どうしの間
+const HUD_TOP = 10;        // 画面の上端と HUD の間
+const HUD_ROW = 52;        // HUD 1 段ぶんの高さ
+const MESSAGE_BAND = 34;   // 画面の下端に空ける、メッセージ 1 行ぶんの帯
+const TRAY_SPAN = 5;       // ペントミノは縦横どちらにも最大 5 マス（`I` の向き次第）
+const TRAY_SLOT_PAD = 12;  // トレイの 1 スロットで、ピースの周りに空ける分
+const TRAY_CELL_MAX = 20;  // トレイのマスの上限。TODO-006 で掴みやすさを見て決めた値で、
+                           // これより大きくしても掴みやすさは変わらず場所を食うだけ
+
+/** トレイの 1 スロットの一辺から、そこへ収まるマスの大きさを出す。 */
+function trayCellFor(slot) {
+  return Math.min(TRAY_CELL_MAX, Math.floor((slot - TRAY_SLOT_PAD) / TRAY_SPAN));
+}
+
+/** 逆に、マスの大きさから 1 スロットに要る一辺を出す。 */
+function traySlotFor(cell) {
+  return cell * TRAY_SPAN + TRAY_SLOT_PAD;
+}
+
+/**
+ * 画面の配置を作る。内部解像度は横 960×640 / 縦 640×960 の 2 通りで、
+ * 実際の表示は `Scale.FIT` が拡大縮小する。
+ *
+ * 固定値 1 組ではなく関数にしてあるのは、盤の大きさ（8×8 と 6×10）と画面の
+ * 向き（横と縦）の組み合わせが 4 通りあり、手で並べた数値では食い違いを
+ * 防げないため（TODO-011）。マスの大きさも 64 固定をやめ、盤に使える幅と
+ * 高さの小さいほうから決める。
+ *
+ * 場所の取り合いは**トレイを先に決めて、余りを全部盤に回す**。トレイは
+ * ピースが掴めるだけあればよく、大きく見せたいのは盤のほうだから。
+ *
+ * - 横画面（盤が左・トレイが右）… トレイは高さいっぱいなので、1 スロットの
+ *   **高さ**から一辺を決め、必要な幅を盤の取り分から差し引く
+ * - 縦画面（盤が上・トレイが下）… トレイは幅いっぱいなので、1 スロットの
+ *   **幅**から一辺を決め、必要な高さを盤の取り分から差し引く
+ */
+export function makeLayout({ portrait, board }) {
+  // 縦の 640×1136 は 16:9。今のスマホは縦画面がこれより細長い（375×667 と
+  // 320×568 はちょうど 16:9、390×844 と 412×915 はさらに細長い）ので、
+  // 3:2 の 640×960 にすると `Scale.FIT` が上下に大きな余白を作ってしまう。
+  const width = portrait ? 640 : 960;
+  const height = portrait ? 1136 : 640;
+
+  // 縦画面は横幅が狭く、ボタン 5 個と時間の表示が 1 段に並ばないので 2 段にする。
+  const hudRows = portrait ? 2 : 1;
+  const hud = {
+    x: MARGIN,
+    y: HUD_TOP,
+    width: width - MARGIN * 2,
+    height: HUD_ROW * hudRows,
+    rows: hudRows,
+    rowHeight: HUD_ROW,
+    padding: 24,
+    gap: 10,
+    buttonWidth: 104,
+    buttonHeight: 40,
+  };
+
+  // HUD の下からメッセージの帯の上までが、盤とトレイで分け合う範囲。
+  const top = hud.y + hud.height + GAP;
+  const bottom = height - MESSAGE_BAND;
+
+  // 12 個をどう並べるかは、縦横それぞれで盤に残る場所が一番広くなる形。
+  // 縦画面を 6 列 2 段にすると 1 スロットが横に狭まり、`I` の 5 マスを
+  // 収めるためにトレイのマスが 17 まで縮む（4 列 3 段なら 20 のまま）。
+  const tray = portrait ? { cols: 4, rows: 3 } : { cols: 3, rows: 4 };
+  let boardBoxWidth;
+  let boardBoxHeight;
+  if (portrait) {
+    tray.cell = trayCellFor((width - MARGIN * 2 - PANEL_PAD * 2) / tray.cols);
+    boardBoxWidth = width - MARGIN * 2;
+    boardBoxHeight = (bottom - top) - GAP
+      - (traySlotFor(tray.cell) * tray.rows + PANEL_PAD * 2);
+  } else {
+    tray.cell = trayCellFor(((bottom - top) - PANEL_PAD * 2) / tray.rows);
+    boardBoxWidth = (width - MARGIN * 2) - GAP
+      - (traySlotFor(tray.cell) * tray.cols + PANEL_PAD * 2);
+    boardBoxHeight = bottom - top;
+  }
+
+  const cell = Math.min(
+    Math.floor((boardBoxWidth - PANEL_PAD * 2) / board.cols),
+    Math.floor((boardBoxHeight - PANEL_PAD * 2) / board.rows),
+  );
+  const boardPanel = {
+    width: board.cols * cell + PANEL_PAD * 2,
+    height: board.rows * cell + PANEL_PAD * 2,
+  };
+  // 交わる向き（横画面なら上下、縦画面なら左右）には中央へ寄せる。盤が
+  // 幅で頭打ちになったとき（6×10 の横画面など）に片側へ偏らないようにするため。
+  boardPanel.x = portrait
+    ? Math.round((width - boardPanel.width) / 2)
+    : MARGIN;
+  boardPanel.y = portrait
+    ? top
+    : top + Math.round(((bottom - top) - boardPanel.height) / 2);
+
+  // トレイの枠は残りを全部使う（`traySlotFor` で見積もった分よりは必ず広い）。
+  const trayPanel = portrait
+    ? {
+      x: MARGIN,
+      y: boardPanel.y + boardPanel.height + GAP,
+      width: width - MARGIN * 2,
+      height: 0,
+    }
+    : {
+      x: MARGIN + boardPanel.width + GAP,
+      y: top,
+      width: 0,
+      height: bottom - top,
+    };
+  trayPanel.height = portrait ? bottom - trayPanel.y : trayPanel.height;
+  trayPanel.width = portrait ? trayPanel.width : width - MARGIN - trayPanel.x;
+
+  return {
+    width,
+    height,
+    portrait,
+    // タイトルとクリアの画面が、枠を画面幅いっぱいに広げすぎないために読む。
+    margin: MARGIN,
+    hud,
+    board: { x: boardPanel.x + PANEL_PAD, y: boardPanel.y + PANEL_PAD, cell },
+    boardPanel,
+    tray: {
+      x: trayPanel.x + PANEL_PAD,
+      y: trayPanel.y + PANEL_PAD,
+      width: trayPanel.width - PANEL_PAD * 2,
+      height: trayPanel.height - PANEL_PAD * 2,
+      cols: tray.cols,
+      rows: tray.rows,
+      cell: tray.cell,
+    },
+    trayPanel,
+    message: { x: width / 2, y: height - MESSAGE_BAND / 2 },
+    confirm: {
+      width: 360, height: 170, buttonWidth: 120, buttonHeight: 40, gap: 16,
+    },
+  };
+}
+
+/**
+ * 実際に使う配置。**向きは起動時に 1 回だけ見て、以後は変えない**（TODO-011）。
+ *
+ * 遊んでいる最中に端末を回しても組み直さず、`Scale.FIT` が縮めるに任せる。
+ * 組み直すには盤面・ピースの位置・経過時間・Undo の履歴を持ち越して Game
+ * シーンを作り直す必要があり、持ち越しの取りこぼしがバグになりやすいため。
+ */
+export const LAYOUT = makeLayout({
+  portrait: window.innerHeight > window.innerWidth,
+  board: BOARD_SPEC,
+});
 
 /**
  * マス目テクスチャの描き方。ピースの色ごとに 1 枚を `boot.js` が作る。
@@ -133,9 +275,9 @@ export const TILE = {
  * **見え方を変えたいときはこの 3 つを触る**（`game.js` の `drawPieceEdges()`
  * が読む。他の場所に散らばっていない）:
  *
- * - `OUTLINE.width` … 外周の太さ。盤の 1 マス（`LAYOUT.board.cell` = 64）の
- *   座標系での値で、トレイでは `LAYOUT.tray.cell / LAYOUT.board.cell`
- *   = 20/64 に縮む。**トレイでの実測**は 6→1.9px、4→1.25px、
+ * - `OUTLINE.width` … 外周の太さ。盤の 1 マス（`LAYOUT.board.cell`。横画面の
+ *   8×8 で 64）の座標系での値で、トレイでは `LAYOUT.tray.cell /
+ *   LAYOUT.board.cell` = 20/64 に縮む。**トレイでの実測**は 6→1.9px、4→1.25px、
  *   3→0.94px（消えかける）、2→0.6px（まだらになる）。盤での落ち着きを
  *   取って 2 にしてあるが、トレイまで輪郭を確かにしたいなら 4
  * - `OUTLINE.darken` … 外周の暗さ。自分の色に掛ける係数で、小さいほど暗い。

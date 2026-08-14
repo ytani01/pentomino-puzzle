@@ -8,6 +8,29 @@
 
 import { COLORS, FONT, TEXT_COLORS } from './config.js';
 
+/**
+ * 縦に積む部品の上端 `y` をまとめて出す。
+ *
+ * 内部解像度が画面の向きで変わるので（TODO-011）、タイトルとクリアの画面は
+ * 固定の `y` を持てない。高さと、次の部品までの間隔だけを並べておき、
+ * 余った高さを上下へ配る。`bias` は余りのうち上へ回す割合で、0 なら上寄せ、
+ * 1 なら下寄せ、0.5 で中央。横画面での今までの位置を保つ値を各シーンが渡す。
+ *
+ * @param {{height: number, gap: number}[]} rows 上から順の部品
+ * @param {number} available 収める範囲の高さ
+ * @param {number} bias 余りのうち上へ回す割合
+ * @returns {number[]} `rows` と同じ並びの上端 `y`
+ */
+export function stackTops(rows, available, bias) {
+  const used = rows.reduce((sum, row) => sum + row.height + row.gap, 0);
+  let y = (available - used) * bias;
+  return rows.map((row) => {
+    const top = y;
+    y += row.height + row.gap;
+    return top;
+  });
+}
+
 /** 角丸の板。HUD の帯やトレイの下地に使う。 */
 export function createPanel(scene, x, y, width, height, radius = 10) {
   const g = scene.add.graphics();

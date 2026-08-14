@@ -9,7 +9,26 @@ import { COLORS, FONT, LAYOUT, TEXT_COLORS } from '../config.js';
 import { formatTime } from '../logic.js';
 import { saveBest } from '../storage.js';
 import * as audio from '../audio.js';
-import { createButton, createPanel } from '../ui.js';
+import { createButton, createPanel, stackTops } from '../ui.js';
+
+/**
+ * 上から順に積む部品。横画面での今までの見え方を写した値で、縦画面では
+ * この塊ごと下へずれる（TODO-011）。枠の中の 3 行は枠の上端からの差で置く。
+ */
+const STACK = [
+  { key: 'title', height: 52, gap: 44 },
+  { key: 'panel', height: 170, gap: 40 },
+  { key: 'buttons', height: 52, gap: 0 },
+];
+
+/**
+ * 余りのうち上へ回す割合。横画面の 0.44 は今までどおりの位置になる値で、
+ * 縦画面は余りが増えるぶん下だけが空くので、素直に中央へ置く（TODO-011）。
+ */
+const STACK_BIAS = LAYOUT.portrait ? 0.5 : 0.44;
+
+/** 枠の上端から見た、中の 3 行の中心。 */
+const PANEL_ROWS = { time: 48, best: 106, hint: 140 };
 
 export default class ClearScene extends Phaser.Scene {
   constructor() {
@@ -26,22 +45,26 @@ export default class ClearScene extends Phaser.Scene {
     const record = saveBest(this.elapsed);
     audio.fanfare();
 
-    this.add.text(LAYOUT.width / 2, 150, 'COMPLETE', {
+    const cx = LAYOUT.width / 2;
+    const [titleTop, panelTop, buttonTop] = stackTops(STACK, LAYOUT.height, STACK_BIAS);
+    const panelWidth = Math.min(440, LAYOUT.width - LAYOUT.margin * 2);
+
+    this.add.text(cx, titleTop + STACK[0].height / 2, 'COMPLETE', {
       fontFamily: FONT.family,
       fontSize: `${FONT.title}px`,
       color: TEXT_COLORS.accent,
     }).setOrigin(0.5);
 
-    createPanel(this, LAYOUT.width / 2 - 220, 220, 440, 170);
+    createPanel(this, cx - panelWidth / 2, panelTop, panelWidth, STACK[1].height);
 
-    this.add.text(LAYOUT.width / 2, 268, formatTime(this.elapsed), {
+    this.add.text(cx, panelTop + PANEL_ROWS.time, formatTime(this.elapsed), {
       fontFamily: FONT.family,
       fontSize: '46px',
       color: TEXT_COLORS.normal,
     }).setOrigin(0.5);
 
     const bestLine = record.updated ? '自己最短を更新' : `最短 ${formatTime(record.best)}`;
-    this.add.text(LAYOUT.width / 2, 326, bestLine, {
+    this.add.text(cx, panelTop + PANEL_ROWS.best, bestLine, {
       fontFamily: FONT.family,
       fontSize: `${FONT.hud}px`,
       color: record.updated ? TEXT_COLORS.accent : TEXT_COLORS.dim,
@@ -49,16 +72,18 @@ export default class ClearScene extends Phaser.Scene {
 
     // ヒントを使ったかどうかは、記録の扱いを変えるほどではないが伝えておく。
     if (this.usedHint) {
-      this.add.text(LAYOUT.width / 2, 360, 'ヒントを使った', {
+      this.add.text(cx, panelTop + PANEL_ROWS.hint, 'ヒントを使った', {
         fontFamily: FONT.family,
         fontSize: `${FONT.small}px`,
         color: TEXT_COLORS.dim,
       }).setOrigin(0.5);
     }
 
+    // 2 つのボタンは横に並べる。縦画面でも 440 なら収まるので折り返さない。
+    const buttonY = buttonTop + STACK[2].height / 2;
     createButton(this, {
-      x: LAYOUT.width / 2 - 120,
-      y: 456,
+      x: cx - 120,
+      y: buttonY,
       width: 200,
       height: 52,
       label: 'もう一度',
@@ -69,8 +94,8 @@ export default class ClearScene extends Phaser.Scene {
       },
     });
     createButton(this, {
-      x: LAYOUT.width / 2 + 120,
-      y: 456,
+      x: cx + 120,
+      y: buttonY,
       width: 200,
       height: 52,
       label: 'タイトルへ',

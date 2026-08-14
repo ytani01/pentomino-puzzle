@@ -158,18 +158,23 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * 上部のメニューバー。縦画面では横幅が足りず、時間の表示とボタン 5 個が
+   * 1 段に並ばないので 2 段に折り返す（`LAYOUT.hud.rows`。TODO-011）。
+   * 段の数だけで分かれるように書いてあるので、向きをここで見る必要はない。
+   */
   createHud() {
     const hud = LAYOUT.hud;
     createPanel(this, hud.x, hud.y, hud.width, hud.height).setDepth(DEPTH.hud);
-    const centerY = hud.y + hud.height / 2;
+    const rowY = (row) => hud.y + hud.rowHeight * (row + 0.5);
 
-    this.timeText = this.add.text(hud.x + hud.padding, centerY, formatTime(0), {
+    this.timeText = this.add.text(hud.x + hud.padding, rowY(0), formatTime(0), {
       fontFamily: FONT.family,
       fontSize: `${FONT.hud}px`,
       color: TEXT_COLORS.normal,
     }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
 
-    this.remainText = this.add.text(hud.x + hud.padding + 110, centerY, '', {
+    this.remainText = this.add.text(hud.x + hud.padding + 110, rowY(0), '', {
       fontFamily: FONT.family,
       fontSize: `${FONT.hud}px`,
       color: TEXT_COLORS.dim,
@@ -185,11 +190,15 @@ export default class GameScene extends Phaser.Scene {
       () => this.toggleMute(),
       () => this.confirmToTitle(),
     ];
+    // ボタンは最後の段に置く。1 段なら時間の表示と並ぶので右へ寄せ、
+    // 2 段なら段まるごとをボタンが使うので中央へ置く。
     const total = labels.length * hud.buttonWidth + (labels.length - 1) * hud.gap;
-    const left = hud.x + hud.width - hud.padding - total;
+    const left = hud.rows > 1
+      ? hud.x + (hud.width - total) / 2
+      : hud.x + hud.width - hud.padding - total;
     this.buttons = labels.map((label, index) => createButton(this, {
       x: left + hud.buttonWidth / 2 + index * (hud.buttonWidth + hud.gap),
-      y: centerY,
+      y: rowY(hud.rows - 1),
       width: hud.buttonWidth,
       height: hud.buttonHeight,
       label,
