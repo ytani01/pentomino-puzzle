@@ -9,7 +9,9 @@ import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, SCREEN, TEXT_COLORS,
 } from '../config.js';
 import { formatTime } from '../logic.js';
-import { addHistory, saveBest } from '../storage.js';
+import {
+  addHistory, loadBest, saveBest, shouldRecord,
+} from '../storage.js';
 import * as audio from '../audio.js';
 import { createButton, createPanel, stackTops } from '../ui.js';
 
@@ -49,11 +51,16 @@ export default class ClearScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(COLORS.background);
     // 記録は盤ごとに分けてあるので、どの盤を解いたのかを `registry` から読む。
     const board = BOARDS[this.registry.get(BOARD_REGISTRY_KEY)];
-    const record = saveBest(board.key, this.elapsed);
+    // ヒント・詰み表示のどちらかに頼ったら「自力ではない」ので、
+    // 最短時間・履歴のどちらにも残さない（TODO-020）。
+    const recordable = shouldRecord(this.usedHint, this.usedCheck);
+    const record = recordable
+      ? saveBest(board.key, this.elapsed)
+      : { best: loadBest(board.key), updated: false };
     // クリアした回を履歴へ 1 件足す（TODO-008）。最短時間の更新とは別に、
     // 更新しなかった回も残す（あとから完成形を見比べるためのもの）。
     // 盤面が渡ってこなかったときは足さない（`cells` の無い件は残せない）。
-    if (this.cells !== null) {
+    if (recordable && this.cells !== null) {
       addHistory(board.key, { at: Date.now(), ms: this.elapsed, cells: this.cells });
     }
     audio.fanfare();
@@ -77,17 +84,25 @@ export default class ClearScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // 記録は盤ごとなので、どちらの盤の記録かが分かるように盤の名前を添える。
-    const bestLine = record.updated
-      ? `${board.label} の自己最短を更新`
-      : `${board.label} の最短 ${formatTime(record.best)}`;
+    // ヒント・詰み表示のどちらかを使った回は、記録を更新しなかったことが
+    // 伝わる言い方にする（TODO-020）。
+    let bestLine;
+    if (!recordable) {
+      bestLine = record.best !== null
+        ? `${board.label} の最短 ${formatTime(record.best)}（今回は記録しない）`
+        : `${board.label} はまだ記録が無い（今回も記録しない）`;
+    } else if (record.updated) {
+      bestLine = `${board.label} の自己最短を更新`;
+    } else {
+      bestLine = `${board.label} の最短 ${formatTime(record.best)}`;
+    }
     this.add.text(cx, panelTop + PANEL_ROWS.best, bestLine, {
       fontFamily: FONT.family,
       fontSize: `${FONT.hud}px`,
       color: record.updated ? TEXT_COLORS.accent : TEXT_COLORS.dim,
     }).setOrigin(0.5);
 
-    // 求解に頼ったかどうかは、記録の扱いを変えるほどではないが伝えておく
-    // （どちらも「自力ではない」と見なすかは TODO-020 で決め直す）。
+    // ヒント・詰み表示のどちらを使ったかは、記録に残らない理由として伝える。
     const helps = [];
     if (this.usedHint) helps.push('ヒント');
     if (this.usedCheck) helps.push('詰み表示');

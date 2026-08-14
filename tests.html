@@ -48,7 +48,7 @@ import {
 } from './src/logic.js';
 import { solve, hintPlacement } from './src/solver.js';
 import {
-  sanitizeHistory, loadHistory, addHistory, clearHistory, loadBest,
+  sanitizeHistory, loadHistory, addHistory, clearHistory, loadBest, shouldRecord,
 } from './src/storage.js';
 
 // ---- ごく小さなテストの土台 ----------------------------------------------
@@ -852,6 +852,26 @@ test('HISTORY_LIMIT を超える件数を渡すと先頭から 50 件に切ら�
   const result = sanitizeHistory(entries, board);
   assertSame(result.length, HISTORY_LIMIT, '件数');
   assertSame(result, entries.slice(0, HISTORY_LIMIT), '先頭から残った');
+});
+
+// ---- storage：記録してよいか（TODO-020）----------------------------------
+
+group('src/storage.js — 記録してよいか（shouldRecord）');
+
+test('ヒントも詰み表示も使っていなければ記録してよい', () => {
+  assertSame(shouldRecord(false, false), true);
+});
+
+test('ヒントを使ったら記録しない', () => {
+  assertSame(shouldRecord(true, false), false);
+});
+
+test('詰み表示を使ったら記録しない', () => {
+  assertSame(shouldRecord(false, true), false);
+});
+
+test('両方使っても記録しない', () => {
+  assertSame(shouldRecord(true, true), false);
 });
 
 // ---- storage：保存して読み出す（TODO-008）--------------------------------

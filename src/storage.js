@@ -77,6 +77,16 @@ export function savePalette(key) {
   }
 }
 
+/**
+ * 記録に残してよいか（TODO-020）。
+ *
+ * ヒント・詰み表示のどちらかに頼ったら「自力ではない」と見なし、
+ * 最短時間・履歴のどちらにも残さない。`clear.js` から使う。
+ */
+export function shouldRecord(usedHint, usedCheck) {
+  return !usedHint && !usedCheck;
+}
+
 /** 記録を消す。タイトルからの操作用。 */
 export function clearBest(boardKey) {
   try {
