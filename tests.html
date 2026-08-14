@@ -40,7 +40,7 @@
 <script type="module">
 import { BOARD_SPEC, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, SOLVER_LIMIT } from './src/config.js';
 import {
-  normalize, rotateCw, flip, sameShape, orientations, shapeSize,
+  normalize, rotateCw, flip, sameShape, orientations, shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
 } from './src/logic.js';
@@ -193,6 +193,44 @@ test('どの向きも 5 マスのまま', () => {
 test('shapeSize は外接する矩形の大きさを返す', () => {
   assertSame(shapeSize(cellsOf('I')), { rows: 5, cols: 1 });
   assertSame(shapeSize(cellsOf('X')), { rows: 3, cols: 3 });
+});
+
+test('outlineEdges は 1 マスなら 4 辺を返す', () => {
+  assertSame(outlineEdges([[0, 0]]), [
+    [0, 0, 0, 1], [0, 1, 1, 1], [1, 0, 1, 1], [0, 0, 1, 0],
+  ]);
+});
+
+test('outlineEdges は内側の辺を含まない', () => {
+  // 5 マスの辺は延べ 20 本。隣り合う 1 組につき内側の辺が 2 本消える。
+  for (const name of NAMES) {
+    const cells = normalize(cellsOf(name));
+    const has = new Set(cells.map(([row, col]) => `${row},${col}`));
+    let touching = 0;
+    for (const [row, col] of cells) {
+      if (has.has(`${row + 1},${col}`)) touching += 1;
+      if (has.has(`${row},${col + 1}`)) touching += 1;
+    }
+    assertSame(outlineEdges(cells).length, 20 - touching * 2, `${name} の外周の本数`);
+  }
+});
+
+test('outlineEdges は同じ辺を 2 度返さない', () => {
+  for (const name of NAMES) {
+    const edges = outlineEdges(normalize(cellsOf(name)));
+    assertSame(new Set(edges.map((edge) => edge.join(','))).size, edges.length,
+               `${name} の重複`);
+  }
+});
+
+test('outlineEdges は向きを変えても本数が変わらない', () => {
+  for (const name of NAMES) {
+    const cells = normalize(cellsOf(name));
+    const count = outlineEdges(cells).length;
+    for (const turned of orientations(cells)) {
+      assertSame(outlineEdges(turned).length, count, `${name} の向き違い`);
+    }
+  }
 });
 
 // ---- logic：盤面 ---------------------------------------------------------

@@ -16,8 +16,11 @@ export const TEX = {
   ghost: 'cell-ghost',
 };
 
-/** 縁取り用に色を暗くする。テクスチャの縁だけに使う派生色。 */
-function darken(color, factor) {
+/**
+ * 縁取り用に色を暗くする。マスの縁と、ピースの外周（`game.js`）が使う派生色。
+ * テクスチャを作る側に置いてあるのは、マスの縁と外周で同じ作り方を保つため。
+ */
+export function darken(color, factor) {
   const r = Math.round(((color >> 16) & 0xff) * factor);
   const g = Math.round(((color >> 8) & 0xff) * factor);
   const b = Math.round((color & 0xff) * factor);

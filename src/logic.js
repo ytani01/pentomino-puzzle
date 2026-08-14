@@ -74,6 +74,27 @@ export function shapeSize(cells) {
   return { rows, cols };
 }
 
+/**
+ * シルエットの外周にあたる辺を返す。1 本は `[行1, 列1, 行2, 列2]` で、
+ * マスの格子を単位とした線分（マス 1 個は `[0,0]`〜`[1,1]` の正方形）。
+ *
+ * 5 マスを 1 個の塊として見せるために、外周だけを濃く描きたい。
+ * 隣にマスがある辺は内側の格子なので外周から外す。
+ * 描画に使う値だが、Phaser を持ち込まずに `tests.html` から確かめられるよう
+ * ここに置く。返す順は「上・右・下・左」を各マスについて行優先で見た順。
+ */
+export function outlineEdges(cells) {
+  const has = new Set(cells.map(([row, col]) => `${row},${col}`));
+  const edges = [];
+  for (const [row, col] of cells) {
+    if (!has.has(`${row - 1},${col}`)) edges.push([row, col, row, col + 1]);
+    if (!has.has(`${row},${col + 1}`)) edges.push([row, col + 1, row + 1, col + 1]);
+    if (!has.has(`${row + 1},${col}`)) edges.push([row + 1, col, row + 1, col + 1]);
+    if (!has.has(`${row},${col - 1}`)) edges.push([row, col, row + 1, col]);
+  }
+  return edges;
+}
+
 /** 盤のうちピースを置けるマスを、行優先で並べて返す（穴は含まない）。 */
 export function boardCells(spec) {
   const { row: holeRow, col: holeCol, rows: holeRows, cols: holeCols } = spec.hole;

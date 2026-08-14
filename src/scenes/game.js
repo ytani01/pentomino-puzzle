@@ -8,16 +8,16 @@
  */
 
 import {
-  BOARD_SPEC, COLORS, FONT, INPUT, LAYOUT, PIECES, TEXT_COLORS, VERSION,
+  BOARD_SPEC, COLORS, FONT, INPUT, LAYOUT, OUTLINE, PIECES, TEXT_COLORS, VERSION,
 } from '../config.js';
 import {
-  canPlace, createBoard, flip, formatTime, isSolved, normalize, place, remove,
-  rotateCw, sameShape, shapeSize,
+  canPlace, createBoard, flip, formatTime, isSolved, normalize, outlineEdges, place,
+  remove, rotateCw, sameShape, shapeSize,
 } from '../logic.js';
 import { hintPlacement } from '../solver.js';
 import * as audio from '../audio.js';
 import { createButton, createPanel } from '../ui.js';
-import { TEX } from './boot.js';
+import { darken, TEX } from './boot.js';
 
 /** 重なりの順。盤の上にピース、トレイの当たり判定はその上、ドラッグ中の
  *  ピースはさらに上、確認ダイアログが最前面。 */
@@ -114,6 +114,10 @@ export default class GameScene extends Phaser.Scene {
         tiles: [],
       };
       piece.container = this.add.container(0, 0).setDepth(DEPTH.piece);
+      // 落ち影はマスの下、外周の縁取りはマスの上。Container 内の並び順が
+      // そのまま重なりの順になるので、マスを挟むように前後へ入れる。
+      piece.shadow = this.add.graphics();
+      piece.container.add(piece.shadow);
       for (let i = 0; i < piece.cells.length; i += 1) {
         const tile = this.add.image(0, 0, TEX.piece(piece.name)).setOrigin(0);
         tile.setInteractive({ useHandCursor: true });
@@ -121,6 +125,8 @@ export default class GameScene extends Phaser.Scene {
         piece.container.add(tile);
         piece.tiles.push(tile);
       }
+      piece.outline = this.add.graphics();
+      piece.container.add(piece.outline);
       this.refreshPiece(piece);
       this.layoutPiece(piece);
       return piece;
@@ -270,6 +276,41 @@ export default class GameScene extends Phaser.Scene {
     piece.cells.forEach(([row, col], index) => {
       piece.tiles[index].setPosition(col * cell, row * cell);
     });
+    this.drawPieceEdges(piece);
+  }
+
+  /**
+   * シルエットの外周の縁取りと落ち影を引き直す。向きが変わるたびに呼ぶ。
+   *
+   * 盤の 1 マス（`LAYOUT.board.cell`）の座標系で描いておけば、トレイでの
+   * 縮小は Container の拡大率がそのまま効くので、描き分けが要らない。
+   * 縁は線の太さの半分だけ内側へ寄せる。外へはみ出すと隣のピースにかぶり、
+   * どちらの輪郭か分からなくなるため。
+   */
+  drawPieceEdges(piece) {
+    const cell = LAYOUT.board.cell;
+    const inset = OUTLINE.width / 2;
+    const has = new Set(piece.cells.map(([row, col]) => `${row},${col}`));
+
+    piece.shadow.clear();
+    piece.shadow.fillStyle(OUTLINE.shadowColor, OUTLINE.shadowAlpha);
+    for (const [row, col] of piece.cells) {
+      piece.shadow.fillRect(col * cell + OUTLINE.shadowOffset,
+                            row * cell + OUTLINE.shadowOffset, cell, cell);
+    }
+
+    piece.outline.clear();
+    piece.outline.lineStyle(OUTLINE.width, darken(piece.color, OUTLINE.darken), 1);
+    for (const [r1, c1, r2, c2] of outlineEdges(piece.cells)) {
+      // 内側がどちら側かは、辺に接するマスが在るほうを見れば決まる。
+      const horizontal = r1 === r2;
+      const dr = horizontal && has.has(`${r1},${c1}`) ? inset : -inset;
+      const dc = !horizontal && has.has(`${r1},${c1}`) ? inset : -inset;
+      const x = horizontal ? 0 : dc;
+      const y = horizontal ? dr : 0;
+      piece.outline.lineBetween(c1 * cell + x, r1 * cell + y,
+                                c2 * cell + x, r2 * cell + y);
+    }
   }
 
   /** 置かれている場所（盤かトレイか）から、Container の位置と拡大率を決める。 */
