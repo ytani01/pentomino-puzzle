@@ -131,7 +131,10 @@ ws.close();
 
 ## 公開（GitHub Pages）
 
-GitHub 上での設定・公開手順は [docs/developer.md](docs/developer.md) を見る。
+GitHub 上での設定・公開手順は
+[docs/developer.md](docs/developer.md#github-上の設定) を見る。
+画面の部位の呼び名（盤・トレイ・スロットなど）は
+[同じファイルの「画面の用語」](docs/developer.md#画面の用語)にまとめてある。
 
 - `src/config.js` の `VERSION`（既定は `'dev'`）を、`.github/workflows/pages.yml` が
   タグ名へ書き換えてから公開する。ローカルで直接開いた画面は `dev` のまま
