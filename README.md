@@ -49,6 +49,7 @@ src/
   solver.js           ヒント用の求解（tests.html の対象）
   audio.js            Web Audio API による効果音
   storage.js          クリア記録の保存
+  ui.js               ボタンと枠（3 つのシーンで共通）
   scenes/
     boot.js           マス目テクスチャの生成
     title.js          タイトル

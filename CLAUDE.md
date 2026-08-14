@@ -54,6 +54,7 @@ python3 -m http.server 8765
 | `src/solver.js` | ヒント用の求解（純関数） |
 | `src/audio.js` | 効果音の合成。最初のユーザー操作で `unlock()` を呼ぶ |
 | `src/storage.js` | クリア記録（最短時間）の保存（失敗しても遊べるようにする） |
+| `src/ui.js` | ボタンと枠の組み立て。3 つのシーンが同じ見た目を使うため |
 | `src/scenes/boot.js` | マス目テクスチャの生成。ピースの色ごとに 1 枚 |
 | `src/scenes/title.js` | タイトル |
 | `src/scenes/game.js` | 本編。Phaser とのつなぎに徹し、判定は `logic.js` に任せる |

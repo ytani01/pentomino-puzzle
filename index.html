@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pentomino Puzzle</title>
+<style>
+  /* CSS が持つのは画面の地の色だけ。ほかの色は src/config.js にある。 */
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #181b26;
+    color: #8d97b0;
+    font-family: system-ui, "Helvetica Neue", Arial, sans-serif;
+    overflow: hidden;
+  }
+  #app {
+    width: 100%;
+    height: 100%;
+  }
+  #app canvas {
+    display: block;
+    /* 指で操作するとき、ドラッグが画面のスクロールに取られないようにする。 */
+    touch-action: none;
+  }
+  /* id 指定は [hidden] の display:none より強いので、消えるほうも明示しておく。 */
+  #notice[hidden] {
+    display: none;
+  }
+  #notice {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 0.8em;
+    padding: 2em;
+    text-align: center;
+    line-height: 1.7;
+  }
+  #notice code {
+    background: #212636;
+    padding: 0.2em 0.5em;
+    border-radius: 4px;
+    color: #e8ecf4;
+  }
+</style>
+</head>
+<body>
+<!--
+  id は "game" にしない。要素の id は同じ名前のグローバル変数になるので、
+  src/main.js が入れる window.game（デバッグ用の入口）と衝突する。
+-->
+<div id="app"></div>
+
+<!--
+  起動できなかったときの案内。src/main.js が最後まで走ったら消える。
+  file:// で開くと ES Modules が読めず、CDN が届かないと Phaser が無い。
+  どちらも画面が真っ黒になるだけなので、理由が分かるようにしておく。
+-->
+<div id="notice">
+  <p><strong>Pentomino Puzzle を読み込めなかった</strong></p>
+  <p>
+    <code>file://</code> で開くと ES Modules が読めない。<br>
+    ローカルサーバ経由で開くこと。
+  </p>
+  <p><code>python3 -m http.server 8765</code> → <code>http://localhost:8765/</code></p>
+  <p>ネットワークが繋がらないときは、CDN の Phaser も届かない。</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
