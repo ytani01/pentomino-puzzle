@@ -77,6 +77,48 @@ export const PIECES = [
 /** ピース 1 個のマス数。`logic.js` / `solver.js` の枝刈りが参照する。 */
 export const PIECE_SIZE = 5;
 
+/**
+ * ピースの色の組（TODO-015）。
+ *
+ * TODO-007 でピースへ外周の縁取りを付けたので、**塊の見分けに色を使わなくても
+ * 済むようになった**。そこで 12 個とも同じ色の「ガラス」を既定にし、
+ * 今までどおり 12 色に塗り分ける組も選べるようにしてある。
+ *
+ * - `mono` … 単色なら 12 種で共通に使う色、色を分けるなら `null`
+ *   （`PIECES[].color` を使う）。テクスチャを 1 枚に減らせるかの判断も兼ねる
+ * - `glass` … マスをガラスふうに焼くか（`boot.js` の `makeTile`）
+ * - `outlineDarken` / `outlineWidth` … 外周の縁取りの暗さと太さ。
+ *   **単色のほうを暗く太くしてある**のは、同じ色どうしが接したときに外周だけが
+ *   境目になるため（12 色なら色の違いも境目の手がかりになる）
+ */
+export const PALETTES = {
+  glass: {
+    key: 'glass',
+    label: 'ガラス',
+    mono: 0x7cc4e8,
+    glass: true,
+    outlineDarken: 0.2,
+    outlineWidth: 3,
+  },
+  colorful: {
+    key: 'colorful',
+    label: '12 色',
+    mono: null,
+    glass: false,
+    outlineDarken: 0.3,
+    outlineWidth: 2,
+  },
+};
+
+/** 一度も選んでいないときの色の組。 */
+export const DEFAULT_PALETTE_KEY = 'glass';
+
+/** 選んだ色の組を覚えておく `game.registry` のキー（`BOARD_REGISTRY_KEY` と同じ扱い）。 */
+export const PALETTE_REGISTRY_KEY = 'palette';
+
+/** 選んだ色の組の保存先。盤ごとの記録（`BOARDS[key].storageKey`）とは別に 1 つだけ持つ。 */
+export const PALETTE_STORAGE_KEY = 'pentomino-puzzle/palette';
+
 /** 盤のマスの状態。空きは `null` で表す。 */
 export const HOLE = '#';
 
@@ -316,6 +358,35 @@ export const TILE = {
 };
 
 /**
+ * ガラスふうのマスの描き方（`PALETTES.glass`。TODO-015）。
+ *
+ * 画像を持ち込まずにガラスらしさを出すため、**地を半透明にして盤のマスを
+ * 透かし**、その上へ内側の明るい縁と斜めの光の筋を重ねる。帯の位置は
+ * マスの一辺に対する割合で持つ（盤で 64px、トレイで 20px と大きさが違うため）。
+ *
+ * 半透明の度合い（`fillAlpha`）は、**ゴースト（`COLORS.ghost` を alpha 0.28 で
+ * 出す）と紛れない**ことが下限を決めている。薄くするほどガラスらしくなるが、
+ * 置いてあるピースと「ここへ置ける」の影が見分けにくくなる。
+ */
+export const GLASS = {
+  fillAlpha: 0.62,
+  innerInset: 2.5,
+  innerAlpha: 0.3,
+  innerWidth: 1,
+  // マスの区切り。12 色の組（`TILE.edgeDarken` で黒）より薄くしてあるのは、
+  // **単色では外周の縁取りだけが塊の境目になる**ため。区切りが同じ濃さだと
+  // 5 マスが 1 個に見えず、盤が一面のタイル貼りに見えてしまう。
+  gridColor: 0x000000,
+  gridAlpha: 0.22,
+  // 斜めの光の筋。`[開始, 終了]` は左上の角から右下へ向かう対角上の位置で、
+  // 一辺に対する割合。太い筋と細い筋の 2 本にすると、1 本より硝子板らしくなる。
+  streaks: [
+    { from: 0.42, to: 0.72, alpha: 0.16 },
+    { from: 0.86, to: 0.98, alpha: 0.1 },
+  ],
+};
+
+/**
  * ピースの外周の縁取りと落ち影。色だけでは 12 種を見分けきれないため、
  * シルエットの輪郭を手がかりとして足す（TODO-007）。
  *
@@ -335,16 +406,16 @@ export const TILE = {
  *   LAYOUT.board.cell` = 20/64 に縮む。**トレイでの実測**は 6→1.9px、4→1.25px、
  *   3→0.94px（消えかける）、2→0.6px（まだらになる）。盤での落ち着きを
  *   取って 2 にしてあるが、トレイまで輪郭を確かにしたいなら 4
- * - `OUTLINE.darken` … 外周の暗さ。自分の色に掛ける係数で、小さいほど暗い。
- *   0.2 まで下げるとほぼ黒になり、隣り合う同系色は分けやすくなるが、
- *   暗い地に接した所でピースが痩せて見える
+ * - `PALETTES[key].outlineDarken` … 外周の暗さ。自分の色に掛ける係数で、
+ *   小さいほど暗い。0.2 まで下げるとほぼ黒になり、隣り合う同系色は分けやすく
+ *   なるが、暗い地に接した所でピースが痩せて見える。**色の組ごとに違う**ので
+ *   `OUTLINE` ではなく `PALETTES` の側にある（TODO-015）
  * - `TILE.edgeDarken` … ピース**内側**の格子の濃さ。外周より弱くしておく
  *   （外周と同じ濃さにすると 5 マスが 1 個の塊に見えなくなる）。
  *   0.78 まで上げるとマス目感が消えたので 0.68 にしてある
  */
 export const OUTLINE = {
   width: 2,
-  darken: 0.3,
   shadowOffset: 5,
   shadowColor: 0x000000,
   shadowAlpha: 0.3,

@@ -38,7 +38,7 @@
 <div id="results"></div>
 
 <script type="module">
-import { BOARDS, DEFAULT_BOARD_KEY, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, SOLVER_LIMIT } from './src/config.js';
+import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, SOLVER_LIMIT } from './src/config.js';
 import {
   normalize, rotateCw, flip, sameShape, orientations, shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
@@ -135,6 +135,18 @@ test('BOARDS は 8×8 と 6×10 を持ち、既定の盤がその中にある', 
   for (const spec of Object.values(BOARDS)) {
     assertSame(spec.rows * spec.cols - (spec.hole ? spec.hole.rows * spec.hole.cols : 0),
       PLAYABLE_CELLS, `${spec.label} の置けるマス数`);
+  }
+});
+
+test('PALETTES は必要な項目をそろえ、既定の組がその中にある', () => {
+  assert(PALETTES[DEFAULT_PALETTE_KEY], `既定の組 ${DEFAULT_PALETTE_KEY} が PALETTES に無い`);
+  for (const [key, palette] of Object.entries(PALETTES)) {
+    assertSame(palette.key, key, 'キーと中身の key が食い違っている');
+    assert(typeof palette.label === 'string' && palette.label !== '', `${key} の label`);
+    // 単色なら色を 1 つ、色を分けるなら `null`（`PIECES[].color` を使う）。
+    assert(palette.mono === null || Number.isInteger(palette.mono), `${key} の mono`);
+    assert(palette.outlineDarken > 0 && palette.outlineDarken <= 1, `${key} の outlineDarken`);
+    assert(palette.outlineWidth > 0, `${key} の outlineWidth`);
   }
 });
 

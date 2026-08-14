@@ -8,8 +8,8 @@
  */
 
 import {
-  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, INPUT, LAYOUTS, OUTLINE, PIECES,
-  TEXT_COLORS, VERSION,
+  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, INPUT, LAYOUTS, OUTLINE, PALETTES,
+  PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, VERSION,
 } from '../config.js';
 import {
   canPlace, createBoard, flip, formatTime, isSolved, normalize, outlineEdges, place,
@@ -18,7 +18,7 @@ import {
 import { hintPlacement } from '../solver.js';
 import * as audio from '../audio.js';
 import { createButton, createPanel } from '../ui.js';
-import { darken, TEX } from './boot.js';
+import { darken, pieceColor, TEX } from './boot.js';
 
 /** 重なりの順。盤の上にピース、トレイの当たり判定はその上、ドラッグ中の
  *  ピースはさらに上、確認ダイアログが最前面。 */
@@ -39,6 +39,8 @@ export default class GameScene extends Phaser.Scene {
     this.boardKey = this.registry.get(BOARD_REGISTRY_KEY);
     this.spec = BOARDS[this.boardKey];
     this.layout = LAYOUTS[this.boardKey];
+    // 色の組も同じく、タイトルでだけ選べる（TODO-015）。
+    this.palette = PALETTES[this.registry.get(PALETTE_REGISTRY_KEY)];
 
     this.board = createBoard(this.spec);
     this.history = [];
@@ -115,7 +117,7 @@ export default class GameScene extends Phaser.Scene {
     this.pieces = PIECES.map((definition, index) => {
       const piece = {
         name: definition.name,
-        color: definition.color,
+        color: pieceColor(this.palette, definition),
         cells: normalize(definition.cells),
         location: 'tray',
         row: 0,
@@ -130,7 +132,8 @@ export default class GameScene extends Phaser.Scene {
       piece.shadow = this.add.graphics();
       piece.container.add(piece.shadow);
       for (let i = 0; i < piece.cells.length; i += 1) {
-        const tile = this.add.image(0, 0, TEX.piece(piece.name, this.layout.board.cell))
+        const tile = this.add.image(0, 0,
+                                    TEX.piece(this.palette, piece.name, this.layout.board.cell))
           .setOrigin(0);
         tile.setInteractive({ useHandCursor: true });
         tile.on('pointerdown', (pointer) => this.onPiecePointerDown(piece, pointer));
@@ -310,7 +313,8 @@ export default class GameScene extends Phaser.Scene {
    */
   drawPieceEdges(piece) {
     const cell = this.layout.board.cell;
-    const inset = OUTLINE.width / 2;
+    const width = this.palette.outlineWidth;
+    const inset = width / 2;
     const has = new Set(piece.cells.map(([row, col]) => `${row},${col}`));
 
     piece.shadow.clear();
@@ -321,7 +325,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     piece.outline.clear();
-    piece.outline.lineStyle(OUTLINE.width, darken(piece.color, OUTLINE.darken), 1);
+    piece.outline.lineStyle(width, darken(piece.color, this.palette.outlineDarken), 1);
     for (const [r1, c1, r2, c2] of outlineEdges(piece.cells)) {
       // 内側がどちら側かは、辺に接するマスが在るほうを見れば決まる。
       const horizontal = r1 === r2;
