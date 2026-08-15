@@ -41,7 +41,7 @@
 import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT } from './src/config.js';
 import {
   normalize, rotateCw, flip, sameShape, orientations, turnOrder, nextTurn,
-  shapeSize, outlineEdges,
+  nextPlaceableTurn, snapSpot, shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
@@ -258,6 +258,58 @@ test('nextTurn を向きの数だけ繰り返すと元へ戻り、途中で全�
 test('X は nextTurn でも向きが変わらない', () => {
   const start = normalize(cellsOf('X'));
   assert(sameShape(nextTurn(start), start), 'X の向きが変わった');
+});
+
+test('nextPlaceableTurn が返す向きは、その場に置けるか元のまま（TODO-023）', () => {
+  const board = createBoard(BOARDS['8x8']);
+  for (const piece of PIECES) {
+    const start = normalize(piece.cells);
+    for (let row = 0; row < board.rows; row += 1) {
+      for (let col = 0; col < board.cols; col += 1) {
+        const next = nextPlaceableTurn(board, start, row, col);
+        const ok = canPlace(board, next, row, col).ok || sameShape(next, start);
+        assert(ok, `${piece.name} が ${row},${col} で置けない向きを返した`);
+      }
+    }
+  }
+});
+
+test('nextPlaceableTurn は、置けない向きを飛ばして次の置ける向きへ進む', () => {
+  const board = createBoard({ rows: 4, cols: 2, hole: null });   // L は縦長しか入らない
+  const order = turnOrder(cellsOf('L'));
+  // 「次が置けない」向きを起点に選ぶ。そこから 1 つ進めば必ず飛ばすことになる。
+  const start = order.find((shape, index) => canPlace(board, shape, 0, 0).ok
+    && !canPlace(board, order[(index + 1) % order.length], 0, 0).ok);
+  assert(start !== undefined, '飛ばす場面を作れなかった');
+  const next = nextPlaceableTurn(board, start, 0, 0);
+  assert(canPlace(board, next, 0, 0).ok, '置けない向きを返した');
+  assert(!sameShape(next, nextTurn(start)), '飛ばさずに次の向きを返した');
+});
+
+test('nextPlaceableTurn は、どの向きも置けなければ元の向きを返す', () => {
+  // 盤を I の縦 1 本ぶんにする。横向きは入らないので、進みようがない。
+  const board = createBoard({ rows: 5, cols: 1, hole: null });
+  const start = normalize(cellsOf('I'));
+  assertSame(nextPlaceableTurn(board, start, 0, 0), start);
+});
+
+test('snapSpot は、置ける升目ならそのまま返す', () => {
+  const board = createBoard(BOARDS['8x8']);
+  assertSame(snapSpot(board, cellsOf('I'), 0, 0, 1), { row: 0, col: 0 });
+});
+
+test('snapSpot は、塞がっていれば近くの置ける升目へ寄せる（TODO-023）', () => {
+  const board = place(createBoard(BOARDS['8x8']), 'I', cellsOf('I'), 0, 0);
+  const spot = snapSpot(board, cellsOf('I'), 0, 0, 1);
+  assert(spot !== null, '寄せ先を見つけられなかった');
+  assert(canPlace(board, cellsOf('I'), spot.row, spot.col).ok, '置けない升目を返した');
+  assertSame(spot, { row: 0, col: 1 });
+});
+
+test('snapSpot は、範囲の中に置ける升目が無ければ null', () => {
+  const board = createBoard(BOARDS['8x8']);
+  // 盤から 3 升も外れた所。`range` が 1 では届かない。
+  assertSame(snapSpot(board, cellsOf('I'), 0, -3, 1), null);
 });
 
 test('どの向きも 5 マスのまま', () => {

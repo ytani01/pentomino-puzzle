@@ -12,8 +12,8 @@ import {
   OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, VERSION,
 } from '../config.js';
 import {
-  boardKey, canPlace, createBoard, flip, formatTime, isSolved, nextTurn, normalize, outlineEdges,
-  place, remove, sameShape, shapeSize,
+  boardKey, canPlace, createBoard, flip, formatTime, isSolved, nextPlaceableTurn, nextTurn,
+  normalize, outlineEdges, place, remove, sameShape, shapeSize, snapSpot, turnOrder,
 } from '../logic.js';
 import {
   ensureSolutions, hasSolution, hintFrom, solutionNumber,
@@ -55,7 +55,6 @@ export default class GameScene extends Phaser.Scene {
     this.checkState = null;
     this.playing = true;
     this.pending = null;
-    this.pendingTap = null;
     this.drag = null;
     this.messageTimer = null;
 
@@ -84,7 +83,6 @@ export default class GameScene extends Phaser.Scene {
     // シーンを離れるときに持ち越しの押下状態を捨てる（次に来たとき掴んだままになる）。
     // `once` なのは、やり直しで `create()` を通るたびに登録が積み上がらないようにするため。
     this.events.once('shutdown', this.cancelPending, this);
-    this.events.once('shutdown', this.cancelPendingTap, this);
 
     this.refreshHud();
   }
@@ -438,71 +436,46 @@ export default class GameScene extends Phaser.Scene {
     if (moved > INPUT.dragThreshold) this.startDrag(pointer);
   }
 
-  /** タップは既定で「次の向き」へ進めるが、`INPUT.doubleTapMs` 以内に同じ
-   *  ピースへ 2 回目のタップが来たら反転に差し替える。1 回目をその猶予ぶん
-   *  遅らせて待つことで、反転の直前に絵が跳ねないようにしている。 */
+  /** タップは待たずにその場で次の向きへ進める（TODO-023）。ダブルタップの
+   *  反転を無くしたので、2 回目を待つ猶予が要らなくなった。 */
   onPointerUp(pointer) {
     if (this.drag) {
-      this.dropDrag();
+      this.dropDrag(pointer);
       return;
     }
     const pending = this.pending;
     this.cancelPending();
     if (!pending || pending.consumed) return;
-    const piece = pending.piece;
-
-    const waiting = this.pendingTap;
-    if (waiting && waiting.piece === piece) {
-      const moved = Phaser.Math.Distance.Between(waiting.x, waiting.y, pointer.x, pointer.y);
-      if (moved <= INPUT.dragThreshold) {
-        waiting.timer.remove();
-        this.pendingTap = null;
-        this.applyOrientation(piece, normalize(flip(piece.cells)), audio.flip);
-        return;
-      }
-    }
-
-    if (this.pendingTap) this.pendingTap.timer.remove();
-    this.pendingTap = {
-      piece,
-      x: pointer.x,
-      y: pointer.y,
-      timer: this.time.delayedCall(INPUT.doubleTapMs, () => {
-        this.pendingTap = null;
-        this.turnPiece(piece);
-      }),
-    };
+    this.turnPiece(pending.piece);
   }
 
   cancelPending() {
     this.pending = null;
   }
 
-  /** 待機中の 1 回目のタップを、次のドラッグやシーン終了で捨てる。 */
-  cancelPendingTap() {
-    if (this.pendingTap) this.pendingTap.timer.remove();
-    this.pendingTap = null;
-  }
-
   startDrag(pointer) {
     const pending = this.pending;
     const piece = pending.piece;
     this.cancelPending();
-    if (this.pendingTap && this.pendingTap.piece === piece) this.cancelPendingTap();
 
     // 掴んだ点を拡大率ぶん割り戻して覚える。トレイの縮小表示から盤の大きさへ
     // 広がっても、指の下にあるマスが変わらないようにするため。
     const scale = piece.container.scaleX;
-    const offsetX = (pending.startX - piece.container.x) / scale;
+    let offsetX = (pending.startX - piece.container.x) / scale;
     let offsetY = (pending.startY - piece.container.y) / scale;
-    // 指で隠れないよう、タッチ操作のときだけピースを盤のマス 1 個ぶん上へ
-    // ずらす。マウスでは指がないのでずらさない（`pointer.wasTouch` で見分ける）。
-    if (pointer.wasTouch) offsetY += this.layout.board.cell;
+    // 指で隠れないよう、タッチ操作のときだけピースを盤のマス 1 個ぶんずらす。
+    // 縦画面では指の上、横画面では指の左（TODO-023）。画面の長い側へ
+    // 逃がすので、盤の端でも指を画面の外へ出さずに済む。
+    // マウスでは指がないのでずらさない（`pointer.wasTouch` で見分ける）。
+    if (pointer.wasTouch) {
+      if (this.layout.portrait) offsetY += this.layout.board.cell;
+      else offsetX += this.layout.board.cell;
+    }
 
     const snapshot = this.snapshot();
     if (piece.location === 'board') this.board = remove(this.board, piece.name);
 
-    this.drag = { piece, offsetX, offsetY, snapshot };
+    this.drag = { piece, offsetX, offsetY, snapshot, trail: [] };
     piece.container.setScale(1);
     piece.container.setDepth(DEPTH.dragging);
     audio.pick();
@@ -510,33 +483,77 @@ export default class GameScene extends Phaser.Scene {
   }
 
   updateDrag(pointer) {
-    const { piece, offsetX, offsetY } = this.drag;
+    const { piece, offsetX, offsetY, trail } = this.drag;
     piece.container.setPosition(pointer.x - offsetX, pointer.y - offsetY);
 
-    const spot = this.dropSpot();
-    if (spot && canPlace(this.board, piece.cells, spot.row, spot.col).ok) {
-      this.showGhost(piece, spot.row, spot.col);
-    } else {
-      this.ghost.setVisible(false);
+    // 離すときの速さを測るために、直近 `swipeWindowMs` ぶんの通り道を残す
+    // （TODO-023）。先頭がその区間の始まりになるよう、古いものから捨てる。
+    trail.push({ x: pointer.x, y: pointer.y, time: this.time.now });
+    while (trail.length > 2 && this.time.now - trail[1].time > INPUT.swipeWindowMs) {
+      trail.shift();
     }
+
+    const spot = this.dropSpot();
+    if (spot) this.showGhost(piece, spot.row, spot.col);
+    else this.ghost.setVisible(false);
   }
 
   /**
-   * ドラッグ中の Container の位置から、置こうとしている盤の升目を求める。
-   * 「盤の上か」も指の位置ではなく Container で見る。タッチ中はピースを
-   * 指より上へずらしてあるので、指の位置で見ると盤の下端で「ピースは
-   * 盤の上に見えているのに指は盤の外」がずれて起きる。
+   * ドラッグ中の Container の位置から、一番近い升目を求める。盤の外に
+   * あたる値もそのまま返す（近くまで来ているかは `nearBoard()` が見る）。
+   *
+   * 指の位置ではなく Container で見る。タッチ中はピースを指からずらして
+   * あるので、指で見ると「ピースは盤の上に見えているのに指は盤の外」がずれて起きる。
    */
-  dropSpot() {
+  nearestSpot() {
     const { x, y, cell } = this.layout.board;
     const container = this.drag.piece.container;
-    const overBoard = container.x >= x && container.x < x + this.board.cols * cell
-      && container.y >= y && container.y < y + this.board.rows * cell;
-    if (!overBoard) return null;
     return {
       row: Math.round((container.y - y) / cell),
       col: Math.round((container.x - x) / cell),
     };
+  }
+
+  /**
+   * その升目が盤の近くにあるか。吸い付く範囲ぶん（`INPUT.snapRange`）だけ
+   * 盤の外まで含める。そこまでに限るのは、トレイへ運ぶ途中のピースが
+   * 盤の縁へ吸い寄せられないようにするため。
+   */
+  nearBoard(spot) {
+    const margin = INPUT.snapRange;
+    return spot.row >= -margin && spot.col >= -margin
+      && spot.row < this.board.rows + margin && spot.col < this.board.cols + margin;
+  }
+
+  /**
+   * 実際に置く升目。一番近い升目に置けなくても周りを探すので、
+   * 多少ずれても置ける（TODO-023）。どこにも置けなければ null。
+   */
+  dropSpot() {
+    const spot = this.nearestSpot();
+    if (!this.nearBoard(spot)) return null;
+    return snapSpot(this.board, this.drag.piece.cells, spot.row, spot.col, INPUT.snapRange);
+  }
+
+  /**
+   * 離す直前の動きが、トレイの方向への振りだったか（TODO-023）。
+   * 置くときは位置を合わせるので指が止まってから離れる。速さが残っていれば
+   * 「置く気は無い」と見てよいので、盤の上で離してもトレイへ戻せる。
+   * トレイは縦画面では盤の下、横画面では盤の右にある。
+   */
+  swipedToTray(pointer) {
+    const trail = this.drag.trail;
+    if (trail.length === 0) return false;
+    const from = trail[0];
+    const elapsed = this.time.now - from.time;
+    if (elapsed <= 0) return false;
+    const dx = pointer.x - from.x;
+    const dy = pointer.y - from.y;
+    const toward = this.layout.portrait ? dy : dx;
+    const across = this.layout.portrait ? dx : dy;
+    // 斜めに流れただけのものを拾わないよう、トレイの側が主でなければ見送る。
+    if (toward <= Math.abs(across)) return false;
+    return toward / elapsed >= INPUT.swipeSpeed;
   }
 
   showGhost(piece, row, col) {
@@ -550,42 +567,48 @@ export default class GameScene extends Phaser.Scene {
     this.ghost.setVisible(true);
   }
 
-  dropDrag() {
+  dropDrag(pointer) {
     const { piece, snapshot } = this.drag;
+    const nearest = this.nearestSpot();
     const spot = this.dropSpot();
+    // 振って離したときは、置ける場所にいても戻す（TODO-023）。
+    const swiped = this.swipedToTray(pointer);
     this.ghost.setVisible(false);
     this.drag = null;
 
-    if (spot) {
-      const result = canPlace(this.board, piece.cells, spot.row, spot.col);
-      if (result.ok) {
+    if (spot && !swiped) {
+      this.history.push(snapshot);
+      piece.location = 'board';
+      piece.row = spot.row;
+      piece.col = spot.col;
+      this.board = place(this.board, piece.name, piece.cells, spot.row, spot.col);
+      this.settlePiece(piece, false);
+      audio.drop();
+      this.refreshHud();
+      this.checkSolved();
+      return;
+    }
+
+    // 盤から離れた所で離した、または振って戻した。盤に置いてあったものなら
+    // 「外す」、もともとトレイのものは元へ戻すだけ。
+    if (swiped || !this.nearBoard(nearest)) {
+      if (snapshot.pieces[piece.slot].location === 'board') {
         this.history.push(snapshot);
-        piece.location = 'board';
-        piece.row = spot.row;
-        piece.col = spot.col;
-        this.board = place(this.board, piece.name, piece.cells, spot.row, spot.col);
-        this.settlePiece(piece, false);
-        audio.drop();
+        piece.location = 'tray';
+        this.settlePiece(piece, true);
+        audio.lift();
         this.refreshHud();
-        this.checkSolved();
         return;
       }
-      audio.invalid();
-      this.flashPiece(piece);
-      this.showMessage(result.reason === 'overlap' ? 'そこは他のピースと重なる' : 'そこは盤からはみ出す');
       this.restoreState(snapshot, true);
       return;
     }
 
-    // 盤の外で離した。盤に置いてあったものなら「外す」、もともとトレイなら元へ戻すだけ。
-    if (snapshot.pieces[piece.slot].location === 'board') {
-      this.history.push(snapshot);
-      piece.location = 'tray';
-      this.settlePiece(piece, true);
-      audio.lift();
-      this.refreshHud();
-      return;
-    }
+    // 盤の上だが、周りを探しても置ける所が無かった。
+    const result = canPlace(this.board, piece.cells, nearest.row, nearest.col);
+    audio.invalid();
+    this.flashPiece(piece);
+    this.showMessage(result.reason === 'overlap' ? 'そこは他のピースと重なる' : 'そこは盤からはみ出す');
     this.restoreState(snapshot, true);
   }
 
@@ -614,47 +637,42 @@ export default class GameScene extends Phaser.Scene {
   // ---- 向きの変更 -----------------------------------------------------
 
   /**
-   * タップ 1 つで次の向きへ進める（TODO-019）。`turnOrder()` の並びは
-   * 90° 回転と、その場の裏返しが混ざるので、どちらの動きになったかを
-   * 見て音を選ぶ。X のように向きが 1 通りしかないピースは変化しないので、
-   * 回転の音だけが鳴る（タップが届いたことは伝わる）。
+   * タップ 1 つで次の向きへ進める（TODO-019）。盤に置いたままなら、その場に
+   * 置けない向きは飛ばす（TODO-023）。`turnOrder()` の並びは 90° 回転と
+   * その場の裏返しが混ざるので、どちらの動きになったかを見て音を選ぶ。
    */
   turnPiece(piece) {
-    const next = nextTurn(piece.cells);
-    const flipped = !sameShape(next, piece.cells)
-      && sameShape(next, normalize(flip(piece.cells)));
-    this.applyOrientation(piece, next, flipped ? audio.flip : audio.rotate);
-  }
-
-  /**
-   * 回転・反転をまとめて受ける。盤に置いてあるピースはその場で向きを変えるので、
-   * 自分を取り除いた盤で置けるかを確かめ、無理なら赤く光らせて元のままにする。
-   */
-  applyOrientation(piece, cells, sound) {
     if (!this.playing) return;
-    if (sameShape(cells, piece.cells)) {
-      // X のように、その操作では形が変わらないもの。音だけ返して知らせる。
-      sound();
-      return;
-    }
-    if (piece.location === 'board') {
-      const snapshot = this.snapshot();
-      const without = remove(this.board, piece.name);
-      if (!canPlace(without, cells, piece.row, piece.col).ok) {
+    const onBoard = piece.location === 'board';
+    // 盤の上では、今いる場所を自分で塞いでいると見なさないよう自分を除く。
+    const without = onBoard ? remove(this.board, piece.name) : null;
+    const next = onBoard
+      ? nextPlaceableTurn(without, piece.cells, piece.row, piece.col)
+      : nextTurn(piece.cells);
+
+    if (sameShape(next, piece.cells)) {
+      // どの向きも置けなかったときは、断っていることを知らせる。X のように
+      // 向きが 1 通りしかないピースは、音だけ返す（タップは届いている）。
+      if (onBoard && turnOrder(piece.cells).length > 1) {
         audio.invalid();
         this.flashPiece(piece);
         this.showMessage('そこでは向きを変えられない');
         return;
       }
-      this.history.push(snapshot);
-      piece.cells = cells;
-      this.board = place(without, piece.name, cells, piece.row, piece.col);
-    } else {
-      piece.cells = cells;
+      audio.rotate();
+      return;
     }
+
+    const flipped = sameShape(next, normalize(flip(piece.cells)));
+    if (onBoard) {
+      this.history.push(this.snapshot());
+      this.board = place(without, piece.name, next, piece.row, piece.col);
+    }
+    piece.cells = next;
     this.refreshPiece(piece);
     this.layoutPiece(piece);
-    sound();
+    if (flipped) audio.flip();
+    else audio.rotate();
     this.refreshHud();
   }
 

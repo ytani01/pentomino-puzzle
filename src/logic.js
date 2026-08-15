@@ -207,6 +207,46 @@ export function canPlace(board, cells, row, col) {
 }
 
 /**
+ * 盤に置いたまま向きを変えるときの、次の向きを返す（TODO-023）。その場に
+ * 置けない向きは飛ばす。置けるものが他に無ければ今の向きをそのまま返す。
+ *
+ * `board` には自分を取り除いた盤面を渡す（今いる場所を自分で塞いでいると
+ * 見なさないため）。飛ばすのは、置けない向きで止まると赤く光るだけになり、
+ * 置ける向きに当たるまでタップし続けることになるため。
+ */
+export function nextPlaceableTurn(board, cells, row, col) {
+  const order = turnOrder(cells);
+  const shape = normalize(cells);
+  const start = order.findIndex((known) => sameShape(known, shape));
+  for (let step = 1; step <= order.length; step += 1) {
+    const candidate = order[(start + step) % order.length];
+    if (canPlace(board, candidate, row, col).ok) return candidate;
+  }
+  return shape;
+}
+
+/**
+ * 離した升目から、実際に置く升目を決める（TODO-023）。そこに置けなければ
+ * 周りを `range` 升まで、近い順に探す。指を正確に合わせなくても置けるように
+ * するため。同じ距離なら上・左が先。どこにも置けなければ null。
+ */
+export function snapSpot(board, cells, row, col, range) {
+  const spots = [];
+  for (let dr = -range; dr <= range; dr += 1) {
+    for (let dc = -range; dc <= range; dc += 1) {
+      spots.push({ row: row + dr, col: col + dc, distance: dr * dr + dc * dc });
+    }
+  }
+  spots.sort((a, b) => a.distance - b.distance);
+  for (const spot of spots) {
+    if (canPlace(board, cells, spot.row, spot.col).ok) {
+      return { row: spot.row, col: spot.col };
+    }
+  }
+  return null;
+}
+
+/**
  * ピースを置いた盤面を新しく作って返す。盤面を書き換えないのは、
  * Undo の履歴が過去の盤面を参照したままでも壊れないようにするため。
  */
