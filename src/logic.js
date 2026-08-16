@@ -91,10 +91,15 @@ function baseTurn(cells) {
  *
  * 探索の順を変えると `tools/enumerate.mjs` の数え上げの当たり方が変わるので、
  * `orientations()` 自体の並びには手を入れずに別の関数として持つ。
+ *
+ * 起点 `origin` は並びの先頭に来る向き（TODO-025）。ピース定義の向きを渡すと、
+ * どのピースも「表を全部回ってから裏返し、裏を全部回る」に揃い、裏返しが
+ * 何タップ目に来るかがピースごとにばらつかなくなる。省いたときは
+ * `baseTurn()` で、今の向きに関わらず同じ並びになる。
  */
-export function turnOrder(cells) {
+export function turnOrder(cells, origin = null) {
   const order = [];
-  let current = baseTurn(cells);
+  let current = origin ? normalize(origin) : baseTurn(cells);
   for (let side = 0; side < 2; side += 1) {
     let last = current;
     for (let turn = 0; turn < 4; turn += 1) {
@@ -111,8 +116,8 @@ export function turnOrder(cells) {
  * 今の向きの次を返す。並びの最後まで来たら先頭へ戻る。
  * X のように向きが 1 通りしかないピースは、同じ向きがそのまま返る。
  */
-export function nextTurn(cells) {
-  const order = turnOrder(cells);
+export function nextTurn(cells, origin = null) {
+  const order = turnOrder(cells, origin);
   const shape = normalize(cells);
   const index = order.findIndex((known) => sameShape(known, shape));
   return order[(index + 1) % order.length];
@@ -214,8 +219,8 @@ export function canPlace(board, cells, row, col) {
  * 見なさないため）。飛ばすのは、置けない向きで止まると赤く光るだけになり、
  * 置ける向きに当たるまでタップし続けることになるため。
  */
-export function nextPlaceableTurn(board, cells, row, col) {
-  const order = turnOrder(cells);
+export function nextPlaceableTurn(board, cells, row, col, origin = null) {
+  const order = turnOrder(cells, origin);
   const shape = normalize(cells);
   const start = order.findIndex((known) => sameShape(known, shape));
   for (let step = 1; step <= order.length; step += 1) {

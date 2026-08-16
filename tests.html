@@ -229,14 +229,50 @@ test('turnOrder は orientations と同じ向きを、重複なく並べる', ()
 
 test('turnOrder の隣どうしは、90° 回転かその場の裏返しで移れる', () => {
   for (const piece of PIECES) {
-    const order = turnOrder(piece.cells);
-    if (order.length < 2) continue;   // X は 1 通りしかないので巡りようがない
-    for (let i = 0; i < order.length; i += 1) {
-      const from = order[i];
-      const to = order[(i + 1) % order.length];
-      const ok = sameShape(to, rotateCw(from)) || sameShape(to, flip(from));
-      assert(ok, `${piece.name} の ${i} 番目から次へ飛んでいる`);
+    // 起点を渡さないとき（既定の baseTurn）と、定義の向きを渡したときの両方。
+    for (const order of [turnOrder(piece.cells), turnOrder(piece.cells, piece.cells)]) {
+      if (order.length < 2) continue;   // X は 1 通りしかないので巡りようがない
+      for (let i = 0; i < order.length; i += 1) {
+        const from = order[i];
+        const to = order[(i + 1) % order.length];
+        const ok = sameShape(to, rotateCw(from)) || sameShape(to, flip(from));
+        assert(ok, `${piece.name} の ${i} 番目から次へ飛んでいる`);
+      }
     }
+  }
+});
+
+test('turnOrder は、渡した起点から並べる（TODO-025）', () => {
+  for (const piece of PIECES) {
+    const start = normalize(piece.cells);
+    const order = turnOrder(piece.cells, piece.cells);
+    assertSame(order[0], start, `${piece.name} の先頭が起点でない`);
+    // 起点を変えても、並ぶ向きの集合と数は変わらない。
+    assertSame(order.length, orientations(piece.cells).length, `${piece.name} の数が違う`);
+  }
+});
+
+test('turnOrder は、定義の向きを起点にすると裏返しの位置が揃う（TODO-025）', () => {
+  for (const piece of PIECES) {
+    const order = turnOrder(piece.cells, piece.cells);
+    if (order.length < 2) continue;   // X は 1 通りしかないので、回転も裏返しも同じ
+    const start = normalize(piece.cells);
+    // i 番目から次へ移るときが、その場の裏返しかどうか。V のように回転でも
+    // 裏返しでも同じ向きになる遷移があるので、回転で説明できるものは回転と見る。
+    const flips = order.map((from, i) => {
+      const to = order[(i + 1) % order.length];
+      return !sameShape(to, rotateCw(from)) && sameShape(to, flip(from));
+    });
+    // 裏返しても回転で重なるピース（I・T・U・V・W）は、裏返しが並びに出ない。
+    // それ以外は、表を回り切ってから裏返るので、並びの半分の位置と最後だけ。
+    const rotations = [];
+    let turned = start;
+    for (let i = 0; i < 4; i += 1) { rotations.push(turned); turned = rotateCw(turned); }
+    const sameWhenFlipped = rotations.some((shape) => sameShape(shape, flip(start)));
+    const half = order.length / 2;
+    const expected = order.map((_, i) => !sameWhenFlipped
+      && (i === half - 1 || i === order.length - 1));
+    assertSame(flips, expected, `${piece.name} の裏返しの位置`);
   }
 });
 

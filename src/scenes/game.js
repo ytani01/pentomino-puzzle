@@ -9,11 +9,11 @@
 
 import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, INPUT, LAYOUTS,
-  OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, VERSION,
+  OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, TURN_MARK, VERSION,
 } from '../config.js';
 import {
   boardKey, canPlace, createBoard, flip, formatTime, isSolved, nextPlaceableTurn, nextTurn,
-  normalize, outlineEdges, place, remove, sameShape, shapeSize, snapSpot, turnOrder,
+  normalize, outlineEdges, place, remove, rotateCw, sameShape, shapeSize, snapSpot, turnOrder,
 } from '../logic.js';
 import {
   autoFrom, ensureSolutions, hasSolution, solutionNumber,
@@ -144,6 +144,10 @@ export default class GameScene extends Phaser.Scene {
         name: definition.name,
         color: pieceColor(this.palette, definition),
         cells: normalize(definition.cells),
+        // 向きの巡りの起点（TODO-025）。定義の向きから巡り始めると、どの
+        // ピースも表を回り切ってから裏返しになる。`cells` は回すたびに
+        // 変わるので、起点は別に持っておく。
+        origin: normalize(definition.cells),
         location: 'tray',
         row: 0,
         col: 0,
@@ -167,6 +171,10 @@ export default class GameScene extends Phaser.Scene {
       }
       piece.outline = this.add.graphics();
       piece.container.add(piece.outline);
+      // 次のタップで何が起きるかの印（TODO-025）。ピースの絵に重ねるので、
+      // Container の一番上へ入れる。
+      piece.turnMark = this.add.graphics();
+      piece.container.add(piece.turnMark);
       this.refreshPiece(piece);
       this.layoutPiece(piece);
       return piece;
@@ -345,6 +353,104 @@ export default class GameScene extends Phaser.Scene {
       piece.tiles[index].setPosition(col * cell, row * cell);
     });
     this.drawPieceEdges(piece);
+    this.drawTurnMark(piece);
+  }
+
+  // ---- 次のタップで何が起きるかの印（TODO-025）-------------------------
+
+  /**
+   * 次のタップでこのピースがどう変わるかを返す。`turnOrder()` の並びは
+   * 定義の向きを起点にすると「回転が続いて、その場の裏返しが 1 回」に揃うので、
+   * 見分けるのは回転か裏返しかの 2 つで足りる（上下反転は並びに出てこない）。
+   *
+   * V のように回転でも裏返しでも同じ向きになる遷移があるので、回転で
+   * 説明できるものは回転として扱う。X は向きが 1 通りなので null（印を出さない）。
+   */
+  turnMarkKind(piece) {
+    const next = nextTurn(piece.cells, piece.origin);
+    if (sameShape(next, piece.cells)) return null;
+    if (sameShape(next, rotateCw(piece.cells))) return 'rotate';
+    return 'flip';
+  }
+
+  /**
+   * 印を置くマスの中心。外接矩形の真ん中は U や X のように空いていることが
+   * あるので、そこへ一番近い**埋まっているマス**を選ぶ。印がピースから
+   * 外れて浮くのを避けるため。
+   */
+  turnMarkCenter(piece) {
+    const cell = this.layout.board.cell;
+    const size = shapeSize(piece.cells);
+    let best = piece.cells[0];
+    let bestDistance = Infinity;
+    for (const [row, col] of piece.cells) {
+      const dx = col + 0.5 - size.cols / 2;
+      const dy = row + 0.5 - size.rows / 2;
+      const distance = dx * dx + dy * dy;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = [row, col];
+      }
+    }
+    return { x: (best[1] + 0.5) * cell, y: (best[0] + 0.5) * cell };
+  }
+
+  /**
+   * 印を引き直す。**トレイにいるピースだけ**に出す（TODO-025）。盤の上では
+   * 置けない向きを飛ばすので、次に何が来るかが盤の埋まり方で変わってしまう。
+   * 掴んでいる間も出さない（拡大率が変わって大きさが合わなくなるうえ、
+   * 運んでいる最中に向きの話は要らない）。
+   */
+  drawTurnMark(piece) {
+    const g = piece.turnMark;
+    g.clear();
+    const dragging = this.drag && this.drag.piece === piece;
+    if (!this.playing || piece.location !== 'tray' || dragging) return;
+    const kind = this.turnMarkKind(piece);
+    if (kind === null) return;
+
+    const center = this.turnMarkCenter(piece);
+    const cell = this.layout.board.cell;
+    // 暗い縁取りを先に太く敷き、その上へ白い本線を重ねる。
+    for (const pass of [
+      { color: TURN_MARK.edgeColor, alpha: TURN_MARK.edgeAlpha, width: TURN_MARK.edgeWidth },
+      { color: TURN_MARK.color, alpha: TURN_MARK.alpha, width: TURN_MARK.width },
+    ]) {
+      g.lineStyle(pass.width * cell, pass.color, pass.alpha);
+      if (kind === 'rotate') this.strokeRotateMark(g, center);
+      else this.strokeFlipMark(g, center);
+    }
+  }
+
+  /** 矢じり。`angle` は進む向きで、そこから開いた 2 本の線で描く。 */
+  strokeArrowHead(g, x, y, angle) {
+    const size = TURN_MARK.headSize * this.layout.board.cell;
+    const spread = Phaser.Math.DegToRad(150);
+    for (const sign of [1, -1]) {
+      const a = angle + spread * sign;
+      g.lineBetween(x, y, x + Math.cos(a) * size, y + Math.sin(a) * size);
+    }
+  }
+
+  /** 回転の印。時計回りの円弧に、進む先を指す矢じりを付ける。 */
+  strokeRotateMark(g, center) {
+    const radius = TURN_MARK.radius * this.layout.board.cell;
+    const from = Phaser.Math.DegToRad(-130);
+    const to = Phaser.Math.DegToRad(110);
+    g.beginPath();
+    g.arc(center.x, center.y, radius, from, to, false);
+    g.strokePath();
+    // 角度が増える向き（画面では時計回り）の接線は、その角度の 90° 先。
+    this.strokeArrowHead(g, center.x + Math.cos(to) * radius,
+                         center.y + Math.sin(to) * radius, to + Math.PI / 2);
+  }
+
+  /** 左右反転の印。左右に開いた両向きの矢印。 */
+  strokeFlipMark(g, center) {
+    const length = TURN_MARK.arrowLength * this.layout.board.cell;
+    g.lineBetween(center.x - length, center.y, center.x + length, center.y);
+    this.strokeArrowHead(g, center.x + length, center.y, 0);
+    this.strokeArrowHead(g, center.x - length, center.y, Math.PI);
   }
 
   /**
@@ -486,6 +592,7 @@ export default class GameScene extends Phaser.Scene {
     if (piece.location === 'board') this.board = remove(this.board, piece.name);
 
     this.drag = { piece, offsetX, offsetY, snapshot, trail: [] };
+    this.drawTurnMark(piece);   // 掴んでいる間は印を消す
     piece.container.setScale(1);
     piece.container.setDepth(DEPTH.dragging);
     audio.pick();
@@ -626,6 +733,8 @@ export default class GameScene extends Phaser.Scene {
   settlePiece(piece, animate) {
     const target = this.pieceTransform(piece);
     piece.container.setDepth(DEPTH.piece);
+    // 盤とトレイのどちらへ収まるかで、向きの印を出すかどうかが変わる。
+    this.drawTurnMark(piece);
     // 前の移動が残っていると行き先を取り合うので、先に止める。
     this.tweens.killTweensOf(piece.container);
     if (!animate) {
@@ -657,13 +766,13 @@ export default class GameScene extends Phaser.Scene {
     // 盤の上では、今いる場所を自分で塞いでいると見なさないよう自分を除く。
     const without = onBoard ? remove(this.board, piece.name) : null;
     const next = onBoard
-      ? nextPlaceableTurn(without, piece.cells, piece.row, piece.col)
-      : nextTurn(piece.cells);
+      ? nextPlaceableTurn(without, piece.cells, piece.row, piece.col, piece.origin)
+      : nextTurn(piece.cells, piece.origin);
 
     if (sameShape(next, piece.cells)) {
       // どの向きも置けなかったときは、断っていることを知らせる。X のように
       // 向きが 1 通りしかないピースは、音だけ返す（タップは届いている）。
-      if (onBoard && turnOrder(piece.cells).length > 1) {
+      if (onBoard && turnOrder(piece.cells, piece.origin).length > 1) {
         audio.invalid();
         this.flashPiece(piece);
         this.showMessage('そこでは向きを変えられない');
