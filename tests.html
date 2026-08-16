@@ -56,6 +56,7 @@ import {
   sanitizeHistory, sanitizeFound, migrateHistory, loadHistory, addHistory,
   clearHistory, loadFound, addFound, clearFound, loadBest, shouldRecordBest,
   loadAuto, addAuto, clearAuto,
+  removeHistory, removeFound, removeAuto,
 } from './src/storage.js';
 
 // ---- ごく小さなテストの土台 ----------------------------------------------
@@ -1372,6 +1373,59 @@ for (const state of boardStates) {
       addAuto(spec.key, 1, total);
       clearAuto(spec.key);
       assertSame(loadAuto(spec.key, total), []);
+    });
+  });
+
+  // ---- TODO-031：履歴を 1 件だけ消す ---------------------------------------
+
+  test(`removeHistory は指した番号の件だけを消す（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      addHistory(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
+      addHistory(spec.key, { at: 3000, ms: 300, no: 3 }, solutions);
+      removeHistory(spec.key, 2, solutions);
+      assertSame(loadHistory(spec.key, solutions).map((e) => e.no), [3, 1]);
+    });
+  });
+
+  test(`removeHistory は無い番号を指しても何も変わらない（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      removeHistory(spec.key, 9, solutions);
+      assertSame(loadHistory(spec.key, solutions).map((e) => e.no), [1]);
+    });
+  });
+
+  test(`removeHistory は古い形の件も、番号へ読み替えてから消せる（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.historyKey, JSON.stringify([
+        { at: 2000, ms: 200, cells: canonical[1] },
+        { at: 1000, ms: 100, cells: canonical[0] },
+      ]));
+      removeHistory(spec.key, 2, solutions);
+      assertSame(loadHistory(spec.key, solutions), [{ at: 1000, ms: 100, no: 1 }]);
+    });
+  });
+
+  test(`removeFound / removeAuto は指した番号だけを外す（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      addFound(spec.key, 1, total);
+      addFound(spec.key, 2, total);
+      addAuto(spec.key, 1, total);
+      addAuto(spec.key, 2, total);
+      removeFound(spec.key, 1, total);
+      removeAuto(spec.key, 2, total);
+      assertSame(loadFound(spec.key, total), [2], '達成度の側');
+      assertSame(loadAuto(spec.key, total), [1], 'おまかせの側');
+    });
+  });
+
+  test(`removeFound は履歴（loadHistory）を消さない（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      addFound(spec.key, 1, total);
+      removeFound(spec.key, 1, total);
+      assertSame(loadHistory(spec.key, solutions).length, 1, '履歴まで消えた');
     });
   });
 }

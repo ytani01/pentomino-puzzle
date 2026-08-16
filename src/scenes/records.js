@@ -21,6 +21,7 @@ import { formatTime } from '../logic.js';
 import { ensureSolutions, solutionCells } from '../solutions.js';
 import {
   clearFound, clearAuto, clearHistory, loadFound, loadHistory,
+  removeAuto, removeFound, removeHistory,
 } from '../storage.js';
 import * as audio from '../audio.js';
 import { createButton, createChoiceRow, createPanel } from '../ui.js';
@@ -70,8 +71,11 @@ const PAGER = {
   offset: 30, width: 118, height: 40, gap: 140,
 };
 
-/** 下端に並べるボタン。 */
-const FOOT = { width: 210, height: 52, gap: 20 };
+/**
+ * 下端に並べるボタン。3 つ（TODO-031）なので、一番狭い縦画面の内部解像度 640 から
+ * 左右の余白（14 × 2）を引いた 612 に収まる大きさにしてある。
+ */
+const FOOT = { width: 190, height: 52, gap: 14 };
 
 /**
  * 確認の枠の寸法。盤に依らない値なので、どの盤の `LAYOUTS` から取っても同じ
@@ -155,17 +159,29 @@ export default class RecordsScene extends Phaser.Scene {
 
     // 消せるものが無いときは押せなくする（押しても何も起きないボタンを
     // 残すより、押せないと見せたほうが分かる）。
-    this.clearButton = createButton(this, {
-      x: cx - (FOOT.width + FOOT.gap) / 2,
+    const step = FOOT.width + FOOT.gap;
+    // 選んでいる 1 件だけを消す（TODO-031）。何を消すのかは、選んだ回の
+    // 完成形と見出しが出ているので確かめてから押せる。
+    this.removeButton = createButton(this, {
+      x: cx - step,
       y: L.buttonsY,
       width: FOOT.width,
       height: FOOT.height,
-      label: '消す',
+      label: 'この回を消す',
+      fontSize: FONT.small,
+      onClick: () => this.confirmRemove(),
+    });
+    this.clearButton = createButton(this, {
+      x: cx,
+      y: L.buttonsY,
+      width: FOOT.width,
+      height: FOOT.height,
+      label: '全部消す',
       fontSize: FONT.hud,
       onClick: () => this.confirmClear(),
     });
     createButton(this, {
-      x: cx + (FOOT.width + FOOT.gap) / 2,
+      x: cx + step,
       y: L.buttonsY,
       width: FOOT.width,
       height: FOOT.height,
@@ -269,6 +285,9 @@ export default class RecordsScene extends Phaser.Scene {
    * 当たり判定を持たせ、開いている間は後ろのボタンへクリックが抜けないようにする。
    */
   createConfirmDialog() {
+    // 開くときに `showConfirm()` が入れ替える（TODO-031）。枠が出ていない間に
+    // 呼ばれることは無いが、鍵を作っておかないと形が場面で変わってしまう。
+    this.confirmAction = () => this.hideConfirm();
     const x = (SCREEN.width - CONFIRM.width) / 2;
     const y = (SCREEN.height - CONFIRM.height) / 2;
     const depth = 10;
@@ -298,7 +317,10 @@ export default class RecordsScene extends Phaser.Scene {
       height: CONFIRM.buttonHeight,
       label: 'はい',
       fontSize: FONT.small,
-      onClick: () => this.doClear(),
+      // 全部消すのか 1 件だけ消すのか（TODO-031）は、開くときに決めて
+      // `confirmAction` へ持たせる。枠を 2 つ組むより、文言と行き先だけを
+      // 差し替えるほうが、確認の見え方が 2 つに分かれずに済む。
+      onClick: () => this.confirmAction(),
     }).setDepth(depth).setVisible(false));
     this.confirmParts.push(createButton(this, {
       x: left + CONFIRM.buttonWidth + CONFIRM.gap + CONFIRM.buttonWidth / 2,
@@ -344,11 +366,27 @@ export default class RecordsScene extends Phaser.Scene {
 
   confirmClear() {
     if (this.entries.length === 0) return;
+    this.showConfirm(
+      `${BOARDS[this.boardKey].label} の記録 ${this.entries.length} 件を消しますか？\nもとに戻せません`,
+      () => this.doClear(),
+    );
+  }
+
+  /** 選んでいる 1 件を消す前の確認（TODO-031）。どの回かが分かる文にする。 */
+  confirmRemove() {
+    const entry = this.entries[this.selected];
+    if (!entry || !entry.no || this.solutions === null) return;
+    this.showConfirm(
+      `${formatDate(entry.at)} の ${entry.no} 番を消しますか？\nもとに戻せません`,
+      () => this.doRemove(),
+    );
+  }
+
+  showConfirm(text, action) {
     audio.unlock();
     audio.button();
-    this.confirmText.setText(
-      `${BOARDS[this.boardKey].label} の記録 ${this.entries.length} 件を消しますか？\nもとに戻せません`,
-    );
+    this.confirmAction = action;
+    this.confirmText.setText(text);
     this.confirmParts.forEach((part) => part.setVisible(true));
   }
 
@@ -369,6 +407,32 @@ export default class RecordsScene extends Phaser.Scene {
     clearAuto(this.boardKey);
     this.confirmParts.forEach((part) => part.setVisible(false));
     this.reload();
+  }
+
+  /**
+   * 選んでいる 1 件だけを消す（TODO-031）。達成度に使う番号（`removeFound`）と、
+   * おまかせが避ける番号（`removeAuto`）も一緒に外す——全部消すとき
+   * （`doClear()`）と揃えてあり、一覧から消えたものが達成度やおまかせの側に
+   * だけ残る状態を作らない。
+   *
+   * 消したあとは頁と選び位置を詰め直す。`reload()` で先頭へ戻すと、後ろの頁で
+   * 1 件消すたびに 1 頁目から辿り直すことになるため。
+   */
+  doRemove() {
+    audio.button();
+    this.confirmParts.forEach((part) => part.setVisible(false));
+    const entry = this.entries[this.selected];
+    if (!entry || !entry.no || this.solutions === null) return;
+    const count = this.solutions.canonical.length;
+    removeHistory(this.boardKey, entry.no, this.solutions);
+    removeFound(this.boardKey, entry.no, count);
+    removeAuto(this.boardKey, entry.no, count);
+    this.entries = loadHistory(this.boardKey, this.solutions);
+    this.found = loadFound(this.boardKey, count);
+    // 消した場所にあった次の件を選ぶ（末尾を消したときは 1 つ前）。
+    this.selected = Math.max(0, Math.min(this.selected, this.entries.length - 1));
+    this.page = Math.min(this.page, this.pageCount() - 1);
+    this.refresh();
   }
 
   // ---- 表示 -------------------------------------------------------------
@@ -426,6 +490,10 @@ export default class RecordsScene extends Phaser.Scene {
     this.clearButton.setEnabled(!empty);
 
     const entry = this.entries[this.selected];
+    // 1 件だけ消せるのは、その件が番号を持つとき（TODO-031）。番号は解のデータが
+    // 届いてから付くので、届く前は押せない——`removeHistory()` は番号で件を
+    // 指すため、番号の無いうちは何を消すのかが決まらない。
+    this.removeButton.setEnabled(!!entry && !!entry.no && this.solutions !== null);
     // 何番の解かも添える（TODO-022）。一覧の行は日時と時間だけで揃えたいので、
     // 番号は選んだ 1 件の見出しにだけ出す。番号はデータが届いてから付く
     // （古い形の件は読み替えたあとに入る）ので、無いうちは日時と時間だけ。

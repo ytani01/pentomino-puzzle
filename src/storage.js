@@ -264,6 +264,26 @@ export function addHistory(boardKey, entry, solutions = null) {
   return next;
 }
 
+/**
+ * 履歴から 1 件だけ消して、保存後の配列を返す（TODO-031）。
+ *
+ * 消す件は**解の番号で指す**。履歴は同じ番号を 2 件持たない（`addHistory()`）
+ * ので番号で 1 件に決まり、頁送りの何行目かのような**見た目の位置に依らない**。
+ *
+ * 番号を持たない古い形の件（`cells`）は、`solutions` を渡せば読み替えてから
+ * 消せる。渡さなければ読み替えられない件はそのまま残る。
+ */
+export function removeHistory(boardKey, no, solutions = null) {
+  const board = boardOf(boardKey);
+  const next = loadHistory(boardKey, solutions).filter((entry) => entry.no !== no);
+  try {
+    window.localStorage.setItem(board.historyKey, JSON.stringify(next));
+  } catch (error) {
+    // 消せなくても、その場の一覧は消したあとの形で出せる。
+  }
+  return next;
+}
+
 /** その盤の履歴を消す。最短時間（`clearBest()`）とは別に消せる。 */
 export function clearHistory(boardKey) {
   try {
@@ -326,6 +346,35 @@ export function addFound(boardKey, no, count) {
   return next;
 }
 
+/**
+ * 番号を 1 つだけ外して保存し、保存後の配列を返す（TODO-031）。
+ * `foundKey`（達成度）と `autoKey`（おまかせで避ける番号）で同じ処理になるので、
+ * 保存先だけを引数に取る形にしてある。
+ */
+function removeNumber(storeKey, no, count) {
+  let existing;
+  try {
+    existing = sanitizeFound(window.localStorage.getItem(storeKey), count);
+  } catch (error) {
+    return [];
+  }
+  const next = existing.filter((entry) => entry !== no);
+  try {
+    window.localStorage.setItem(storeKey, JSON.stringify(next));
+  } catch (error) {
+    // 消せなくても、その場の達成度は消したあとの数で出せる。
+  }
+  return next;
+}
+
+/**
+ * 見つけた解の番号を 1 つ外す（TODO-031）。履歴を 1 件消すときに一緒に呼ぶ。
+ * 一覧から消えたのに達成度には残る、という辻褄の合わない状態を作らないため。
+ */
+export function removeFound(boardKey, no, count) {
+  return removeNumber(boardOf(boardKey).foundKey, no, count);
+}
+
 /** その盤で見つけた解の番号を消す。履歴を消すときに一緒に呼ぶ。 */
 export function clearFound(boardKey) {
   try {
@@ -366,6 +415,15 @@ export function addAuto(boardKey, no, count) {
     // 保存できなくても、そのおまかせ自体は出せている。
   }
   return next;
+}
+
+/**
+ * おまかせが導いた解の番号を 1 つ外す（TODO-031）。履歴を 1 件消すときに、
+ * `removeFound()` と一緒に呼ぶ。全部消すときに `clearAuto()` まで呼ぶのと
+ * 同じ理由で、記録を消した解を「前に出した」と避け続けないようにする。
+ */
+export function removeAuto(boardKey, no, count) {
+  return removeNumber(boardOf(boardKey).autoKey, no, count);
 }
 
 /** その盤でおまかせが導いた解の番号を消す。履歴を消すときに一緒に呼ぶ。 */
