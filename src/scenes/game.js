@@ -272,7 +272,8 @@ export default class GameScene extends Phaser.Scene {
       () => this.toggleMute(),
       () => this.confirmToTitle(),
     ];
-    // ボタンだけの段は中央へ、時間の表示と分け合う段（横画面の 1 段目）は右へ寄せる。
+    // ボタンだけの段は中央へ寄せる。時間の表示と段を分け合うなら右へ寄せるが、
+    // 今は必ず段が分かれる（`config.js` の `firstButtonRow`）ので中央だけを通る。
     const perRow = hud.buttonsPerRow;
     const centered = hud.firstButtonRow > 0;
     this.buttons = labels.map((label, index) => {

@@ -294,7 +294,8 @@ export function makeLayout({ portrait, board }) {
     buttonWidth,
     buttonHeight: HUD_BUTTON_HEIGHT,
     buttonsPerRow,
-    // ボタンが始まる段。0 なら文字と同じ段に並ぶ（横画面）。
+    // ボタンが始まる段。文字の段が 1 段あるので、今はどちらの向きでも 1。
+    // 文字と同じ段（0）に並べていたのは TODO-026 より前（上の `hudRows`）。
     firstButtonRow: hudRows - buttonRows,
     remainX: HUD_REMAIN_X,
     statusX: HUD_STATUS_X,

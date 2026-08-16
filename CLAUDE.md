@@ -122,16 +122,18 @@ ws.close();
 | `src/solutions.js` | 全解のデータの読み込み（動的 import）と、盤面との照合・おまかせ（TODO-022） |
 | `src/data/8x8.js` ・ `src/data/6x10.js` | 盤ごとの全解（代表形 65 件 / 2339 件）。**手で書き換えない** |
 | `src/audio.js` | 効果音の合成。最初のユーザー操作で `unlock()` を呼ぶ |
-| `src/storage.js` | クリア記録（最短時間・履歴・見つけた解の番号・おまかせで導いた解の番号）と、遊びかけの盤面（TODO-030）の保存（失敗しても遊べるようにする） |
+| `src/storage.js` | クリア記録（最短時間・履歴・見つけた解の番号・おまかせで導いた解の番号）、色の組（TODO-015）、遊びかけの盤面（TODO-030）の保存（失敗しても遊べるようにする） |
 | `src/ui.js` | ボタンと枠の組み立て。4 つのシーンが同じ見た目を使うため |
 | `src/scenes/boot.js` | マス目テクスチャの生成。ピースの色ごとに 1 枚 |
 | `src/scenes/title.js` | タイトル |
 | `src/scenes/game.js` | 本編。Phaser とのつなぎに徹し、判定は `logic.js` に任せる |
 | `src/scenes/clear.js` | クリア表示と記録の更新 |
-| `src/scenes/records.js` | クリア記録の一覧、選んだ回の完成形（TODO-008）、達成度（TODO-022） |
+| `src/scenes/records.js` | クリア記録の一覧、選んだ回の完成形（TODO-008）、達成度（TODO-022）、1 件だけ消す（TODO-031） |
 | `tools/enumerate.mjs` | 全解の数え上げ（開発時のみ。元は `src/solver.js`） |
 | `tools/gen-solutions.mjs` | `src/data/*.js` を作る／突き合わせる（開発時のみ） |
+| `tools/window-shim.mjs` | Node から `src/` を読むためのダミーの `window`（開発時のみ） |
 | `tests.html` | 計算のテスト（ブラウザで開くだけ） |
+| `docs/developer.md` | 画面の用語、全解のデータ、GitHub 上の設定 |
 | `.github/workflows/pages.yml` | タグを押したときに GitHub Pages へ公開する |
 
 ## 公開（GitHub Pages）
