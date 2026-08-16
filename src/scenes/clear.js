@@ -44,6 +44,12 @@ const PANEL_ROWS = {
 /** 経過時間だけは他より大きく出す（この画面の主役なので）。 */
 const TIME_FONT = 58;
 
+/**
+ * 下端に並べるボタン。3 つ（TODO-032）なので、一番狭い縦画面の幅 640 から
+ * 左右の余白を引いた 612 に収まる大きさにしてある。
+ */
+const BUTTONS = { width: 190, height: 58, gap: 12 };
+
 export default class ClearScene extends Phaser.Scene {
   constructor() {
     super('Clear');
@@ -150,31 +156,30 @@ export default class ClearScene extends Phaser.Scene {
       }).setOrigin(0.5);
     }
 
-    // 2 つのボタンは横に並べる。合わせて 520 なので、縦画面（640）でも収まる。
+    // 3 つのボタンを横に並べる。240 幅のままでは縦画面（640）に収まらないので、
+    // 190 幅 + 間 12（合わせて 594）まで詰めてある（TODO-032）。
     const buttonY = buttonTop + STACK[2].height / 2;
-    createButton(this, {
-      x: cx - 140,
-      y: buttonY,
-      width: 240,
-      height: 58,
-      label: 'もう一度',
-      fontSize: FONT.hud,
-      onClick: () => {
-        audio.button();
-        this.scene.start('Game');
-      },
-    });
-    createButton(this, {
-      x: cx + 140,
-      y: buttonY,
-      width: 240,
-      height: 58,
-      label: 'タイトルへ',
-      fontSize: FONT.hud,
-      onClick: () => {
-        audio.button();
-        this.scene.start('Title');
-      },
+    const step = BUTTONS.width + BUTTONS.gap;
+    // 解いた直後にその回を一覧で見たくなるので、記録へ直に行けるようにする
+    // （タイトルを経由させると、盤を選び直す画面を挟むことになる。TODO-032）。
+    const actions = [
+      { label: 'もう一度', scene: 'Game' },
+      { label: '記録', scene: 'Records' },
+      { label: 'タイトルへ', scene: 'Title' },
+    ];
+    actions.forEach((action, index) => {
+      createButton(this, {
+        x: cx + (index - 1) * step,
+        y: buttonY,
+        width: BUTTONS.width,
+        height: BUTTONS.height,
+        label: action.label,
+        fontSize: FONT.hud,
+        onClick: () => {
+          audio.button();
+          this.scene.start(action.scene);
+        },
+      });
     });
   }
 }
