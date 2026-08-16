@@ -17,9 +17,10 @@
  * 混ぜないため。8×8 だけ接尾辞が無いのは、盤が 1 つだった頃の記録を
  * そのまま引き継ぐため。
  *
- * `historyKey`（クリア記録の履歴。TODO-008）と `foundKey`（見つけた解の番号。
- * TODO-022）は**どちらも接尾辞を付けて揃えてある**。引き継ぐ古い記録が
- * そもそも無いので、`storageKey` の不揃いを新しいキーにまで持ち込む理由が無い。
+ * `historyKey`（クリア記録の履歴。TODO-008）・`foundKey`（自力で見つけた解の
+ * 番号。TODO-022）・`hintedKey`（ヒントで出した解の番号。TODO-016）は
+ * **どれも接尾辞を付けて揃えてある**。引き継ぐ古い記録がそもそも無いので、
+ * `storageKey` の不揃いを新しいキーにまで持ち込む理由が無い。
  */
 export const BOARDS = {
   '8x8': {
@@ -32,6 +33,7 @@ export const BOARDS = {
     storageKey: 'pentomino-puzzle/best-ms',
     historyKey: 'pentomino-puzzle/history/8x8',
     foundKey: 'pentomino-puzzle/found/8x8',
+    hintedKey: 'pentomino-puzzle/hinted/8x8',
   },
   '6x10': {
     key: '6x10',
@@ -43,6 +45,7 @@ export const BOARDS = {
     storageKey: 'pentomino-puzzle/best-ms/6x10',
     historyKey: 'pentomino-puzzle/history/6x10',
     foundKey: 'pentomino-puzzle/found/6x10',
+    hintedKey: 'pentomino-puzzle/hinted/6x10',
   },
 };
 

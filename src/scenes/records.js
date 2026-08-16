@@ -20,7 +20,7 @@ import {
 import { formatTime } from '../logic.js';
 import { ensureSolutions, solutionCells } from '../solutions.js';
 import {
-  clearFound, clearHistory, loadFound, loadHistory,
+  clearFound, clearHinted, clearHistory, loadFound, loadHistory,
 } from '../storage.js';
 import * as audio from '../audio.js';
 import { createButton, createChoiceRow, createPanel } from '../ui.js';
@@ -330,11 +330,16 @@ export default class RecordsScene extends Phaser.Scene {
     this.confirmParts.forEach((part) => part.setVisible(false));
   }
 
-  /** 履歴と、達成度に使う「見つけた解の番号」をまとめて消す（TODO-022）。 */
+  /**
+   * 履歴と、達成度に使う「見つけた解の番号」をまとめて消す（TODO-022）。
+   * ヒントで導いた解の番号（TODO-016）も一緒に消す——記録を消したのに
+   * 「その解は前に出した」とヒントが避け続けるのは辻褄が合わないため。
+   */
   doClear() {
     audio.button();
     clearHistory(this.boardKey);
     clearFound(this.boardKey);
+    clearHinted(this.boardKey);
     this.confirmParts.forEach((part) => part.setVisible(false));
     this.reload();
   }

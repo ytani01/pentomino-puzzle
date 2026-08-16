@@ -79,12 +79,17 @@ export function savePalette(key) {
 }
 
 /**
- * 記録に残してよいか（TODO-020）。
+ * 最短時間を更新してよいか（TODO-020、TODO-024）。
  *
  * ヒント・詰み表示のどちらかに頼ったら「自力ではない」と見なし、
- * 最短時間・履歴のどちらにも残さない。`clear.js` から使う。
+ * 最短時間には入れない。`clear.js` から使う。
+ *
+ * **見るのは最短時間だけ**（TODO-024）。前は履歴と達成度も同じ判定で
+ * 落としていたが、それだと解けた回そのものが残らず、あとから
+ * 「どのパターンを解いたか」を辿れなかった。今は履歴と達成度には残し、
+ * 履歴の側に「何に頼ったか」の印（`h` / `c`）を付けて見分ける。
  */
-export function shouldRecord(usedHint, usedCheck) {
+export function shouldRecordBest(usedHint, usedCheck) {
   return !usedHint && !usedCheck;
 }
 
@@ -103,6 +108,12 @@ export function clearBest(boardKey) {
  * - `at` … クリアした時刻（エポックミリ秒）
  * - `ms` … その回の所要時間（ミリ秒）
  * - `no` … 何番の解か（代表形の番号。1 から数える。TODO-022）
+ * - `h` … ヒントを使った回なら `true`（TODO-024）
+ * - `c` … 詰み表示を使った回なら `true`（TODO-024）
+ *
+ * **`h` / `c` は使ったときだけ持たせる**（偽なら鍵ごと省く）。自力で解いた回が
+ * 記録の大半になるので、そちらを今までと同じ形のままにしておくと、TODO-024
+ * より前に保存した件と見分ける必要がなくなる（印が無い＝自力）。
  *
  * **60 マスぶんの文字列（`cells`）を持つのはやめた**（TODO-022）。全解を
  * データで持つようになったので、番号さえあれば完成形を引き直せる。回転・反転
@@ -130,6 +141,10 @@ export function clearBest(boardKey) {
  * 1 件ずつ検証して**壊れた件は黙って捨てる**（例外にしない。`loadPalette()`
  * が知らないキーを既定へ落とすのと同じ考え方）。番号を持つ件と、古い `cells`
  * を持つ件の**どちらも通す**——読み替えは解のデータが要るので、ここではしない。
+ *
+ * 通った件は組み立て直して返す。持っている鍵を `at` / `ms` / `no`（または
+ * `cells`）と、真の `h` / `c` だけに絞るためで、知らない鍵や `h: 1` のような
+ * 値がそのまま保存へ戻らないようにしてある（TODO-024）。
  */
 export function sanitizeHistory(value, board) {
   let parsed = value;
@@ -148,7 +163,16 @@ export function sanitizeHistory(value, board) {
     && typeof entry.ms === 'number' && Number.isFinite(entry.ms) && entry.ms > 0
     && ((Number.isInteger(entry.no) && entry.no > 0)
       || (typeof entry.cells === 'string' && entry.cells.length === length))
-  )).slice(0, HISTORY_LIMIT);
+  )).slice(0, HISTORY_LIMIT).map((entry) => {
+    // 番号を持つ件は番号で持つ（`cells` も付いていたら番号の側を採る。
+    // `migrateHistory()` と同じ優先順）。
+    const item = Number.isInteger(entry.no) && entry.no > 0
+      ? { at: entry.at, ms: entry.ms, no: entry.no }
+      : { at: entry.at, ms: entry.ms, cells: entry.cells };
+    if (entry.h === true) item.h = true;
+    if (entry.c === true) item.c = true;
+    return item;
+  });
 }
 
 /**
@@ -157,6 +181,10 @@ export function sanitizeHistory(value, board) {
  * 読み替えられなかった件（データに無い盤面。手で書き換えられたものなど）は
  * 捨てる。番号を既に持つ件はそのまま通す。`solutions` が無いときは何もしない
  * ので、データが届く前でも一覧の日時と時間だけは出せる。
+ *
+ * `cells` だけを番号へ差し替え、ほかの鍵（`h` / `c`）はそのまま持ち越す。
+ * 古い件は印を持たないので何も付かないが、鍵を並べ直すと印を落としてしまう
+ * ので、残す側を書き並べない形にしてある（TODO-024）。
  */
 export function migrateHistory(entries, solutions) {
   if (!solutions) return entries;
@@ -167,7 +195,9 @@ export function migrateHistory(entries, solutions) {
       continue;
     }
     const no = solutionNumber(solutions, entry.cells);
-    if (no !== null) migrated.push({ at: entry.at, ms: entry.ms, no });
+    if (no === null) continue;
+    const { cells, ...rest } = entry;
+    migrated.push({ ...rest, no });
   }
   return migrated;
 }
@@ -199,14 +229,29 @@ export function loadHistory(boardKey, solutions = null) {
  * クリアしたか」で、時間で順位付けはしないため、既にある件を書き換えることも
  * しない。回転・反転しただけの解は同じ番号になるので、番号を見るだけで足りる。
  *
+ * **例外は印を外すときだけ**（TODO-024）。ヒントや詰み表示に頼って解いた回に
+ * 印が付いたあと、同じ解を自力で解き直したら、その件の印を落とす。日時と時間は
+ * 初めに解いた回のまま残す（上の「既にある件を書き換えない」を保つ）。
+ *
  * `solutions` を渡すのは、**書き戻すときに古い形の件も番号へ揃えるため**
  * （読み替えずに書き戻すと、いつまでも `cells` の件が残ってしまう）。
  */
 export function addHistory(boardKey, entry, solutions = null) {
   const board = boardOf(boardKey);
   const existing = loadHistory(boardKey, solutions);
-  if (existing.some((item) => item.no === entry.no)) return existing;
-  const next = sanitizeHistory([entry, ...existing], board);
+  const index = existing.findIndex((item) => item.no === entry.no);
+  let list;
+  if (index < 0) {
+    list = [entry, ...existing];
+  } else {
+    const marked = existing[index].h === true || existing[index].c === true;
+    // 印の付いた件を、印の無い回（＝自力）でなぞったときだけ書き換える。
+    if (!marked || entry.h === true || entry.c === true) return existing;
+    list = existing.map((item, i) => (i === index
+      ? { at: item.at, ms: item.ms, no: item.no }
+      : item));
+  }
+  const next = sanitizeHistory(list, board);
   try {
     window.localStorage.setItem(board.historyKey, JSON.stringify(next));
   } catch (error) {
@@ -281,6 +326,48 @@ export function addFound(boardKey, no, count) {
 export function clearFound(boardKey) {
   try {
     window.localStorage.removeItem(boardOf(boardKey).foundKey);
+  } catch (error) {
+    // 消せなくても実害は無い。
+  }
+}
+
+/**
+ * ヒントで導いた解の番号（TODO-016）。`foundKey` とは**別に持つ**。
+ *
+ * ヒントが毎回同じ解へ導かないよう、一度導いた解を候補から外すのに使う。
+ * 達成度の分子（`foundKey`）へ混ぜてはいけない——あちらは「65 解中 12 解」の
+ * 12 で、ヒントを混ぜると数の意味が変わってしまう。
+ *
+ * 貯め方（番号の配列）は `foundKey` と同じなので、検証は `sanitizeFound()` を
+ * そのまま使い回す。
+ */
+
+/** その盤でヒントが導いた解の番号を昇順で返す。読めなければ空の配列。 */
+export function loadHinted(boardKey, count) {
+  try {
+    return sanitizeFound(window.localStorage.getItem(boardOf(boardKey).hintedKey), count);
+  } catch (error) {
+    return [];
+  }
+}
+
+/** 番号を 1 つ足して保存し、保存後の配列を返す。既にあれば何もしない。 */
+export function addHinted(boardKey, no, count) {
+  const existing = loadHinted(boardKey, count);
+  if (existing.includes(no)) return existing;
+  const next = sanitizeFound([...existing, no], count);
+  try {
+    window.localStorage.setItem(boardOf(boardKey).hintedKey, JSON.stringify(next));
+  } catch (error) {
+    // 保存できなくても、そのヒント自体は出せている。
+  }
+  return next;
+}
+
+/** その盤でヒントが導いた解の番号を消す。履歴を消すときに一緒に呼ぶ。 */
+export function clearHinted(boardKey) {
+  try {
+    window.localStorage.removeItem(boardOf(boardKey).hintedKey);
   } catch (error) {
     // 消せなくても実害は無い。
   }

@@ -18,6 +18,7 @@ import {
 import {
   ensureSolutions, hasSolution, hintFrom, solutionNumber,
 } from '../solutions.js';
+import { addHinted, loadFound, loadHinted } from '../storage.js';
 import * as audio from '../audio.js';
 import { createButton, createPanel } from '../ui.js';
 import { darken, pieceColor, TEX } from './boot.js';
@@ -72,9 +73,18 @@ export default class GameScene extends Phaser.Scene {
     // 届くまで [ヒント] と [詰み表示] は押せない（`refreshHud()` が見る）。
     // シーンを離れたあとに届くことがあるので、生きているかを確かめてから使う。
     this.solutions = null;
+    // ヒントで避ける解の番号（TODO-016）。自力で見つけた解（達成度の分子）と、
+    // 今までヒントで導いた解を合わせたもの。**読むのはここ 1 回だけ**で、
+    // あとはヒントを押すたびにこの集合へ足していく。
+    this.avoidNumbers = new Set();
     ensureSolutions(this.registry, this.spec).then((solutions) => {
       if (!this.scene.isActive()) return;
       this.solutions = solutions;
+      const total = solutions.canonical.length;
+      this.avoidNumbers = new Set([
+        ...loadFound(this.spec.key, total),
+        ...loadHinted(this.spec.key, total),
+      ]);
       this.refreshHud();
     });
 
@@ -720,12 +730,15 @@ export default class GameScene extends Phaser.Scene {
   /**
    * ヒントを 1 手ぶん置く。全解のデータから条件に合う解を無作為に選ぶだけなので、
    * 待たされることも「時間内に見つけられなかった」も無い（TODO-022）。
+   *
+   * 既に出した解（自力で見つけた解と、今までヒントで導いた解）は候補から外す
+   * ので、同じ盤を何度も解いても毎回同じ解へは導かれない（TODO-016）。
    */
   useHint() {
     const left = this.pieces.filter((piece) => piece.location === 'tray').length;
     if (left === 0 || !this.solutions) return;
 
-    const result = hintFrom(this.solutions, this.board);
+    const result = hintFrom(this.solutions, this.board, Math.random, this.avoidNumbers);
     if (!result.ok) {
       audio.invalid();
       this.showMessage('この形からは完成できない');
@@ -743,6 +756,12 @@ export default class GameScene extends Phaser.Scene {
     this.refreshPiece(piece);
     this.settlePiece(piece, true);
     this.usedHint = true;
+    // 導いた解を覚えて、次からはそれも避ける（TODO-016）。ヒントを頼りに
+    // 解いた回は達成度（`addFound`）には入らないので、こちらで別に貯める。
+    if (result.no !== null && result.no !== undefined) {
+      this.avoidNumbers.add(result.no);
+      addHinted(this.spec.key, result.no, this.solutions.canonical.length);
+    }
     audio.hint();
     this.showMessage(`${name} を置いた`);
     this.refreshHud();

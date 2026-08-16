@@ -150,13 +150,33 @@ export function placementIn(cells, cols, name) {
  * 他の手が無いということ。
  *
  * `random` はテストから決まった選び方を作るための差し替え。
+ *
+ * `avoid` には**既に出した解の番号の集合**を渡す（TODO-016）。同じ盤を何度も
+ * 解くと毎回同じ解へ導かれるので、まだ出していない解を優先する。渡さなければ
+ * 今までどおり全候補から選ぶ。
+ *
+ * **避けきれないときは避けずに選び直す。** ヒントは 1 手ぶんしか返さないので、
+ * 盤に置いてあるピースの並びから既出の解にしか繋がらないことがある。そこで
+ * 何も出さないより、既出でも 1 手を出したほうが役に立つ。8×8 は全 65 解しか
+ * 無いので、遊び込めば必ずここへ来る。
+ *
+ * 戻り値の `no` は選んだ解の番号。呼ぶ側が「この解は出した」と覚えるのに使う。
  */
-export function hintFrom(solutions, board, random = Math.random) {
-  const candidates = consistentSolutions(solutions, board);
+export function hintFrom(solutions, board, random = Math.random, avoid = null) {
+  const all = consistentSolutions(solutions, board);
   const target = board.grid.indexOf(null);
-  if (candidates.length === 0 || target < 0) return { ok: false, placement: null };
+  if (all.length === 0 || target < 0) return { ok: false, placement: null, no: null };
+  let candidates = all;
+  if (avoid && avoid.size > 0) {
+    const fresh = all.filter((key) => !avoid.has(solutions.numbers.get(key)));
+    if (fresh.length > 0) candidates = fresh;
+  }
   const key = candidates[Math.floor(random() * candidates.length)];
-  return { ok: true, placement: placementIn(key, board.cols, key[target]) };
+  return {
+    ok: true,
+    placement: placementIn(key, board.cols, key[target]),
+    no: solutions.numbers.get(key),
+  };
 }
 
 /** 完成した盤面（`boardKey()` の文字列）が何番の解か。データに無ければ `null`。 */
