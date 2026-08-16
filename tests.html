@@ -47,7 +47,7 @@ import {
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
 } from './src/logic.js';
 import {
-  buildSolutions, consistentSolutions, hasSolution, hintFrom, placementIn,
+  autoFrom, buildSolutions, consistentSolutions, hasSolution, placementIn,
   solutionCells, solutionNumber,
 } from './src/solutions.js';
 import { SOLUTIONS as SOLUTIONS_8X8 } from './src/data/8x8.js';
@@ -55,7 +55,7 @@ import { SOLUTIONS as SOLUTIONS_6X10 } from './src/data/6x10.js';
 import {
   sanitizeHistory, sanitizeFound, migrateHistory, loadHistory, addHistory,
   clearHistory, loadFound, addFound, clearFound, loadBest, shouldRecordBest,
-  loadHinted, addHinted, clearHinted,
+  loadAuto, addAuto, clearAuto,
 } from './src/storage.js';
 
 // ---- ごく小さなテストの土台 ----------------------------------------------
@@ -747,9 +747,9 @@ for (const state of boardStates) {
   });
 }
 
-// ---- solutions：照合とヒント（TODO-022）----------------------------------
+// ---- solutions：照合とおまかせ（TODO-022）----------------------------------
 
-group('src/solutions.js — 照合とヒント');
+group('src/solutions.js — 照合とおまかせ');
 
 for (const state of boardStates) {
   const {
@@ -814,10 +814,10 @@ for (const state of boardStates) {
     assert(!hasSolution(solutions, board), '解けると言われた');
   });
 
-  test(`hintFrom は一番若い空きマスを覆う 1 手を返す（${spec.label}）`, () => {
+  test(`autoFrom は一番若い空きマスを覆う 1 手を返す（${spec.label}）`, () => {
     const board = place(createBoard(spec), 'X', cellsOf('X'), 0, 2);
-    const result = hintFrom(solutions, board);
-    assert(result.ok, 'ヒントが出なかった');
+    const result = autoFrom(solutions, board);
+    assert(result.ok, 'おまかせが出なかった');
     const target = emptyCells(board)[0];
     const covers = result.placement.cells
       .some(([dr, dc]) => result.placement.row + dr === target[0]
@@ -827,19 +827,19 @@ for (const state of boardStates) {
       '返ってきた置き方が盤に合わない');
   });
 
-  test(`hintFrom は詰みの盤面で解なしを返す（${spec.label}）`, () => {
+  test(`autoFrom は詰みの盤面で解なしを返す（${spec.label}）`, () => {
     const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
-    const result = hintFrom(solutions, board);
+    const result = autoFrom(solutions, board);
     assert(!result.ok, '解が出てしまった');
     assertSame(result.placement, null);
   });
 
-  test(`hintFrom は選ぶ解を差し替えると違う手も返す（${spec.label}）`, () => {
+  test(`autoFrom は選ぶ解を差し替えると違う手も返す（${spec.label}）`, () => {
     // 乱数を差し替えられないと、無作為に選んでいることをテストで押さえられない。
     const seen = new Set();
     for (const at of [0, 0.25, 0.5, 0.75, 0.99]) {
-      const result = hintFrom(solutions, emptyBoard, () => at);
-      assert(result.ok, 'ヒントが出なかった');
+      const result = autoFrom(solutions, emptyBoard, () => at);
+      assert(result.ok, 'おまかせが出なかった');
       const p = result.placement;
       seen.add(`${p.name}@${p.row},${p.col}:${p.cells.map((c) => c.join('')).join('-')}`);
     }
@@ -848,48 +848,48 @@ for (const state of boardStates) {
 
   // ---- TODO-016：既に出した解を避ける ------------------------------------
 
-  test(`hintFrom は返した手がどの解から来たかを番号で返す（${spec.label}）`, () => {
-    const result = hintFrom(solutions, emptyBoard, () => 0);
-    assert(result.ok, 'ヒントが出なかった');
+  test(`autoFrom は返した手がどの解から来たかを番号で返す（${spec.label}）`, () => {
+    const result = autoFrom(solutions, emptyBoard, () => 0);
+    assert(result.ok, 'おまかせが出なかった');
     assert(Number.isInteger(result.no) && result.no >= 1 && result.no <= canonical.length,
       `番号が範囲の外: ${result.no}`);
   });
 
-  test(`hintFrom は避けろと言われた番号の解を選ばない（${spec.label}）`, () => {
+  test(`autoFrom は避けろと言われた番号の解を選ばない（${spec.label}）`, () => {
     // 空の盤なら候補は全解なので、1 つ避けても必ず別の解が残る。
-    const first = hintFrom(solutions, emptyBoard, () => 0);
-    const avoided = hintFrom(solutions, emptyBoard, () => 0, new Set([first.no]));
-    assert(avoided.ok, '避けたらヒントが出なくなった');
+    const first = autoFrom(solutions, emptyBoard, () => 0);
+    const avoided = autoFrom(solutions, emptyBoard, () => 0, new Set([first.no]));
+    assert(avoided.ok, '避けたらおまかせが出なくなった');
     assert(avoided.no !== first.no, `避けたはずの ${first.no} 番が返った`);
   });
 
-  test(`hintFrom は全部避けると、避けずに選び直す（${spec.label}）`, () => {
+  test(`autoFrom は全部避けると、避けずに選び直す（${spec.label}）`, () => {
     // 8×8 は全 65 解しかないので、遊び込めば必ずこうなる。何も出さないより
     // 既出でも 1 手を出したほうが役に立つ、という割り切り（TODO-016）。
     const all = new Set(canonical.map((cells, index) => index + 1));
-    const result = hintFrom(solutions, emptyBoard, () => 0, all);
-    assert(result.ok, '候補が尽きたらヒントが出なくなった');
+    const result = autoFrom(solutions, emptyBoard, () => 0, all);
+    assert(result.ok, '候補が尽きたらおまかせが出なくなった');
     assert(all.has(result.no), `データに無い番号が返った: ${result.no}`);
   });
 
-  test(`hintFrom は空の集合を渡しても今までどおり（${spec.label}）`, () => {
-    const plain = hintFrom(solutions, emptyBoard, () => 0);
-    const empty = hintFrom(solutions, emptyBoard, () => 0, new Set());
+  test(`autoFrom は空の集合を渡しても今までどおり（${spec.label}）`, () => {
+    const plain = autoFrom(solutions, emptyBoard, () => 0);
+    const empty = autoFrom(solutions, emptyBoard, () => 0, new Set());
     assertSame(empty.no, plain.no, '選ぶ解が変わった');
     assertSame(empty.placement, plain.placement, '返す手が変わった');
   });
 
-  test(`hintFrom は詰みの盤面では番号も null（${spec.label}）`, () => {
+  test(`autoFrom は詰みの盤面では番号も null（${spec.label}）`, () => {
     const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
-    assertSame(hintFrom(solutions, board, () => 0, new Set([1])).no, null);
+    assertSame(autoFrom(solutions, board, () => 0, new Set([1])).no, null);
   });
 
-  test(`hintFrom を最後まで繰り返すと盤が埋まる（${spec.label}）`, () => {
+  test(`autoFrom を最後まで繰り返すと盤が埋まる（${spec.label}）`, () => {
     // 遊ぶ側は 1 手ずつしか受け取らないので、12 手ぶん繰り返せることを見る。
     let board = emptyBoard;
     for (let i = 0; i < 12; i += 1) {
-      const result = hintFrom(solutions, board);
-      assert(result.ok, `${i + 1} 手目でヒントが出なかった`);
+      const result = autoFrom(solutions, board);
+      assert(result.ok, `${i + 1} 手目でおまかせが出なかった`);
       const p = result.placement;
       assert(canPlace(board, p.cells, p.row, p.col).ok, `${i + 1} 手目が置けない`);
       board = place(board, p.name, p.cells, p.row, p.col);
@@ -992,14 +992,14 @@ test('正しい件と壊れた件が混ざっていたら、正しい件だけ�
   assertSame(sanitizeHistory([good1, bad, good2], board), [good1, good2]);
 });
 
-// TODO-024 で足した印（h＝ヒント、c＝詰み表示）。使ったときだけ持たせる。
+// TODO-024 で足した印（a＝おまかせ、h＝ヒント表示。TODO-028）。使ったときだけ持たせる。
 
-test('ヒント・詰み表示の印はそのまま通る（TODO-024）', () => {
+test('おまかせ・ヒント表示の印はそのまま通る（TODO-024）', () => {
   const board = BOARDS['8x8'];
   const entries = [
-    { at: 1000, ms: 100, no: 1, h: true },
-    { at: 2000, ms: 200, no: 2, c: true },
-    { at: 3000, ms: 300, no: 3, h: true, c: true },
+    { at: 1000, ms: 100, no: 1, a: true },
+    { at: 2000, ms: 200, no: 2, h: true },
+    { at: 3000, ms: 300, no: 3, a: true, h: true },
   ];
   assertSame(sanitizeHistory(entries, board), entries);
 });
@@ -1071,9 +1071,9 @@ for (const state of boardStates) {
   });
 
   test(`読み替えても印は残る（${spec.label}。TODO-024）`, () => {
-    const entries = [{ at: 1000, ms: 100, cells: canonical[2], h: true, c: true }];
+    const entries = [{ at: 1000, ms: 100, cells: canonical[2], a: true, h: true }];
     assertSame(migrateHistory(entries, solutions),
-      [{ at: 1000, ms: 100, h: true, c: true, no: 3 }]);
+      [{ at: 1000, ms: 100, a: true, h: true, no: 3 }]);
   });
 
   test(`番号を持つ件はそのまま通り、solutions が無ければ何もしない（${spec.label}）`, () => {
@@ -1110,15 +1110,15 @@ test('JSON の文字列としても読める', () => {
 
 group('src/storage.js — 最短時間を更新してよいか（shouldRecordBest）');
 
-test('ヒントも詰み表示も使っていなければ最短時間を更新してよい', () => {
+test('おまかせもヒント表示も使っていなければ最短時間を更新してよい', () => {
   assertSame(shouldRecordBest(false, false), true);
 });
 
-test('ヒントを使ったら最短時間は更新しない', () => {
+test('おまかせを使ったら最短時間は更新しない', () => {
   assertSame(shouldRecordBest(true, false), false);
 });
 
-test('詰み表示を使ったら最短時間は更新しない', () => {
+test('ヒント表示を使ったら最短時間は更新しない', () => {
   assertSame(shouldRecordBest(false, true), false);
 });
 
@@ -1139,11 +1139,11 @@ group('src/storage.js — 保存して読み出す');
  * assert が落ちても戻せるよう `finally` で書き戻す。
  */
 function withCleanStorage(spec, fn) {
-  const keys = [spec.historyKey, spec.storageKey, spec.foundKey, spec.hintedKey];
+  const keys = [spec.historyKey, spec.storageKey, spec.foundKey, spec.autoKey];
   const saved = keys.map((key) => window.localStorage.getItem(key));
   window.localStorage.removeItem(spec.historyKey);
   window.localStorage.removeItem(spec.foundKey);
-  window.localStorage.removeItem(spec.hintedKey);
+  window.localStorage.removeItem(spec.autoKey);
   try {
     fn();
   } finally {
@@ -1263,27 +1263,27 @@ for (const state of boardStates) {
     });
   });
 
-  // ---- TODO-024：ヒント・詰み表示を使った回も履歴に残す -------------------
+  // ---- TODO-024：おまかせ・ヒント表示を使った回も履歴に残す -------------------
 
-  test(`ヒント・詰み表示を使った回も履歴に残り、印が付く（${spec.label}）`, () => {
+  test(`おまかせ・ヒント表示を使った回も履歴に残り、印が付く（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
       addHistory(spec.key, {
-        at: 1000, ms: 100, no: 1, h: true,
+        at: 1000, ms: 100, no: 1, a: true,
       }, solutions);
       addHistory(spec.key, {
-        at: 2000, ms: 200, no: 2, c: true,
+        at: 2000, ms: 200, no: 2, h: true,
       }, solutions);
       const list = loadHistory(spec.key, solutions);
       assertSame(list.length, 2, '件数');
-      assertSame(list[0], { at: 2000, ms: 200, no: 2, c: true }, '詰み表示の件');
-      assertSame(list[1], { at: 1000, ms: 100, no: 1, h: true }, 'ヒントの件');
+      assertSame(list[0], { at: 2000, ms: 200, no: 2, h: true }, 'ヒント表示の件');
+      assertSame(list[1], { at: 1000, ms: 100, no: 1, a: true }, 'おまかせの件');
     });
   });
 
   test(`印の付いた解を自力で解き直すと、印だけ外れる（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
       addHistory(spec.key, {
-        at: 1000, ms: 100, no: 5, h: true, c: true,
+        at: 1000, ms: 100, no: 5, a: true, h: true,
       }, solutions);
       addHistory(spec.key, { at: 2000, ms: 200, no: 5 }, solutions);
       const list = loadHistory(spec.key, solutions);
@@ -1295,47 +1295,47 @@ for (const state of boardStates) {
 
   test(`印の付いた件は、また頼って解いても印が増えない・減らない（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 5, h: true }, solutions);
-      addHistory(spec.key, { at: 2000, ms: 200, no: 5, c: true }, solutions);
+      addHistory(spec.key, { at: 1000, ms: 100, no: 5, a: true }, solutions);
+      addHistory(spec.key, { at: 2000, ms: 200, no: 5, h: true }, solutions);
       assertSame(loadHistory(spec.key, solutions),
-        [{ at: 1000, ms: 100, no: 5, h: true }]);
+        [{ at: 1000, ms: 100, no: 5, a: true }]);
     });
   });
 
   test(`自力で解いた件は、あとで頼って解いても印が付かない（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
       addHistory(spec.key, { at: 1000, ms: 100, no: 5 }, solutions);
-      addHistory(spec.key, { at: 2000, ms: 200, no: 5, h: true }, solutions);
+      addHistory(spec.key, { at: 2000, ms: 200, no: 5, a: true }, solutions);
       assertSame(loadHistory(spec.key, solutions), [{ at: 1000, ms: 100, no: 5 }]);
     });
   });
 
-  // ---- TODO-016：ヒントで導いた解の番号 -----------------------------------
+  // ---- TODO-016：おまかせで導いた解の番号 -----------------------------------
 
-  test(`addHinted で足したものが loadHinted で昇順に返る（${spec.label}）`, () => {
+  test(`addAuto で足したものが loadAuto で昇順に返る（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHinted(spec.key, 3, total);
-      addHinted(spec.key, 1, total);
-      addHinted(spec.key, 3, total);
-      assertSame(loadHinted(spec.key, total), [1, 3]);
+      addAuto(spec.key, 3, total);
+      addAuto(spec.key, 1, total);
+      addAuto(spec.key, 3, total);
+      assertSame(loadAuto(spec.key, total), [1, 3]);
     });
   });
 
-  test(`addHinted は達成度（loadFound）に混ざらない（${spec.label}）`, () => {
+  test(`addAuto は達成度（loadFound）に混ざらない（${spec.label}）`, () => {
     // 達成度の分子は「自力で見つけた数」なので、混ぜると意味が変わる（TODO-016）。
     withCleanStorage(spec, () => {
-      addHinted(spec.key, 1, total);
+      addAuto(spec.key, 1, total);
       assertSame(loadFound(spec.key, total), [], '達成度に混ざった');
       addFound(spec.key, 2, total);
-      assertSame(loadHinted(spec.key, total), [1], 'ヒントの側が書き換わった');
+      assertSame(loadAuto(spec.key, total), [1], 'おまかせの側が書き換わった');
     });
   });
 
-  test(`clearHinted の後は空の配列になる（${spec.label}）`, () => {
+  test(`clearAuto の後は空の配列になる（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHinted(spec.key, 1, total);
-      clearHinted(spec.key);
-      assertSame(loadHinted(spec.key, total), []);
+      addAuto(spec.key, 1, total);
+      clearAuto(spec.key);
+      assertSame(loadAuto(spec.key, total), []);
     });
   });
 }

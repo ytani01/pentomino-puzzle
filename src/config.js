@@ -18,9 +18,14 @@
  * そのまま引き継ぐため。
  *
  * `historyKey`（クリア記録の履歴。TODO-008）・`foundKey`（自力で見つけた解の
- * 番号。TODO-022）・`hintedKey`（ヒントで出した解の番号。TODO-016）は
+ * 番号。TODO-022）・`autoKey`（おまかせで出した解の番号。TODO-016）は
  * **どれも接尾辞を付けて揃えてある**。引き継ぐ古い記録がそもそも無いので、
  * `storageKey` の不揃いを新しいキーにまで持ち込む理由が無い。
+ *
+ * `historyKey` に `v2` が入っているのは、TODO-028 で履歴の印の文字を
+ * `h` / `c` から `a` / `h` へ付け替えたため。`h` の指すものが入れ替わる
+ * （前はおまかせ、今はヒント表示）ので、前の版が書いた件を読むと印の意味が
+ * ずれる。キーを変えて読まないようにしてある（前の記録は残るが使われない）。
  */
 export const BOARDS = {
   '8x8': {
@@ -31,9 +36,9 @@ export const BOARDS = {
     cols: 8,
     hole: { row: 3, col: 3, rows: 2, cols: 2 },
     storageKey: 'pentomino-puzzle/best-ms',
-    historyKey: 'pentomino-puzzle/history/8x8',
+    historyKey: 'pentomino-puzzle/history/v2/8x8',
     foundKey: 'pentomino-puzzle/found/8x8',
-    hintedKey: 'pentomino-puzzle/hinted/8x8',
+    autoKey: 'pentomino-puzzle/auto/8x8',
   },
   '6x10': {
     key: '6x10',
@@ -43,9 +48,9 @@ export const BOARDS = {
     cols: 10,
     hole: null,
     storageKey: 'pentomino-puzzle/best-ms/6x10',
-    historyKey: 'pentomino-puzzle/history/6x10',
+    historyKey: 'pentomino-puzzle/history/v2/6x10',
     foundKey: 'pentomino-puzzle/found/6x10',
-    hintedKey: 'pentomino-puzzle/hinted/6x10',
+    autoKey: 'pentomino-puzzle/auto/6x10',
   },
 };
 

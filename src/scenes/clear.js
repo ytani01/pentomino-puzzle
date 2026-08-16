@@ -38,7 +38,7 @@ const STACK_BIAS = SCREEN.portrait ? 0.5 : 0.44;
  * 大きくしたので、行の間もそのぶん広げてある。
  */
 const PANEL_ROWS = {
-  time: 56, number: 112, best: 156, hint: 196,
+  time: 56, number: 112, best: 156, help: 196,
 };
 
 /** 経過時間だけは他より大きく出す（この画面の主役なので）。 */
@@ -51,8 +51,8 @@ export default class ClearScene extends Phaser.Scene {
 
   init(data) {
     this.elapsed = data && typeof data.ms === 'number' ? data.ms : 0;
+    this.usedAuto = !!(data && data.usedAuto);
     this.usedHint = !!(data && data.usedHint);
-    this.usedCheck = !!(data && data.usedCheck);
     // 何番の解か（代表形の番号。TODO-022）。表示にも記録にも使う。
     this.no = data && Number.isInteger(data.no) && data.no > 0 ? data.no : null;
   }
@@ -61,9 +61,9 @@ export default class ClearScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(COLORS.background);
     // 記録は盤ごとに分けてあるので、どの盤を解いたのかを `registry` から読む。
     const board = BOARDS[this.registry.get(BOARD_REGISTRY_KEY)];
-    // ヒント・詰み表示のどちらかに頼ったら「自力ではない」ので、最短時間には
+    // おまかせ・ヒント表示のどちらかに頼ったら「自力ではない」ので、最短時間には
     // 入れない（TODO-020）。**履歴と達成度には残す**（TODO-024）。
-    const selfSolved = shouldRecordBest(this.usedHint, this.usedCheck);
+    const selfSolved = shouldRecordBest(this.usedAuto, this.usedHint);
     const record = selfSolved
       ? saveBest(board.key, this.elapsed)
       : { best: loadBest(board.key), updated: false };
@@ -75,12 +75,12 @@ export default class ClearScene extends Phaser.Scene {
     // 更新しなかった回も残す（あとから完成形を見比べるためのもの）。
     // 見つけた解の番号は履歴とは別にも貯める（達成度に使う。TODO-022）。
     //
-    // ヒント・詰み表示に頼った回も残し、何に頼ったかを印として持たせる
+    // おまかせ・ヒント表示に頼った回も残し、何に頼ったかを印として持たせる
     // （TODO-024）。印は使ったときだけ付ける（`storage.js` の履歴の説明）。
     if (this.no !== null && solutions !== null) {
       const entry = { at: Date.now(), ms: this.elapsed, no: this.no };
+      if (this.usedAuto) entry.a = true;
       if (this.usedHint) entry.h = true;
-      if (this.usedCheck) entry.c = true;
       addHistory(board.key, entry, solutions);
       addFound(board.key, this.no, solutions.canonical.length);
     }
@@ -117,7 +117,7 @@ export default class ClearScene extends Phaser.Scene {
     }
 
     // 記録は盤ごとなので、どちらの盤の記録かが分かるように盤の名前を添える。
-    // ヒント・詰み表示のどちらかを使った回は、最短時間を更新しなかったことが
+    // おまかせ・ヒント表示のどちらかを使った回は、最短時間を更新しなかったことが
     // 伝わる言い方にする（TODO-020）。**一覧には残る**ので「記録しない」とは
     // 言わず、最短時間の話だと分かる文にしてある（TODO-024）。
     let bestLine;
@@ -136,13 +136,13 @@ export default class ClearScene extends Phaser.Scene {
       color: record.updated ? TEXT_COLORS.accent : TEXT_COLORS.dim,
     }).setOrigin(0.5);
 
-    // ヒント・詰み表示のどちらを使ったかは、最短に入らない理由として伝える。
+    // おまかせ・ヒント表示のどちらを使ったかは、最短に入らない理由として伝える。
     // 一覧には同じ印が付いて残る（TODO-024）ので、そのことも添える。
     const helps = [];
-    if (this.usedHint) helps.push('ヒント');
-    if (this.usedCheck) helps.push('詰み表示');
+    if (this.usedAuto) helps.push('おまかせ');
+    if (this.usedHint) helps.push('ヒント表示');
     if (helps.length > 0) {
-      this.add.text(cx, panelTop + PANEL_ROWS.hint,
+      this.add.text(cx, panelTop + PANEL_ROWS.help,
                     `${helps.join('と')}を使った（記録には残る）`, {
         fontFamily: FONT.family,
         fontSize: `${FONT.small}px`,

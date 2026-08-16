@@ -1,6 +1,6 @@
 /**
  * 本編。Phaser とのつなぎに徹し、置けるかどうかの判定は `logic.js`、
- * ヒントと解の有無は `solutions.js`（全解のデータ）に任せる。
+ * おまかせと解の有無は `solutions.js`（全解のデータ）に任せる。
  *
  * 盤面（`this.board`）は模型で、画面に見えているのはピースの Container のほう。
  * 二重持ちに見えるが、盤面のほうは Undo の履歴や求解へそのまま渡せる形にしておき、
@@ -16,9 +16,9 @@ import {
   normalize, outlineEdges, place, remove, sameShape, shapeSize, snapSpot, turnOrder,
 } from '../logic.js';
 import {
-  ensureSolutions, hasSolution, hintFrom, solutionNumber,
+  autoFrom, ensureSolutions, hasSolution, solutionNumber,
 } from '../solutions.js';
-import { addHinted, loadFound, loadHinted } from '../storage.js';
+import { addAuto, loadAuto, loadFound } from '../storage.js';
 import * as audio from '../audio.js';
 import { createButton, createPanel } from '../ui.js';
 import { darken, pieceColor, TEX } from './boot.js';
@@ -48,12 +48,12 @@ export default class GameScene extends Phaser.Scene {
     this.board = createBoard(this.spec);
     this.history = [];
     this.elapsed = 0;
-    this.usedHint = false;
-    // 解の有無を教えるモード（TODO-013）。既定は切。`usedCheck` はヒントと
+    this.usedAuto = false;
+    // 解の有無を教えるモード（TODO-013）。既定は切。`usedHint` はおまかせと
     // 同じく「答えに頼った」印で、クリアの画面まで持ち回る。
-    this.checking = false;
-    this.usedCheck = false;
-    this.checkState = null;
+    this.hinting = false;
+    this.usedHint = false;
+    this.hintState = null;
     this.playing = true;
     this.pending = null;
     this.drag = null;
@@ -70,12 +70,12 @@ export default class GameScene extends Phaser.Scene {
     this.createVersionText();
 
     // 全解のデータ（TODO-022）。6×10 は 139KB あるので動的 import で読む。
-    // 届くまで [ヒント] と [詰み表示] は押せない（`refreshHud()` が見る）。
+    // 届くまで [おまかせ] と [ヒント表示] は押せない（`refreshHud()` が見る）。
     // シーンを離れたあとに届くことがあるので、生きているかを確かめてから使う。
     this.solutions = null;
-    // ヒントで避ける解の番号（TODO-016）。自力で見つけた解（達成度の分子）と、
-    // 今までヒントで導いた解を合わせたもの。**読むのはここ 1 回だけ**で、
-    // あとはヒントを押すたびにこの集合へ足していく。
+    // おまかせで避ける解の番号（TODO-016）。自力で見つけた解（達成度の分子）と、
+    // 今までおまかせで導いた解を合わせたもの。**読むのはここ 1 回だけ**で、
+    // あとはおまかせを押すたびにこの集合へ足していく。
     this.avoidNumbers = new Set();
     ensureSolutions(this.registry, this.spec).then((solutions) => {
       if (!this.scene.isActive()) return;
@@ -83,7 +83,7 @@ export default class GameScene extends Phaser.Scene {
       const total = solutions.canonical.length;
       this.avoidNumbers = new Set([
         ...loadFound(this.spec.key, total),
-        ...loadHinted(this.spec.key, total),
+        ...loadAuto(this.spec.key, total),
       ]);
       this.refreshHud();
     });
@@ -221,7 +221,7 @@ export default class GameScene extends Phaser.Scene {
 
     // 解の有無（TODO-013）。切のうちは空にしておくので、モードを使わなければ
     // 今までどおりの見た目のまま。横画面では同じ段にボタンが続くので小さめ。
-    this.checkText = this.add.text(hud.x + hud.padding + hud.statusX, rowY(0), '', {
+    this.hintText = this.add.text(hud.x + hud.padding + hud.statusX, rowY(0), '', {
       fontFamily: FONT.family,
       fontSize: `${FONT.small}px`,
       color: TEXT_COLORS.dim,
@@ -230,13 +230,13 @@ export default class GameScene extends Phaser.Scene {
     // 前半 3 つが「解くのを助けるもの」、後半 3 つが「遊び方を変えるもの」。
     // 縦画面ではこの 3 つずつがそのまま 1 段になる。
     const labels = [
-      '一手戻す', 'ヒント', '詰み表示',
+      '一手戻す', 'おまかせ', 'ヒント表示',
       'やり直し', audio.isMuted() ? '音 OFF' : '音 ON', 'タイトルへ',
     ];
     const actions = [
       () => this.undo(),
-      () => this.useHint(),
-      () => this.toggleCheck(),
+      () => this.useAuto(),
+      () => this.toggleHint(),
       () => this.restart(),
       () => this.toggleMute(),
       () => this.confirmToTitle(),
@@ -262,8 +262,8 @@ export default class GameScene extends Phaser.Scene {
       }).setDepth(DEPTH.hud);
     });
     this.undoButton = this.buttons[0];
-    this.hintButton = this.buttons[1];
-    this.checkButton = this.buttons[2];
+    this.autoButton = this.buttons[1];
+    this.hintButton = this.buttons[2];
     this.muteButton = this.buttons[4];
   }
 
@@ -321,7 +321,7 @@ export default class GameScene extends Phaser.Scene {
       y: buttonY,
       width: cfg.buttonWidth,
       height: cfg.buttonHeight,
-      label: '戻る',
+      label: 'はい',
       fontSize: FONT.small,
       onClick: () => this.goToTitle(),
     }).setDepth(DEPTH.confirm).setVisible(false));
@@ -330,7 +330,7 @@ export default class GameScene extends Phaser.Scene {
       y: buttonY,
       width: cfg.buttonWidth,
       height: cfg.buttonHeight,
-      label: 'やめる',
+      label: 'いいえ',
       fontSize: FONT.small,
       onClick: () => this.hideConfirm(),
     }).setDepth(DEPTH.confirm).setVisible(false));
@@ -728,17 +728,17 @@ export default class GameScene extends Phaser.Scene {
   // ---- ボタンの働き ---------------------------------------------------
 
   /**
-   * ヒントを 1 手ぶん置く。全解のデータから条件に合う解を無作為に選ぶだけなので、
+   * おまかせを 1 手ぶん置く。全解のデータから条件に合う解を無作為に選ぶだけなので、
    * 待たされることも「時間内に見つけられなかった」も無い（TODO-022）。
    *
-   * 既に出した解（自力で見つけた解と、今までヒントで導いた解）は候補から外す
+   * 既に出した解（自力で見つけた解と、今までおまかせで導いた解）は候補から外す
    * ので、同じ盤を何度も解いても毎回同じ解へは導かれない（TODO-016）。
    */
-  useHint() {
+  useAuto() {
     const left = this.pieces.filter((piece) => piece.location === 'tray').length;
     if (left === 0 || !this.solutions) return;
 
-    const result = hintFrom(this.solutions, this.board, Math.random, this.avoidNumbers);
+    const result = autoFrom(this.solutions, this.board, Math.random, this.avoidNumbers);
     if (!result.ok) {
       audio.invalid();
       this.showMessage('この形からは完成できない');
@@ -755,14 +755,14 @@ export default class GameScene extends Phaser.Scene {
     this.board = place(this.board, name, cells, row, col);
     this.refreshPiece(piece);
     this.settlePiece(piece, true);
-    this.usedHint = true;
-    // 導いた解を覚えて、次からはそれも避ける（TODO-016）。ヒントを頼りに
+    this.usedAuto = true;
+    // 導いた解を覚えて、次からはそれも避ける（TODO-016）。おまかせを頼りに
     // 解いた回は達成度（`addFound`）には入らないので、こちらで別に貯める。
     if (result.no !== null && result.no !== undefined) {
       this.avoidNumbers.add(result.no);
-      addHinted(this.spec.key, result.no, this.solutions.canonical.length);
+      addAuto(this.spec.key, result.no, this.solutions.canonical.length);
     }
-    audio.hint();
+    audio.auto();
     this.showMessage(`${name} を置いた`);
     this.refreshHud();
     this.checkSolved();
@@ -775,18 +775,18 @@ export default class GameScene extends Phaser.Scene {
    * ──「音 ON／音 OFF」のように文字で持つと、切のときに何の入／切なのかは
    * 分かっても、今どちらなのかを読み違えやすいため。
    */
-  toggleCheck() {
+  toggleHint() {
     audio.button();
-    this.checking = !this.checking;
-    this.checkButton.setSelected(this.checking);
-    if (this.checking) {
+    this.hinting = !this.hinting;
+    this.hintButton.setSelected(this.hinting);
+    if (this.hinting) {
       // 一度でも入にしたら、答えに頼ったものとして扱う（TODO-020 へ渡す）。
-      this.usedCheck = true;
-      this.runCheck();
+      this.usedHint = true;
+      this.runHint();
       return;
     }
-    this.checkState = null;
-    this.checkText.setText('');
+    this.hintState = null;
+    this.hintText.setText('');
   }
 
   /**
@@ -798,23 +798,23 @@ export default class GameScene extends Phaser.Scene {
    * 上限で打ち切ったときに「詰み」と言い切れず「？？？」と出していたのも、
    * データがあれば必ず言い切れるので消えた。
    */
-  runCheck() {
-    if (!this.checking) return;
+  runHint() {
+    if (!this.hinting) return;
     const left = this.pieces.filter((piece) => piece.location === 'tray').length;
     if (left === 0 || !this.solutions) {
-      this.checkState = null;
-      this.checkText.setText('');
+      this.hintState = null;
+      this.hintText.setText('');
       return;
     }
     const state = hasSolution(this.solutions, this.board) ? 'ok' : 'dead';
 
     // 音は詰みに変わった瞬間だけ。毎回鳴らすと置くたびに鳴って邪魔になる。
-    if (state === 'dead' && this.checkState !== 'dead') audio.invalid();
-    this.checkState = state;
+    if (state === 'dead' && this.hintState !== 'dead') audio.invalid();
+    this.hintState = state;
 
     const text = { ok: '解ける', dead: '解なし' };
     const color = { ok: TEXT_COLORS.dim, dead: TEXT_COLORS.danger };
-    this.checkText.setText(text[state]).setColor(color[state]);
+    this.hintText.setText(text[state]).setColor(color[state]);
   }
 
   restart() {
@@ -849,12 +849,12 @@ export default class GameScene extends Phaser.Scene {
     const left = this.pieces.filter((piece) => piece.location === 'tray').length;
     this.remainText.setText(`残り ${left}`);
     this.undoButton.setEnabled(this.playing && this.history.length > 0);
-    // 全解のデータが届くまでは、ヒントも詰み表示も出せない（TODO-022）。
-    this.hintButton.setEnabled(this.playing && left > 0 && this.solutions !== null);
-    this.checkButton.setEnabled(this.solutions !== null);
-    // 盤が変わるところは置く・外す・向きを変える・戻す・ヒントのどれも
+    // 全解のデータが届くまでは、おまかせもヒント表示も出せない（TODO-022）。
+    this.autoButton.setEnabled(this.playing && left > 0 && this.solutions !== null);
+    this.hintButton.setEnabled(this.solutions !== null);
+    // 盤が変わるところは置く・外す・向きを変える・戻す・おまかせのどれも
     // ここを通るので、解の有無を調べ直す入口をここ 1 つにまとめてある。
-    this.runCheck();
+    this.runHint();
   }
 
   showMessage(text) {
@@ -874,8 +874,8 @@ export default class GameScene extends Phaser.Scene {
     this.time.delayedCall(700, () => {
       this.scene.start('Clear', {
         ms: this.elapsed,
+        usedAuto: this.usedAuto,
         usedHint: this.usedHint,
-        usedCheck: this.usedCheck,
         // 何番の解かを渡す（TODO-022）。記録に残すかどうかを決めるのは
         // `clear.js` なので、ここは番号を引くところまで。データが届く前に
         // 解き切ることもありうるので、そのときは `null` を渡す。

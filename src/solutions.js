@@ -3,7 +3,7 @@
  *
  * 遊んでいる間の求解をやめて、あらかじめ数え上げておいた解を引くようにした
  * ものが、ここ。**探索が無くなったので、待たされることも「？？？」も無くなる**
- * （6×10 の詰みの盤面でヒントを押すと 2.8 秒画面が止まっていた）。
+ * （6×10 の詰みの盤面でおまかせを押すと 2.8 秒画面が止まっていた）。
  *
  * データは `tools/gen-solutions.mjs` が作る（`src/data/*.js`）。持っているのは
  * **代表形だけ**で、回転・反転した見た目は読み込んだあとに `boardSymmetries()`
@@ -140,7 +140,7 @@ export function placementIn(cells, cols, name) {
 }
 
 /**
- * ヒント 1 手ぶん。**条件に合う解から無作為に 1 つ選び**、一番若い空きマスを
+ * おまかせ 1 手ぶん。**条件に合う解から無作為に 1 つ選び**、一番若い空きマスを
  * 覆うピースを取り出す（TODO-022）。
  *
  * どのピースを置くかを「一番若い空きマス」で決めるのは今までどおり。選んだ解が
@@ -155,14 +155,14 @@ export function placementIn(cells, cols, name) {
  * 解くと毎回同じ解へ導かれるので、まだ出していない解を優先する。渡さなければ
  * 今までどおり全候補から選ぶ。
  *
- * **避けきれないときは避けずに選び直す。** ヒントは 1 手ぶんしか返さないので、
+ * **避けきれないときは避けずに選び直す。** おまかせは 1 手ぶんしか返さないので、
  * 盤に置いてあるピースの並びから既出の解にしか繋がらないことがある。そこで
  * 何も出さないより、既出でも 1 手を出したほうが役に立つ。8×8 は全 65 解しか
  * 無いので、遊び込めば必ずここへ来る。
  *
  * 戻り値の `no` は選んだ解の番号。呼ぶ側が「この解は出した」と覚えるのに使う。
  */
-export function hintFrom(solutions, board, random = Math.random, avoid = null) {
+export function autoFrom(solutions, board, random = Math.random, avoid = null) {
   const all = consistentSolutions(solutions, board);
   const target = board.grid.indexOf(null);
   if (all.length === 0 || target < 0) return { ok: false, placement: null, no: null };

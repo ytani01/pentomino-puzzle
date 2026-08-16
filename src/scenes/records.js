@@ -20,7 +20,7 @@ import {
 import { formatTime } from '../logic.js';
 import { ensureSolutions, solutionCells } from '../solutions.js';
 import {
-  clearFound, clearHinted, clearHistory, loadFound, loadHistory,
+  clearFound, clearAuto, clearHistory, loadFound, loadHistory,
 } from '../storage.js';
 import * as audio from '../audio.js';
 import { createButton, createChoiceRow, createPanel } from '../ui.js';
@@ -90,18 +90,18 @@ const PIECE_BY_NAME = new Map(PIECES.map((piece) => [piece.name, piece]));
 
 /**
  * 行の右端へ出す印（TODO-027）。何に頼って解いた回かを、履歴 1 件が持つ
- * `h` / `c`（TODO-024）から組み立てる。
+ * `a` / `h`（TODO-024、TODO-028）から組み立てる。
  *
  * 記号やアイコンではなく短い言葉にしてあるのは、**凡例を別に置かなくても
- * 意味が分かるようにするため**。1 文字へ縮めれば横幅は空くが、「ヒ」「詰」が
+ * 意味が分かるようにするため**。1 文字へ縮めれば横幅は空くが、「お」「ヒ」が
  * 何を指すかはこの画面のどこにも書かれていないことになる。
- * 一番狭い横画面の行（432）でも、日時と時間に「ヒント・詰み」を足して収まる。
+ * 一番狭い横画面の行（432）でも、日時と時間に「おまかせ・ヒント」を足して収まる。
  */
 function marksOf(entry) {
   if (!entry) return '';
   const marks = [];
+  if (entry.a) marks.push('おまかせ');
   if (entry.h) marks.push('ヒント');
-  if (entry.c) marks.push('詰み');
   return marks.join('・');
 }
 
@@ -296,7 +296,7 @@ export default class RecordsScene extends Phaser.Scene {
       y: buttonY,
       width: CONFIRM.buttonWidth,
       height: CONFIRM.buttonHeight,
-      label: '消す',
+      label: 'はい',
       fontSize: FONT.small,
       onClick: () => this.doClear(),
     }).setDepth(depth).setVisible(false));
@@ -305,7 +305,7 @@ export default class RecordsScene extends Phaser.Scene {
       y: buttonY,
       width: CONFIRM.buttonWidth,
       height: CONFIRM.buttonHeight,
-      label: 'やめる',
+      label: 'いいえ',
       fontSize: FONT.small,
       onClick: () => this.hideConfirm(),
     }).setDepth(depth).setVisible(false));
@@ -359,14 +359,14 @@ export default class RecordsScene extends Phaser.Scene {
 
   /**
    * 履歴と、達成度に使う「見つけた解の番号」をまとめて消す（TODO-022）。
-   * ヒントで導いた解の番号（TODO-016）も一緒に消す——記録を消したのに
-   * 「その解は前に出した」とヒントが避け続けるのは辻褄が合わないため。
+   * おまかせで導いた解の番号（TODO-016）も一緒に消す——記録を消したのに
+   * 「その解は前に出した」とおまかせが避け続けるのは辻褄が合わないため。
    */
   doClear() {
     audio.button();
     clearHistory(this.boardKey);
     clearFound(this.boardKey);
-    clearHinted(this.boardKey);
+    clearAuto(this.boardKey);
     this.confirmParts.forEach((part) => part.setVisible(false));
     this.reload();
   }

@@ -100,8 +100,8 @@ export function undo() {
   tone({ freq: 520, freqTo: 330, type: 'sine', duration: 0.12, gain: 0.09 });
 }
 
-/** ヒントで 1 個置いた。 */
-export function hint() {
+/** おまかせで 1 個置いた。 */
+export function auto() {
   tone({ freq: 660, type: 'sine', duration: 0.09, gain: 0.08 });
   tone({ freq: 990, type: 'sine', delay: 0.07, duration: 0.12, gain: 0.07 });
 }
