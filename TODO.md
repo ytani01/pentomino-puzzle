@@ -1,6 +1,6 @@
 # TODO
 
-**残っている項目: TODO-025・TODO-028・TODO-029。**
+**残っている項目: TODO-025・TODO-028。**
 新しく足すときは「完了済み」の上に節を作る。
 **新規項目の番号は `TODO-030` から。**
 
@@ -101,29 +101,12 @@ T・U・V・W は裏返しが並びに出ない（形の性質なので変えら
 
 ---
 
-## TODO-029. favicon を置く
-
-- [ ] `index.html` に favicon を足し、`/favicon.ico` の 404 を無くす
-
-favicon の指定が無いので、ブラウザがどの画面でも `/favicon.ico` を取りに行き、
-ローカルサーバのログに毎回 `code 404, message File not found` が出る。
-本物の不具合を追うときに紛らわしい（実際、記録画面が開かない件を調べた際に
-この 404 を原因と読み違えた）。
-
-画像アセットを持たない方針なので、**SVG を `data:` URI で `index.html` へ
-書く**（`<link rel="icon" href="data:image/svg+xml,...">`）。ファイルを増やさず、
-GitHub Pages への公開手順にも触らずに済む。絵柄はペントミノの 1 ピース。
-
-進め方: `index.html` の 1 行だけ。**サブエージェントは編成しない**。
-モデル Sonnet、effort low。
-
----
-
 ## 完了済み
 
 1 項目 1 ファイル。`archives/todo/` にある（新しい順）。
 **やらないと決めたものの理由もそこにある。** 蒸し返す前に読むこと。
 
+- [**TODO-029.** favicon を置く](archives/todo/TODO-029.%20favicon%20を置く.md)
 - [**TODO-027.** 記録一覧の印を右端へ揃える](archives/todo/TODO-027.%20記録一覧の印を右端へ揃える.md)
 - [**TODO-026.** 全体的に文字が小さすぎる](archives/todo/TODO-026.%20全体的に文字が小さすぎる.md)
 - [**TODO-016.** ヒントは、既にクリアした解と別の解へ導く](archives/todo/TODO-016.%20ヒントは、既にクリアした解と別の解へ導く.md)

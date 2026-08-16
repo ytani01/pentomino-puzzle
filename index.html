@@ -4,6 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pentomino Puzzle</title>
+<!--
+  favicon（TODO-029）。指定が無いとブラウザが /favicon.ico を取りに行き、
+  ローカルサーバのログが 404 で埋まって本物の不具合を追いにくい。
+  画像アセットを持たない方針なので、F ペントミノの形を SVG で書いて
+  data: URI で埋める（ファイルを増やさず、公開手順にも触らずに済む）。
+  色は src/config.js の F の色（0xda3e3e）と地の色に揃えてあるが、
+  link は Phaser の起動前に要るので、ここだけ直に書いている。
+  URL の中で # は使えないので %23 に置き換えてある。
+-->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23181b26'/><g fill='%23da3e3e'><rect x='12' y='3' width='8' height='8' rx='1.5'/><rect x='21' y='3' width='8' height='8' rx='1.5'/><rect x='3' y='12' width='8' height='8' rx='1.5'/><rect x='12' y='12' width='8' height='8' rx='1.5'/><rect x='12' y='21' width='8' height='8' rx='1.5'/></g></svg>">
 <style>
   /* CSS が持つのは画面の地の色だけ。ほかの色は src/config.js にある。 */
   html, body {
