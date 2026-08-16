@@ -45,7 +45,9 @@ export function createPanel(scene, x, y, width, height, radius = 10) {
  * 選ぶボタン 1 個の大きさと間隔、行の頭に置くラベルの幅。
  * ラベルの幅は 1 文字ぶんに間隔を足した値。
  */
-const CHOICE_BUTTON = { width: 120, height: 40, gap: 16, labelWidth: 40 };
+const CHOICE_BUTTON = {
+  width: 150, height: 46, gap: 16, labelWidth: 48,
+};
 
 /**
  * ラベル 1 つと、選択肢ぶんのボタンを 1 行に並べる。中心を `(cx, y)` に置く。
@@ -82,24 +84,41 @@ export function createChoiceRow(scene, cx, y, label, choices, onSelect) {
 /**
  * ボタン。中心を `(x, y)` に置く。
  *
- * 戻り値の Container には `setEnabled()`・`setLabel()`・`setSelected()` を
- * 生やしてある。ヒントや Undo は押せない場面があるので押せるかどうかを、
- * タイトルの盤の選択は 2 つのうちどちらを選んでいるかを、見た目に出す必要がある。
+ * 戻り値の Container には `setEnabled()`・`setLabel()`・`setSelected()`・
+ * `setMark()` を生やしてある。ヒントや Undo は押せない場面があるので押せるか
+ * どうかを、タイトルの盤の選択は 2 つのうちどちらを選んでいるかを、見た目に
+ * 出す必要がある。
+ *
+ * `align` を `'left'` にすると、ラベルを左端から `PAD` だけ空けて左寄せにし、
+ * `mark`（あれば）を右端へ右寄せで置く（TODO-027）。記録の一覧の行のように、
+ * **中身の長さが行ごとに変わる**ところで使う——中央寄せのままだと、印の
+ * 有無で日時や時間の位置が行ごとにずれて読みにくい。
  */
+
+/** 左寄せのボタンで、ラベル・印と枠の間に空ける分。 */
+const BUTTON_PAD = 14;
+
 export function createButton(scene, options) {
   const {
     x, y, width, height, label, onClick,
-    fontSize = FONT.body,
+    fontSize = FONT.body, align = 'center', mark = '',
   } = options;
 
   const container = scene.add.container(x, y);
   const face = scene.add.graphics();
-  const text = scene.add.text(0, 0, label, {
+  const left = align === 'left';
+  const text = scene.add.text(left ? -width / 2 + BUTTON_PAD : 0, 0, label, {
     fontFamily: FONT.family,
     fontSize: `${fontSize}px`,
     color: TEXT_COLORS.normal,
-  }).setOrigin(0.5);
-  container.add([face, text]);
+  }).setOrigin(left ? 0 : 0.5, 0.5);
+  // 印はラベルより 1 段落として出す（行の主役は日時と時間なので）。
+  const markText = scene.add.text(width / 2 - BUTTON_PAD, 0, mark, {
+    fontFamily: FONT.family,
+    fontSize: `${Math.round(fontSize * 0.85)}px`,
+    color: TEXT_COLORS.dim,
+  }).setOrigin(1, 0.5);
+  container.add([face, text, markText]);
 
   container.enabled = true;
   container.hovered = false;
@@ -125,6 +144,12 @@ export function createButton(scene, options) {
     if (!container.enabled) color = TEXT_COLORS.disabled;
     else if (container.selected) color = TEXT_COLORS.accent;
     text.setColor(color);
+    // 印もラベルと同じ状態に連れていく。選んだ行だけ印が地の色のまま残ると、
+    // 行が選ばれていることが伝わりにくい（TODO-027）。
+    let markColor = TEXT_COLORS.dim;
+    if (!container.enabled) markColor = TEXT_COLORS.disabled;
+    else if (container.selected) markColor = TEXT_COLORS.accent;
+    markText.setColor(markColor);
   };
 
   container.setSize(width, height);
@@ -146,6 +171,10 @@ export function createButton(scene, options) {
   };
   container.setLabel = (value) => {
     text.setText(value);
+    return container;
+  };
+  container.setMark = (value) => {
+    markText.setText(value);
     return container;
   };
   container.setSelected = (value) => {

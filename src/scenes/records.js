@@ -35,38 +35,43 @@ import { darken, pieceColor } from './boot.js';
  */
 const L = SCREEN.portrait
   ? {
-    headingY: 62,
-    chooseY: 124,
+    headingY: 66,
+    chooseY: 136,
     listX: SCREEN.width / 2,
-    listTop: 172,
-    listWidth: 520,
-    rowsPerPage: 10,
-    detailY: 626,
-    boardBox: { x: 40, y: 650, width: 560, height: 380 },
-    achieveY: 1044,
-    buttonsY: 1080,
+    listTop: 190,
+    listWidth: 570,
+    rowsPerPage: 7,
+    detailY: 620,
+    boardBox: { x: 60, y: 660, width: 520, height: 350 },
+    achieveY: 1040,
+    buttonsY: 1090,
   }
   : {
-    headingY: 40,
-    chooseY: 92,
+    headingY: 44,
+    chooseY: 106,
     listX: 250,
-    listTop: 132,
-    listWidth: 400,
-    rowsPerPage: 9,
-    detailY: 520,
-    boardBox: { x: 480, y: 132, width: 440, height: 360 },
-    achieveY: 550,
-    buttonsY: 588,
+    listTop: 150,
+    listWidth: 432,
+    rowsPerPage: 7,
+    detailY: 500,
+    boardBox: { x: 500, y: 146, width: 424, height: 320 },
+    achieveY: 556,
+    buttonsY: 600,
   };
 
-/** 一覧の 1 行の高さと、行どうしの間。 */
-const ROW = { height: 34, gap: 4 };
+/**
+ * 一覧の 1 行の高さと、行どうしの間。TODO-026 で文字を大きくしたぶん、
+ * 行も高くしてある（1 頁に載る件数はそのぶん減る）。
+ */
+const ROW = { height: 44, gap: 6 };
 
 /** 頁送りの行（前へ・頁数・次へ）。一覧のすぐ下に置く。 */
-const PAGER = { offset: 26, width: 96, height: 32, gap: 120 };
+const PAGER = {
+  offset: 30, width: 118, height: 40, gap: 140,
+};
 
 /** 下端に並べるボタン。 */
-const FOOT = { width: 180, height: 46, gap: 20 };
+const FOOT = { width: 210, height: 52, gap: 20 };
 
 /**
  * 確認の枠の寸法。盤に依らない値なので、どの盤の `LAYOUTS` から取っても同じ
@@ -82,6 +87,23 @@ const MINI_EDGE = 3;
 
 /** ピース名から定義を引く表。完成形の 60 マスを 1 文字ずつ引くため。 */
 const PIECE_BY_NAME = new Map(PIECES.map((piece) => [piece.name, piece]));
+
+/**
+ * 行の右端へ出す印（TODO-027）。何に頼って解いた回かを、履歴 1 件が持つ
+ * `h` / `c`（TODO-024）から組み立てる。
+ *
+ * 記号やアイコンではなく短い言葉にしてあるのは、**凡例を別に置かなくても
+ * 意味が分かるようにするため**。1 文字へ縮めれば横幅は空くが、「ヒ」「詰」が
+ * 何を指すかはこの画面のどこにも書かれていないことになる。
+ * 一番狭い横画面の行（432）でも、日時と時間に「ヒント・詰み」を足して収まる。
+ */
+function marksOf(entry) {
+  if (!entry) return '';
+  const marks = [];
+  if (entry.h) marks.push('ヒント');
+  if (entry.c) marks.push('詰み');
+  return marks.join('・');
+}
 
 /** 2 桁に揃える。日時の表示に使う。 */
 function pad2(value) {
@@ -175,6 +197,9 @@ export default class RecordsScene extends Phaser.Scene {
         height: ROW.height,
         label: '',
         fontSize: FONT.small,
+        // 日時と時間は左端から、印は右端から（TODO-027）。中央寄せのままだと
+        // 印の有無で文字列の長さが変わり、日時の位置が行ごとにずれてしまう。
+        align: 'left',
         onClick: () => this.selectRow(i),
       });
       this.rowButtons.push(button);
@@ -222,6 +247,8 @@ export default class RecordsScene extends Phaser.Scene {
         fontFamily: FONT.family,
         fontSize: `${FONT.body}px`,
         color: TEXT_COLORS.normal,
+        align: 'center',
+        lineSpacing: 2,
       },
     ).setOrigin(0.5);
     this.mini = this.add.graphics();
@@ -386,6 +413,7 @@ export default class RecordsScene extends Phaser.Scene {
       button.setVisible(!!entry);
       if (!entry) return;
       button.setLabel(`${formatDate(entry.at)}　${formatTime(entry.ms)}`);
+      button.setMark(marksOf(entry));
       button.setSelected(index === this.selected);
     });
     const empty = this.entries.length === 0;
@@ -401,8 +429,16 @@ export default class RecordsScene extends Phaser.Scene {
     // 何番の解かも添える（TODO-022）。一覧の行は日時と時間だけで揃えたいので、
     // 番号は選んだ 1 件の見出しにだけ出す。番号はデータが届いてから付く
     // （古い形の件は読み替えたあとに入る）ので、無いうちは日時と時間だけ。
-    const detail = entry ? `${formatDate(entry.at)}　${formatTime(entry.ms)}` : '';
-    this.detailText.setText(entry && entry.no ? `${detail}　${entry.no} 番` : detail);
+    // 印は行にも出るが（TODO-027）、選んだ 1 件の見出しにも添える。行の印は
+    // 一覧を見渡すためのもので、こちらは今どの回を見ているかの確認になる。
+    // **2 行に分ける**のは、番号と印まで 1 行に並べると完成形の枠より横に
+    // はみ出すため（TODO-026 で文字を大きくして収まらなくなった）。
+    const marks = marksOf(entry);
+    let second = entry && entry.no ? `${entry.no} 番` : '';
+    if (marks !== '') second += second === '' ? `（${marks}）` : `　（${marks}）`;
+    this.detailText.setText(entry
+      ? `${formatDate(entry.at)}　${formatTime(entry.ms)}\n${second}`
+      : '');
     this.drawMini(entry);
 
     // 達成度。データが届くまでは分母が分からないので何も出さない。

@@ -175,13 +175,22 @@ export const TEXT_COLORS = {
   disabled: '#5b6480',
 };
 
+/**
+ * 文字の大きさ。**内部解像度の座標系**なので、`Scale.FIT` が縮めたぶんだけ
+ * 実際は小さく出る（TODO-026）。
+ *
+ * 横画面の内部解像度は 960×640 で、スマホの横画面はこれより横長なので高さで
+ * 頭打ちになる。一番厳しい 568×320 では 0.5 倍、よくある 844×390 でも 0.61 倍
+ * なので、**ここの値のおよそ 6 割が実寸**だと思って決める。`small` を 15 に
+ * していた頃は実寸 9px ほどで、スマホでは読めなかった。
+ */
 export const FONT = {
   family: 'system-ui, "Helvetica Neue", Arial, sans-serif',
-  title: 52,
-  heading: 28,
-  body: 18,
-  hud: 20,
-  small: 15,
+  title: 68,
+  heading: 36,
+  body: 24,
+  hud: 26,
+  small: 20,
 };
 
 /**
@@ -194,16 +203,16 @@ const MARGIN = 14;         // 画面の縁と枠の間
 const PANEL_PAD = 10;      // 枠と、その中身の間
 const GAP = 12;            // 枠どうしの間
 const HUD_TOP = 10;        // 画面の上端と HUD の間
-const HUD_ROW = 52;        // HUD 1 段ぶんの高さ
-const HUD_PAD = 24;        // HUD の枠と、その中身の間
-const HUD_GAP = 10;        // ボタンどうしの間
+const HUD_ROW = 56;        // HUD 1 段ぶんの高さ
+const HUD_PAD = 20;        // HUD の枠と、その中身の間
+const HUD_GAP = 8;         // ボタンどうしの間
 const HUD_BUTTONS = 6;     // HUD に並ぶボタンの数（`game.js` の `labels` と合わせる）
-const HUD_BUTTON_MAX = 104; // ボタン 1 個の幅。場所が足りなければここから詰める
-const HUD_BUTTON_HEIGHT = 40;
-const HUD_REMAIN_X = 110;  // 段の中身の左端から見た「残り n」の位置
-const HUD_STATUS_X = 210;  // 同じく、解の有無（TODO-013）の位置
-const HUD_STATUS_W = 100;  // その文字が使う幅。「もう解けない」6 文字ぶん（`FONT.small`）
-const MESSAGE_BAND = 34;   // 画面の下端に空ける、メッセージ 1 行ぶんの帯
+const HUD_BUTTON_MAX = 130; // ボタン 1 個の幅。場所が足りなければここから詰める
+const HUD_BUTTON_HEIGHT = 44;
+const HUD_REMAIN_X = 140;  // 段の中身の左端から見た「残り n」の位置
+const HUD_STATUS_X = 250;  // 同じく、解の有無（TODO-013）の位置
+const HUD_STATUS_W = 130;  // その文字が使う幅。「もう解けない」6 文字ぶん（`FONT.small`）
+const MESSAGE_BAND = 40;   // 画面の下端に空ける、メッセージ 1 行ぶんの帯
 const TRAY_SPAN = 5;       // ペントミノは縦横どちらにも最大 5 マス（`I` の向き次第）
 const TRAY_SLOT_PAD = 12;  // トレイの 1 スロットで、ピースの周りに空ける分
 const TRAY_CELL_MAX = 20;  // トレイのマスの上限。TODO-006 で掴みやすさを見て決めた値で、
@@ -253,11 +262,11 @@ export function makeLayout({ portrait, board }) {
   // （TODO-013 でボタンが 6 個になり、幅を詰めても 1 段には収まらなくなった）。
   const buttonsPerRow = portrait ? 3 : HUD_BUTTONS;
   const buttonRows = Math.ceil(HUD_BUTTONS / buttonsPerRow);
-  // 横画面はボタンが時間・残り・解の有無と同じ段に並ぶ。縦画面は文字の段を別に持つ。
-  const hudRows = portrait ? buttonRows + 1 : buttonRows;
+  // 文字（時間・残り・解の有無）とボタンは段を分ける。横画面は同じ段に並べて
+  // いたが、TODO-026 で文字を大きくするとボタン 1 個が 85 では収まらなくなった。
+  const hudRows = buttonRows + 1;
   const hudWidth = width - MARGIN * 2;
-  // ボタンの左端の下限。同じ段に文字が並ぶ横画面だけ、その分を空ける。
-  const buttonsLeft = portrait ? 0 : HUD_PAD + HUD_STATUS_X + HUD_STATUS_W + HUD_GAP;
+  const buttonsLeft = 0;
   // 幅は上限から詰める。横画面の 6 個は 104 では文字とぶつかるので 85 まで縮む。
   const buttonWidth = Math.min(HUD_BUTTON_MAX, Math.floor(
     ((hudWidth - HUD_PAD - buttonsLeft) - HUD_GAP * (buttonsPerRow - 1)) / buttonsPerRow,
@@ -357,7 +366,7 @@ export function makeLayout({ portrait, board }) {
     trayPanel,
     message: { x: width / 2, y: height - MESSAGE_BAND / 2 },
     confirm: {
-      width: 360, height: 170, buttonWidth: 120, buttonHeight: 40, gap: 16,
+      width: 460, height: 200, buttonWidth: 150, buttonHeight: 48, gap: 20,
     },
   };
 }

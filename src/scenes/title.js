@@ -21,19 +21,20 @@ import { createButton, createChoiceRow, createPanel, stackTops } from '../ui.js'
  * ぶんだけ、この塊ごと下へずれる。
  *
  * 記録の画面へ行く行（`records`）を足したぶん（TODO-008）、横画面では
- * 640 に収まらなくなるので、`howTo` / `palette` / `best` のあとの間隔を
- * 詰めてある（合わせて 604 で、下端に 10 ほど余る）。
+ * 640 に収まらなくなるので、間隔を詰めてある。TODO-026 で文字を大きくして
+ * さらに苦しくなったので、**合わせて 628 で下端に 12 ほどしか余らない**。
+ * ここへ行を足すときは、まず間隔から削ること。
  */
 const STACK = [
-  { key: 'title', height: 52, gap: 8 },
-  { key: 'subtitle', height: 28, gap: 38 },
-  { key: 'howTo', height: 176, gap: 10 },
-  { key: 'size', height: 40, gap: 10 },
-  { key: 'palette', height: 40, gap: 14 },
-  { key: 'best', height: 24, gap: 20 },
-  { key: 'start', height: 56, gap: 10 },
-  { key: 'keyHint', height: 18, gap: 20 },
-  { key: 'records', height: 40, gap: 0 },
+  { key: 'title', height: 68, gap: 6 },
+  { key: 'subtitle', height: 36, gap: 24 },
+  { key: 'howTo', height: 186, gap: 8 },
+  { key: 'size', height: 48, gap: 6 },
+  { key: 'palette', height: 48, gap: 10 },
+  { key: 'best', height: 30, gap: 12 },
+  { key: 'start', height: 58, gap: 6 },
+  { key: 'keyHint', height: 24, gap: 10 },
+  { key: 'records', height: 48, gap: 0 },
 ];
 
 /**
@@ -43,10 +44,17 @@ const STACK = [
  */
 const STACK_BIAS = SCREEN.portrait ? 0.5 : 0.7;
 
-/** 遊び方。1 行目は盤で変わるので、盤の `label` と `note` から組み立てる。 */
+/**
+ * 遊び方。1 行目は盤で変わるので、盤の `label` と `note` から組み立てる。
+ *
+ * 1 文目を 2 行に割ってあるのは、TODO-026 で文字を大きくすると枠に収まらず、
+ * `wordWrap` に任せると盤によって折り返す場所が変わるため（8×8 と 6×10 で
+ * 但し書きの長さが違う）。切れ目を決め打ちにして、どちらの盤でも同じ形に出す。
+ */
 function howToPlay(board) {
   return [
-    `${board.label}（${board.note}）の 60 マスへ、12 種のピースをすべて置く。`,
+    `${board.label}（${board.note}）の 60 マスへ、`,
+    '12 種のピースをすべて置く。',
     '',
     'ドラッグ … 置く / 動かす',
     'タップ … 次の向きへ（回転と裏返しを順に巡る）',
@@ -70,7 +78,7 @@ export default class TitleScene extends Phaser.Scene {
     const topOf = (key) => tops[indexOf(key)];
     const centerOf = (key) => topOf(key) + STACK[indexOf(key)].height / 2;
     // 遊び方の枠は縦画面では画面幅に収まらないので、はみ出す前に詰める。
-    const panelWidth = Math.min(620, SCREEN.width - SCREEN.margin * 2);
+    const panelWidth = Math.min(720, SCREEN.width - SCREEN.margin * 2);
 
     this.add.text(cx, centerOf('title'), 'PENTOMINO', {
       fontFamily: FONT.family,
@@ -90,7 +98,7 @@ export default class TitleScene extends Phaser.Scene {
       fontSize: `${FONT.body}px`,
       color: TEXT_COLORS.dim,
       align: 'center',
-      lineSpacing: 6,
+      lineSpacing: 4,
       // 枠を詰めた縦画面では 1 行目が入りきらないので、枠の内側で折り返す。
       wordWrap: { width: panelWidth - 32 },
     }).setOrigin(0.5);
@@ -117,8 +125,8 @@ export default class TitleScene extends Phaser.Scene {
     createButton(this, {
       x: cx,
       y: centerOf('start'),
-      width: 220,
-      height: 56,
+      width: 260,
+      height: 58,
       label: 'はじめる',
       fontSize: FONT.hud,
       onClick: () => {
@@ -139,8 +147,8 @@ export default class TitleScene extends Phaser.Scene {
     createButton(this, {
       x: cx,
       y: centerOf('records'),
-      width: 160,
-      height: 40,
+      width: 190,
+      height: 48,
       label: '記録',
       onClick: () => {
         audio.unlock();

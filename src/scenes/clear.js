@@ -21,9 +21,9 @@ import { createButton, createPanel, stackTops } from '../ui.js';
  * この塊ごと下へずれる（TODO-011）。枠の中の 3 行は枠の上端からの差で置く。
  */
 const STACK = [
-  { key: 'title', height: 52, gap: 44 },
-  { key: 'panel', height: 190, gap: 40 },
-  { key: 'buttons', height: 52, gap: 0 },
+  { key: 'title', height: 68, gap: 36 },
+  { key: 'panel', height: 232, gap: 34 },
+  { key: 'buttons', height: 58, gap: 0 },
 ];
 
 /**
@@ -34,11 +34,15 @@ const STACK_BIAS = SCREEN.portrait ? 0.5 : 0.44;
 
 /**
  * 枠の上端から見た、中の 4 行の中心。`number`（何番の解か。TODO-022）を
- * 足したぶん枠を 20 だけ高くしてある（`STACK` の `panel`）。
+ * 足したぶん枠を高くしてある（`STACK` の `panel`）。TODO-026 で文字を
+ * 大きくしたので、行の間もそのぶん広げてある。
  */
 const PANEL_ROWS = {
-  time: 46, number: 92, best: 128, hint: 160,
+  time: 56, number: 112, best: 156, hint: 196,
 };
+
+/** 経過時間だけは他より大きく出す（この画面の主役なので）。 */
+const TIME_FONT = 58;
 
 export default class ClearScene extends Phaser.Scene {
   constructor() {
@@ -84,7 +88,7 @@ export default class ClearScene extends Phaser.Scene {
 
     const cx = SCREEN.width / 2;
     const [titleTop, panelTop, buttonTop] = stackTops(STACK, SCREEN.height, STACK_BIAS);
-    const panelWidth = Math.min(440, SCREEN.width - SCREEN.margin * 2);
+    const panelWidth = Math.min(560, SCREEN.width - SCREEN.margin * 2);
 
     this.add.text(cx, titleTop + STACK[0].height / 2, 'COMPLETE', {
       fontFamily: FONT.family,
@@ -96,7 +100,7 @@ export default class ClearScene extends Phaser.Scene {
 
     this.add.text(cx, panelTop + PANEL_ROWS.time, formatTime(this.elapsed), {
       fontFamily: FONT.family,
-      fontSize: '46px',
+      fontSize: `${TIME_FONT}px`,
       color: TEXT_COLORS.normal,
     }).setOrigin(0.5);
 
@@ -146,13 +150,13 @@ export default class ClearScene extends Phaser.Scene {
       }).setOrigin(0.5);
     }
 
-    // 2 つのボタンは横に並べる。縦画面でも 440 なら収まるので折り返さない。
+    // 2 つのボタンは横に並べる。合わせて 520 なので、縦画面（640）でも収まる。
     const buttonY = buttonTop + STACK[2].height / 2;
     createButton(this, {
-      x: cx - 120,
+      x: cx - 140,
       y: buttonY,
-      width: 200,
-      height: 52,
+      width: 240,
+      height: 58,
       label: 'もう一度',
       fontSize: FONT.hud,
       onClick: () => {
@@ -161,10 +165,10 @@ export default class ClearScene extends Phaser.Scene {
       },
     });
     createButton(this, {
-      x: cx + 120,
+      x: cx + 140,
       y: buttonY,
-      width: 200,
-      height: 52,
+      width: 240,
+      height: 58,
       label: 'タイトルへ',
       fontSize: FONT.hud,
       onClick: () => {
