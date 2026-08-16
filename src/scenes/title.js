@@ -11,7 +11,7 @@ import {
   SCREEN, TEXT_COLORS, VERSION,
 } from '../config.js';
 import { formatTime } from '../logic.js';
-import { loadBest, savePalette } from '../storage.js';
+import { loadBest, loadProgress, savePalette } from '../storage.js';
 import * as audio from '../audio.js';
 import { createButton, createChoiceRow, createPanel, stackTops } from '../ui.js';
 
@@ -43,6 +43,12 @@ const STACK = [
  * 中身が少ない画面なので、縦では素直に中央へ置く（TODO-011）。
  */
 const STACK_BIAS = SCREEN.portrait ? 0.5 : 0.7;
+
+/**
+ * `はじめる` と `つづきから` の 1 個ぶん（TODO-030）。2 個を横に並べても
+ * 縦画面（内部解像度 640）の左右の余白に収まる大きさにしてある。
+ */
+const START = { width: 260, height: 58, gap: 20 };
 
 /**
  * 遊び方。1 行目は盤で変わるので、盤の `label` と `note` から組み立てる。
@@ -119,22 +125,38 @@ export default class TitleScene extends Phaser.Scene {
       fontSize: `${FONT.hud}px`,
     }).setOrigin(0.5);
 
-    this.refreshBoard();
-    this.refreshPalette();
-
+    // `はじめる` と `つづきから` は同じ行へ横に並べる（TODO-030）。行を足すと
+    // 横画面（内部解像度 640）の縦が足りなくなる（この STACK の説明を見る）。
+    const startStep = (START.width + START.gap) / 2;
     createButton(this, {
-      x: cx,
+      x: cx - startStep,
       y: centerOf('start'),
-      width: 260,
-      height: 58,
+      width: START.width,
+      height: START.height,
       label: 'はじめる',
+      fontSize: FONT.hud,
+      onClick: () => this.start(),
+    });
+    // 遊びかけが無い盤では押せなくする（記録の画面の `消す` と同じ見せ方）。
+    // 隠さないのは、盤を選び直すとボタンが出たり消えたりして行が動くため。
+    this.resumeButton = createButton(this, {
+      x: cx + startStep,
+      y: centerOf('start'),
+      width: START.width,
+      height: START.height,
+      label: 'つづきから',
       fontSize: FONT.hud,
       onClick: () => {
         audio.unlock();
         audio.button();
-        this.scene.start('Game');
+        this.scene.start('Game', { resume: true });
       },
     });
+
+    // 盤・色・最短時間・`つづきから` を、選んでいる盤に合わせて出す。
+    // ボタンを作ったあとに呼ぶ（`refreshBoard()` が `つづきから` を触るため）。
+    this.refreshBoard();
+    this.refreshPalette();
 
     this.add.text(cx, centerOf('keyHint'), 'Space / Enter でも始められる', {
       fontFamily: FONT.family,
@@ -204,6 +226,8 @@ export default class TitleScene extends Phaser.Scene {
     const best = loadBest(this.boardKey);
     this.bestText.setText(best === null ? '記録なし' : `最短 ${formatTime(best)}`);
     this.bestText.setColor(best === null ? TEXT_COLORS.dim : TEXT_COLORS.accent);
+    // 遊びかけは盤ごとに分かれているので、盤を選び直すたびに見直す（TODO-030）。
+    this.resumeButton.setEnabled(loadProgress(this.boardKey) !== null);
   }
 
   start() {

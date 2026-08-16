@@ -57,6 +57,7 @@ import {
   clearHistory, loadFound, addFound, clearFound, loadBest, shouldRecordBest,
   loadAuto, addAuto, clearAuto,
   removeHistory, removeFound, removeAuto,
+  sanitizeProgress, loadProgress, saveProgress, clearProgress,
 } from './src/storage.js';
 
 // ---- ごく小さなテストの土台 ----------------------------------------------
@@ -1143,6 +1144,120 @@ test('JSON の文字列としても読める', () => {
   assertSame(sanitizeFound('[2,1]', 65), [1, 2]);
 });
 
+// ---- storage：遊びかけの検証（TODO-030）----------------------------------
+
+group('src/storage.js — 遊びかけの検証（sanitizeProgress）');
+
+/**
+ * 全解のデータの 1 件（60 マスの文字列）から遊びかけを組み立てる。
+ * `inTray` に挙げたピースだけトレイへ戻すので、盤に置いてある分は
+ * 必ず重ならず、盤の中に収まっている。
+ */
+function progressFrom(spec, cells, inTray) {
+  const found = new Map();
+  for (let i = 0; i < cells.length; i += 1) {
+    const ch = cells[i];
+    if (ch === HOLE) continue;
+    if (!found.has(ch)) found.set(ch, []);
+    found.get(ch).push([Math.floor(i / spec.cols), i % spec.cols]);
+  }
+  const pieces = PIECES.map((definition) => {
+    if (inTray.includes(definition.name)) {
+      return {
+        name: definition.name, cells: normalize(definition.cells), location: 'tray', row: 0, col: 0,
+      };
+    }
+    const placed = found.get(definition.name);
+    const row = Math.min(...placed.map(([r]) => r));
+    const col = Math.min(...placed.map(([, c]) => c));
+    return {
+      name: definition.name,
+      cells: placed.map(([r, c]) => [r - row, c - col]),
+      location: 'board',
+      row,
+      col,
+    };
+  });
+  return { ms: 12345, pieces };
+}
+
+for (const state of boardStates) {
+  const { spec, canonical } = state;
+  const sample = () => progressFrom(spec, canonical[0], ['X', 'F']);
+
+  test(`盤に 10 個・トレイに 2 個の遊びかけは通る（${spec.label}）`, () => {
+    const result = sanitizeProgress(sample(), spec);
+    assert(result !== null, '正しい遊びかけを捨てた');
+    assertSame(result.pieces.length, PIECES.length, 'ピースの数');
+    assertSame(result.pieces.filter((p) => p.location === 'tray').length, 2, 'トレイの数');
+    assertSame(result.ms, 12345, '経過時間');
+  });
+
+  test(`JSON の文字列としても読める（${spec.label}）`, () => {
+    assert(sanitizeProgress(JSON.stringify(sample()), spec) !== null);
+  });
+
+  test(`12 個とも盤に載っていたら捨てる（${spec.label}）`, () => {
+    // 完成した盤面に続きは無い。
+    assertSame(sanitizeProgress(progressFrom(spec, canonical[0], []), spec), null);
+  });
+
+  test(`同じピースが 2 つあったら捨てる（${spec.label}）`, () => {
+    const progress = sample();
+    progress.pieces[1] = { ...progress.pieces[0] };
+    assertSame(sanitizeProgress(progress, spec), null);
+  });
+
+  test(`そのピースに無い向きなら捨てる（${spec.label}）`, () => {
+    const progress = sample();
+    const target = progress.pieces.find((piece) => piece.name === 'F');
+    target.cells = [[0, 0], [0, 1], [0, 2], [0, 3], [0, 4]];   // F ではなく I の形
+    assertSame(sanitizeProgress(progress, spec), null);
+  });
+
+  test(`盤の上で重なっていたら捨てる（${spec.label}）`, () => {
+    const progress = sample();
+    const [first, second] = progress.pieces.filter((piece) => piece.location === 'board');
+    second.row = first.row;
+    second.col = first.col;
+    second.cells = first.cells;
+    assertSame(sanitizeProgress(progress, spec), null);
+  });
+
+  test(`盤からはみ出していたら捨てる（${spec.label}）`, () => {
+    const progress = sample();
+    const target = progress.pieces.find((piece) => piece.location === 'board');
+    target.row = spec.rows;
+    assertSame(sanitizeProgress(progress, spec), null);
+  });
+
+  test(`経過時間が数でない・負なら捨てる（${spec.label}）`, () => {
+    for (const ms of [undefined, null, '1000', -1, NaN]) {
+      assertSame(sanitizeProgress({ ...sample(), ms }, spec), null, `ms: ${ms} を通した`);
+    }
+  });
+
+  test(`ピースが 12 個ちょうどでなければ捨てる（${spec.label}）`, () => {
+    const progress = sample();
+    progress.pieces = progress.pieces.slice(0, PIECES.length - 1);
+    assertSame(sanitizeProgress(progress, spec), null);
+  });
+
+  test(`おまかせ・ヒント表示の印は、真のときだけ持ち越す（${spec.label}）`, () => {
+    // 続きで解き切っても自力扱いにしないための印（TODO-020）。
+    const marked = sanitizeProgress({ ...sample(), usedAuto: true, usedHint: 'yes' }, spec);
+    assertSame(marked.usedAuto, true, 'おまかせの印');
+    assertSame(marked.usedHint, false, '真でない値を真として通した');
+  });
+}
+
+test('壊れた JSON・object でない値は null になる', () => {
+  for (const value of ['{壊れている', null, 42, [], 'null']) {
+    assertSame(sanitizeProgress(value, BOARDS[DEFAULT_BOARD_KEY]), null,
+      `${JSON.stringify(value)} を通した`);
+  }
+});
+
 // ---- storage：最短時間を更新してよいか（TODO-020、TODO-024）--------------
 
 group('src/storage.js — 最短時間を更新してよいか（shouldRecordBest）');
@@ -1176,11 +1291,14 @@ group('src/storage.js — 保存して読み出す');
  * assert が落ちても戻せるよう `finally` で書き戻す。
  */
 function withCleanStorage(spec, fn) {
-  const keys = [spec.historyKey, spec.storageKey, spec.foundKey, spec.autoKey];
+  const keys = [
+    spec.historyKey, spec.storageKey, spec.foundKey, spec.autoKey, spec.progressKey,
+  ];
   const saved = keys.map((key) => window.localStorage.getItem(key));
   window.localStorage.removeItem(spec.historyKey);
   window.localStorage.removeItem(spec.foundKey);
   window.localStorage.removeItem(spec.autoKey);
+  window.localStorage.removeItem(spec.progressKey);
   try {
     fn();
   } finally {
@@ -1417,6 +1535,53 @@ for (const state of boardStates) {
       removeAuto(spec.key, 2, total);
       assertSame(loadFound(spec.key, total), [2], '達成度の側');
       assertSame(loadAuto(spec.key, total), [1], 'おまかせの側');
+    });
+  });
+
+  // ---- TODO-030：遊びかけを保存して読み出す --------------------------------
+
+  test(`saveProgress で保存したものが loadProgress で戻る（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      const progress = progressFrom(spec, canonical[0], ['X', 'F']);
+      saveProgress(spec.key, progress);
+      const loaded = loadProgress(spec.key);
+      assert(loaded !== null, '保存したものが読めない');
+      assertSame(loaded.ms, progress.ms, '経過時間');
+      assertSame(loaded.pieces.filter((p) => p.location === 'board').length,
+        PIECES.length - 2, '盤に置いてある数');
+    });
+  });
+
+  test(`遊びかけが無ければ loadProgress は null（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      assertSame(loadProgress(spec.key), null);
+    });
+  });
+
+  test(`clearProgress の後は null になる（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      saveProgress(spec.key, progressFrom(spec, canonical[0], ['X']));
+      clearProgress(spec.key);
+      assertSame(loadProgress(spec.key), null);
+    });
+  });
+
+  test(`使えない遊びかけを渡すと、前のものごと消える（${spec.label}）`, () => {
+    // 古い遊びかけが残って、続きから始めたときに前の盤面が出るのを防ぐ。
+    withCleanStorage(spec, () => {
+      saveProgress(spec.key, progressFrom(spec, canonical[0], ['X', 'F']));
+      assertSame(saveProgress(spec.key, { ms: -1, pieces: [] }), null, '戻り値');
+      assertSame(loadProgress(spec.key), null, '前の遊びかけが残っている');
+    });
+  });
+
+  test(`遊びかけは履歴・達成度と別に保たれる（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      saveProgress(spec.key, progressFrom(spec, canonical[0], ['X']));
+      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      clearHistory(spec.key);
+      clearFound(spec.key);
+      assert(loadProgress(spec.key) !== null, '記録を消したら遊びかけまで消えた');
     });
   });
 

@@ -10,8 +10,11 @@
 
 import {
   BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, HISTORY_LIMIT, PALETTES,
-  PALETTE_STORAGE_KEY,
+  PALETTE_STORAGE_KEY, PIECES,
 } from './config.js';
+import {
+  canPlace, createBoard, normalize, orientations, place, sameShape,
+} from './logic.js';
 import { solutionNumber } from './solutions.js';
 
 /** 盤のキーから盤の定義を引く。知らない盤なら既定の盤として扱う。 */
@@ -430,6 +433,137 @@ export function removeAuto(boardKey, no, count) {
 export function clearAuto(boardKey) {
   try {
     window.localStorage.removeItem(boardOf(boardKey).autoKey);
+  } catch (error) {
+    // 消せなくても実害は無い。
+  }
+}
+
+/**
+ * 遊びかけの盤面（TODO-030）。盤ごとに 1 つだけ持ち、タイトルの `つづきから`
+ * が読む。保存する形は次のとおり。
+ *
+ * - `ms` … そこまでの経過時間（ミリ秒）
+ * - `usedAuto` / `usedHint` … おまかせ・ヒント表示に頼ったか。**続きで解いても
+ *   自力扱いにしない**ために持ち越す（TODO-020 の判定を、中断で消せてしまうと
+ *   最短時間の意味が無くなる）
+ * - `pieces` … 12 種ぶんの `{ name, cells, location, row, col }`
+ *
+ * **盤面（`board.grid`）そのものは持たない。** ピースの位置から組み直せるうえ、
+ * 盤面まで別に持つと、手で書き換えられたときに 2 つの食い違いをどう扱うかを
+ * 決めることになる。ピースだけなら `canPlace()` で置けるかを見るだけで済む。
+ *
+ * **一手戻す履歴は保存しない**（利用者と相談して決めた）。最大 60 手ぶんの
+ * 盤面とピースの配置になり、保存する量も検証も一気に膨らむ。続きを始めた
+ * 直後だけ戻せない、という不便さと引き換えにしてある。
+ */
+
+/**
+ * localStorage から読んだ値を、そのまま使える形にする（純関数）。
+ * 使えなければ `null`（記録が無いのと同じに見せる）。
+ *
+ * `sanitizeHistory()` と同じく、生の文字列でもパース済みの値でも受ける
+ * （テストから組み立てた値を JSON へ直さずに渡せるようにするため）。
+ *
+ * **1 か所でも辻褄が合わなければ丸ごと捨てる。** 履歴は 1 件ずつ独立している
+ * ので壊れた件だけ捨てられるが、こちらは 12 個で 1 つの盤面なので、一部だけ
+ * 通すと**遊べない盤面**（同じ升へ 2 個、知らない向き）が出来てしまう。
+ *
+ * 見るのは次の 4 つ。
+ *
+ * - 12 種がそれぞれ 1 個ずつあること
+ * - `cells` がそのピースの向きのどれかであること（`orientations()` と照合）
+ * - 盤に置いてある分が、順に置いていって重ならないこと（`canPlace()`）
+ * - 12 個とも盤に載っていないこと——それは完成した盤面で、続きが無い
+ */
+export function sanitizeProgress(value, board) {
+  let parsed = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch (error) {
+      return null;
+    }
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  if (typeof parsed.ms !== 'number' || !Number.isFinite(parsed.ms) || parsed.ms < 0) return null;
+  if (!Array.isArray(parsed.pieces) || parsed.pieces.length !== PIECES.length) return null;
+
+  const seen = new Set();
+  const pieces = [];
+  let filled = createBoard(board);
+  for (const entry of parsed.pieces) {
+    if (entry === null || typeof entry !== 'object') return null;
+    const definition = PIECES.find((piece) => piece.name === entry.name);
+    if (!definition || seen.has(entry.name)) return null;
+    seen.add(entry.name);
+
+    if (!Array.isArray(entry.cells) || entry.cells.length !== definition.cells.length) return null;
+    const valid = entry.cells.every((cell) => (
+      Array.isArray(cell) && cell.length === 2
+      && Number.isInteger(cell[0]) && cell[0] >= 0
+      && Number.isInteger(cell[1]) && cell[1] >= 0
+    ));
+    if (!valid) return null;
+    const cells = normalize(entry.cells);
+    if (!orientations(definition.cells).some((known) => sameShape(known, cells))) return null;
+
+    if (entry.location === 'tray') {
+      pieces.push({
+        name: entry.name, cells, location: 'tray', row: 0, col: 0,
+      });
+      continue;
+    }
+    if (entry.location !== 'board') return null;
+    if (!Number.isInteger(entry.row) || !Number.isInteger(entry.col)) return null;
+    if (!canPlace(filled, cells, entry.row, entry.col).ok) return null;
+    filled = place(filled, entry.name, cells, entry.row, entry.col);
+    pieces.push({
+      name: entry.name, cells, location: 'board', row: entry.row, col: entry.col,
+    });
+  }
+  if (pieces.every((piece) => piece.location === 'board')) return null;
+
+  return {
+    ms: parsed.ms,
+    usedAuto: parsed.usedAuto === true,
+    usedHint: parsed.usedHint === true,
+    pieces,
+  };
+}
+
+/** その盤の遊びかけを返す。無い・壊れている・読めないときは `null`。 */
+export function loadProgress(boardKey) {
+  const board = boardOf(boardKey);
+  try {
+    return sanitizeProgress(window.localStorage.getItem(board.progressKey), board);
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * 遊びかけを保存し、保存した形を返す。**使えない値なら保存せずに消す**
+ * （古い遊びかけが残って、続きから始めたときに前の盤面が出るのを防ぐ）。
+ */
+export function saveProgress(boardKey, progress) {
+  const board = boardOf(boardKey);
+  const sane = sanitizeProgress(progress, board);
+  if (sane === null) {
+    clearProgress(boardKey);
+    return null;
+  }
+  try {
+    window.localStorage.setItem(board.progressKey, JSON.stringify(sane));
+  } catch (error) {
+    // 保存できなくても、その回は最後まで遊べる（続きから始められないだけ）。
+  }
+  return sane;
+}
+
+/** その盤の遊びかけを消す。解き切ったとき・やり直したときに呼ぶ。 */
+export function clearProgress(boardKey) {
+  try {
+    window.localStorage.removeItem(boardOf(boardKey).progressKey);
   } catch (error) {
     // 消せなくても実害は無い。
   }

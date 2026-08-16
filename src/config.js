@@ -18,9 +18,13 @@
  * そのまま引き継ぐため。
  *
  * `historyKey`（クリア記録の履歴。TODO-008）・`foundKey`（自力で見つけた解の
- * 番号。TODO-022）・`autoKey`（おまかせで出した解の番号。TODO-016）は
+ * 番号。TODO-022）・`autoKey`（おまかせで出した解の番号。TODO-016）・
+ * `progressKey`（遊びかけの盤面。TODO-030）は
  * **どれも接尾辞を付けて揃えてある**。引き継ぐ古い記録がそもそも無いので、
  * `storageKey` の不揃いを新しいキーにまで持ち込む理由が無い。
+ *
+ * `progressKey` を盤ごとに分けてあるのは、8×8 を遊びかけたまま 6×10 を
+ * 始めても、どちらの続きも残るようにするため（TODO-030）。
  *
  * `historyKey` に `v2` が入っているのは、TODO-028 で履歴の印の文字を
  * `h` / `c` から `a` / `h` へ付け替えたため。`h` の指すものが入れ替わる
@@ -39,6 +43,7 @@ export const BOARDS = {
     historyKey: 'pentomino-puzzle/history/v2/8x8',
     foundKey: 'pentomino-puzzle/found/8x8',
     autoKey: 'pentomino-puzzle/auto/8x8',
+    progressKey: 'pentomino-puzzle/progress/8x8',
   },
   '6x10': {
     key: '6x10',
@@ -51,6 +56,7 @@ export const BOARDS = {
     historyKey: 'pentomino-puzzle/history/v2/6x10',
     foundKey: 'pentomino-puzzle/found/6x10',
     autoKey: 'pentomino-puzzle/auto/6x10',
+    progressKey: 'pentomino-puzzle/progress/6x10',
   },
 };
 

@@ -12,13 +12,16 @@ import {
   OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, TURN_MARK, VERSION,
 } from '../config.js';
 import {
-  boardKey, canPlace, createBoard, flip, formatTime, isSolved, nextPlaceableTurn, nextTurn,
+  boardKey, canPlace, createBoard, flip, formatTime, isSolved,
+  nextPlaceableTurn, nextTurn,
   normalize, outlineEdges, place, remove, rotateCw, sameShape, shapeSize, snapSpot, turnOrder,
 } from '../logic.js';
 import {
   autoFrom, ensureSolutions, hasSolution, solutionNumber,
 } from '../solutions.js';
-import { addAuto, loadAuto, loadFound } from '../storage.js';
+import {
+  addAuto, clearProgress, loadAuto, loadFound, loadProgress, saveProgress,
+} from '../storage.js';
 import * as audio from '../audio.js';
 import { createButton, createPanel } from '../ui.js';
 import { darken, pieceColor, TEX } from './boot.js';
@@ -32,6 +35,15 @@ const DEPTH = {
 export default class GameScene extends Phaser.Scene {
   constructor() {
     super('Game');
+  }
+
+  /**
+   * `resume` が真なら、保存してある遊びかけから始める（TODO-030）。
+   * タイトルの `つづきから` だけが渡す。`scene.restart()`（やり直し）は
+   * 引数を明示して渡し直すので、続きから始め直してしまうことは無い。
+   */
+  init(data) {
+    this.resuming = !!(data && data.resume);
   }
 
   create() {
@@ -55,6 +67,8 @@ export default class GameScene extends Phaser.Scene {
     this.usedHint = false;
     this.hintState = null;
     this.playing = true;
+    // 遊びかけを控えてよいか（TODO-030）。組み立てが済むまでは控えない。
+    this.ready = false;
     this.pending = null;
     this.drag = null;
     this.messageTimer = null;
@@ -91,10 +105,19 @@ export default class GameScene extends Phaser.Scene {
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
     // シーンを離れるときに持ち越しの押下状態を捨てる（次に来たとき掴んだままになる）。
+    // ついでに、そのときの経過時間まで含めて遊びかけを控える（TODO-030）。
+    // 盤が変わったときにも控えているが、置いてから何分も考えて中断すると、
+    // その考えていた時間が落ちてしまうため。
     // `once` なのは、やり直しで `create()` を通るたびに登録が積み上がらないようにするため。
-    this.events.once('shutdown', this.cancelPending, this);
+    this.events.once('shutdown', this.onShutdown, this);
 
+    // 遊びかけの読み込みは、部品を組んでから（`refreshPiece()` などが要る）。
+    if (this.resuming) this.applyProgress(loadProgress(this.spec.key));
     this.refreshHud();
+    // ここから先の `refreshHud()` は、盤が変わったところから呼ばれる。
+    // 組み立ての最中に控えると、まだ何も置いていない状態で保存してある
+    // 遊びかけを消してしまう（`はじめる` を押し間違えただけで消えるのは困る）。
+    this.ready = true;
   }
 
   // Phaser が渡す第 1 引数（時刻）は使わない。経過時間は delta を足して数える。
@@ -313,7 +336,9 @@ export default class GameScene extends Phaser.Scene {
     );
 
     this.confirmParts.push(
-      this.add.text(x + cfg.width / 2, y + 50, 'タイトルへ戻りますか？\n今の進み方は失われます', {
+      // 途中の盤面は残るようになったので（TODO-030）、失われるとは言わない。
+      this.add.text(x + cfg.width / 2, y + 50,
+                    'タイトルへ戻りますか？\n途中の盤面は残るので、\n「つづきから」で再開できます', {
         fontFamily: FONT.family,
         fontSize: `${FONT.body}px`,
         color: TEXT_COLORS.normal,
@@ -834,6 +859,73 @@ export default class GameScene extends Phaser.Scene {
     this.restoreState(this.history.pop(), true);
   }
 
+  // ---- 遊びかけの保存（TODO-030）---------------------------------------
+
+  /**
+   * 今の状態を控える。盤が変わるところ（`refreshHud()`）と、シーンを
+   * 離れるときに呼ぶ。
+   *
+   * 1 個も置いていないときは控えずに消す。何も進んでいない状態を残しても
+   * `つづきから` が「はじめから」と同じ意味になるだけで、押せるボタンが
+   * 増えたぶん紛らわしい。解き終えたあと（`playing` が偽）は
+   * `checkSolved()` が消したものを書き戻さないよう、何もしない。
+   */
+  persist() {
+    if (!this.playing) return;
+    if (this.pieces.every((piece) => piece.location === 'tray')) {
+      clearProgress(this.spec.key);
+      return;
+    }
+    saveProgress(this.spec.key, {
+      ms: this.elapsed,
+      usedAuto: this.usedAuto,
+      usedHint: this.usedHint,
+      pieces: this.pieces.map((piece) => ({
+        name: piece.name,
+        cells: piece.cells,
+        location: piece.location,
+        row: piece.row,
+        col: piece.col,
+      })),
+    });
+  }
+
+  onShutdown() {
+    this.cancelPending();
+    this.persist();
+  }
+
+  /**
+   * 保存してある遊びかけを画面へ写す（TODO-030）。読めなければ何もしない
+   * （そのまま最初から遊べる状態になる）。
+   *
+   * 盤面は `storage.js` が検証済みのピースの位置から組み直す。おまかせ・
+   * ヒント表示の印も持ち越すので、続きで解き切っても自力扱いにはならない。
+   * 一手戻す履歴は保存していないので、続きを始めた直後は戻せない。
+   */
+  applyProgress(progress) {
+    if (!progress) return;
+    const saved = new Map(progress.pieces.map((piece) => [piece.name, piece]));
+    this.board = createBoard(this.spec);
+    this.pieces.forEach((piece) => {
+      const item = saved.get(piece.name);
+      if (!item) return;
+      piece.cells = item.cells;
+      piece.location = item.location;
+      piece.row = item.row;
+      piece.col = item.col;
+      if (item.location === 'board') {
+        this.board = place(this.board, piece.name, piece.cells, piece.row, piece.col);
+      }
+      this.refreshPiece(piece);
+      this.layoutPiece(piece);
+    });
+    this.elapsed = progress.ms;
+    this.usedAuto = progress.usedAuto;
+    this.usedHint = progress.usedHint;
+    this.timeText.setText(formatTime(this.elapsed));
+  }
+
   // ---- ボタンの働き ---------------------------------------------------
 
   /**
@@ -926,9 +1018,19 @@ export default class GameScene extends Phaser.Scene {
     this.hintText.setText(text[state]).setColor(color[state]);
   }
 
+  /**
+   * 同じ盤を最初から。遊びかけは捨てる（TODO-030）。
+   *
+   * `playing` を先に偽にしておくのは、シーンを離れるときの控え
+   * （`onShutdown()`）に、今まさに捨てた盤面を書き戻させないため。
+   * `restart()` に引数を渡すのは、`init()` が前の `resume` を受け取って
+   * 続きから始め直さないようにするため。
+   */
   restart() {
     audio.button();
-    this.scene.restart();
+    this.playing = false;
+    clearProgress(this.spec.key);
+    this.scene.restart({ resume: false });
   }
 
   toggleMute() {
@@ -964,6 +1066,8 @@ export default class GameScene extends Phaser.Scene {
     // 盤が変わるところは置く・外す・向きを変える・戻す・おまかせのどれも
     // ここを通るので、解の有無を調べ直す入口をここ 1 つにまとめてある。
     this.runHint();
+    // 遊びかけを控える入口も同じ理由でここ（TODO-030）。
+    if (this.ready) this.persist();
   }
 
   showMessage(text) {
@@ -978,6 +1082,9 @@ export default class GameScene extends Phaser.Scene {
   checkSolved() {
     if (!isSolved(this.board)) return;
     this.playing = false;
+    // 解き切った盤面に続きは無いので、遊びかけは捨てる（TODO-030）。
+    // `playing` を偽にしたあとなので、`persist()` が書き戻すことはない。
+    clearProgress(this.spec.key);
     this.refreshHud();
     this.showMessage('完成');
     this.time.delayedCall(700, () => {
