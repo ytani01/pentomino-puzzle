@@ -1,31 +1,8 @@
 # TODO
 
-**残っている項目: TODO-036。** これまでに 35 件を決着させた。
+**残っている項目はない。** これまでに 36 件を決着させた。
 新しく足すときは「完了済み」の上に節を作る。
 **新規項目の番号は `TODO-037` から。**
-
----
-
-## TODO-036. 使っていない外部ツール接続とプラグインを片付ける
-
-- [ ] context7 をこのプロジェクトで切る（`/mcp disable context7`）
-- [ ] Chrome 連携（claude-in-chrome）を切る（`/mcp` の一覧、または Chrome 拡張側）
-- [ ] 未使用プラグイン 3 件を削除（pyright-lsp / frontend-design / github。`/plugin`）
-
-2026-08-18 の `/doctor` の結果。直近 50 セッションで context7 は 0 回
-（このリポジトリは Phaser の CDN 固定で npm を使わないため出番が無い）、
-claude-in-chrome も 0 回（Chrome 拡張が未接続）。
-プラグイン 3 件は累計 0 回で、すでに無効化済み（実害は無く、一覧を綺麗にするだけ）。
-playwright（画面の確認、18 回）と typescript-lsp（累計 375 回）は残す。
-
-**実行するのは利用者。** いずれも Claude Code の設定で、
-Claude からは変えられない（アプリ側に戻される恐れがあるため設定ファイルも直接触らない）。
-戻すときは `/mcp enable context7`、Chrome 連携は切ったのと同じ場所、
-プラグインは `/plugin` から再インストール。
-`/mcp disable` はプロジェクトごとの設定なので、他のプロジェクトでも切るなら
-そこで同じコマンドを実行する。
-
-モデル: Haiku / effort low（Claude 側の作業はチェックと記録だけ）
 
 ---
 
@@ -34,6 +11,7 @@ Claude からは変えられない（アプリ側に戻される恐れがある�
 1 項目 1 ファイル。`archives/todo/` にある（新しい順）。
 **やらないと決めたものの理由もそこにある。** 蒸し返す前に読むこと。
 
+- [**TODO-036.** 使っていない外部ツール接続とプラグインを片付ける](archives/todo/TODO-036.%20使っていない外部ツール接続とプラグインを片付ける.md)
 - [**TODO-035.** CLAUDE.md の常駐分を減らす](archives/todo/TODO-035.%20CLAUDE.md%20の常駐分を減らす.md)
 - [**TODO-034.** 画面の確認を Playwright MCP に一本化する](archives/todo/TODO-034.%20画面の確認を%20Playwright%20MCP%20に一本化する.md)
 - [**TODO-033.** 文書とコードの食い違いを直す](archives/todo/TODO-033.%20文書とコードの食い違いを直す.md)
