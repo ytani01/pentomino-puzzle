@@ -24,3 +24,6 @@ Session.vim
 .Trash-*
 .nfs*
 nohup.out
+
+### Claude Code ###
+.claude/settings.local.json
