@@ -30,64 +30,60 @@ python3 -m http.server 8765
 
 ### 画面を撮って確かめる
 
-見た目の確認（スマホの横画面ではみ出さないか、など）は、Playwright に同梱の
-Chromium を headless で動かして撮る。**この環境では Claude のブラウザ拡張
-（claude-in-chrome）も Playwright MCP も使えなかった**（拡張は未接続、MCP は
-`chrome` チャンネルを探して見つからない）。同梱の Chromium だけは入っている。
+見た目の確認（スマホの横画面ではみ出さないか、など）は、Playwright MCP で
+headless の Chromium を動かして撮る（TODO-034）。設定は `~/.mcp.json` にあり、
+Playwright に同梱の Chromium を `--executable-path` で指している
+（システムに Google Chrome が入っていないため。`--isolated` で毎回まっさらな
+プロファイル、撮ったものは `--output-dir` の `~/tmp/playwright-mcp` に入る）。
 
-```bash
-CHROME=$(echo ~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome)
+タイトル画面なら、大きさを決めて開いて撮るだけでよい。
+
+```
+browser_resize            568 x 320
+browser_navigate          http://localhost:8765/
+browser_take_screenshot
 ```
 
-タイトル画面のように、開いただけの状態でよければ `--screenshot` で足りる。
+ゲーム本編のように**画面を進めてから撮る**ときは、間に一段はさむ。
 
-```bash
-$CHROME --headless=new --disable-gpu --hide-scrollbars \
-  --window-size=667,375 --virtual-time-budget=6000 \
-  --screenshot=out.png http://localhost:8765/
+```
+browser_evaluate          () => { window.game.scene.getScene('Title').scene.start('Game'); }
 ```
 
-ゲーム本編のように**画面を進めてから撮る**ときは、`--remote-debugging-port`
-付きで起動し、CDP を直接叩く。Node.js には WebSocket が組み込みで入っているので、
-npm への追加インストールは要らない（このリポジトリに依存を増やさないため）。
+**波かっこで包んで、値を返さないこと。** `browser_evaluate` は返り値を
+JSON にするので、`scene.start()` の戻り（Phaser の ScenePlugin）を返すと
+`Converting circular structure to JSON` で失敗する。
 
-```javascript
-// node shot.mjs <port> <幅> <高さ> <出力先>
-import fs from 'node:fs';
-const [,, port, w, h, out] = process.argv;
-const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-const ws = new WebSocket(targets.find(x => x.type === 'page').webSocketDebuggerUrl);
-let id = 0; const pend = new Map();
-const send = (method, params) => new Promise(r => {
-  const i = ++id; pend.set(i, r); ws.send(JSON.stringify({id: i, method, params}));
-});
-ws.onmessage = e => {
-  const m = JSON.parse(e.data);
-  if (m.id && pend.has(m.id)) { pend.get(m.id)(m.result); pend.delete(m.id); }
-};
-await new Promise(r => ws.onopen = r);
-// mobile: true にするとスマホとして扱われる（画面の大きさだけでなく操作系も）
-await send('Emulation.setDeviceMetricsOverride',
-           {width: +w, height: +h, deviceScaleFactor: 1, mobile: true});
-await send('Page.navigate', {url: 'http://localhost:8765/'});
-await new Promise(r => setTimeout(r, 3000));   // Phaser の起動を待つ
-await send('Runtime.evaluate',
-           {expression: "window.game.scene.getScene('Title').scene.start('Game')"});
-await new Promise(r => setTimeout(r, 2500));   // 画面が組み上がるのを待つ
-fs.writeFileSync(out, Buffer.from((await send('Page.captureScreenshot',
-                                              {format: 'png'})).data, 'base64'));
-ws.close();
-```
-
-- 起動は `$CHROME --headless=new --disable-gpu --hide-scrollbars \`
-  `--remote-debugging-port=9222 --user-data-dir=<一時ディレクトリ> about:blank &`。
-  一度立てれば、上のスクリプトを幅・高さを変えて何度も呼べる
 - スマホ横画面の確認に使った大きさ: `568x320`（iPhone SE 初代）、`667x375`、
   `844x390`、`915x412`。**一番厳しいのは 568x320**
-- 撮り終えたら Chromium を止める。`pgrep -f` は**自分自身にマッチする**ので、
-  止まったかどうかは `ps -eo pid,comm | grep -i chrome` で確かめる
-  （`pgrep` の出力が毎回違う PID になるのは、消し残りではなく `pgrep` 自身）
-- WebGL 由来の `GPU stall due to ReadPixels` が大量に出るが、画像は撮れている
+- `browser_take_screenshot` の `filename` に**相対名を渡すと、`--output-dir`
+  ではなくカレント（＝リポジトリ）へ落ちる**。省略する（`--output-dir` に
+  既定の名前で入る）か、絶対パスで渡す
+- コンソールは `browser_console_messages`、操作は `browser_click` や
+  `browser_drag` で試せる
+- Claude のブラウザ拡張（claude-in-chrome）は、この環境では未接続で使えない
+
+**スマホ扱い**（画面の大きさだけでなく、タッチ機器として振る舞わせる）は、
+Playwright の API ではブラウザコンテキストを作るときに決まり、後から
+変えられない。CDP にはその制約が無いので、`browser_run_code_unsafe` から
+開いて切り替える。
+
+```javascript
+async (page) => {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setDeviceMetricsOverride',
+                 {width: 568, height: 320, deviceScaleFactor: 1, mobile: true});
+  await cdp.send('Emulation.setTouchEmulationEnabled',
+                 {enabled: true, maxTouchPoints: 5});
+  await cdp.send('Emulation.setEmitTouchEventsForMouse',
+                 {enabled: true, configuration: 'mobile'});
+  await page.reload();   // 'ontouchstart' in window は読み込み時に決まるため
+};
+```
+
+- **`setDeviceMetricsOverride` の `mobile: true` だけではタッチ扱いにならない。**
+  残る 2 つも呼ぶこと（TODO-034 で実測）
+- 効いたかどうかは `browser_evaluate` で `'ontouchstart' in window` を見る
 
 ## 規約
 
