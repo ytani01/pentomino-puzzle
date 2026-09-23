@@ -12,7 +12,7 @@ import {
   OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, TURN_MARK,
 } from '../config.js';
 import {
-  boardKey, canPlace, createBoard, flip, formatTime, isSolved,
+  boardKey, canPlace, createBoard, flip, forcedPlacements, formatTime, isSolved,
   nextPlaceableTurn, nextTurn,
   normalize, outlineEdges, place, remove, rotateCw, sameShape, shapeSize, snapSpot, turnOrder,
 } from '../logic.js';
@@ -913,10 +913,18 @@ export default class GameScene extends Phaser.Scene {
     this.refreshHud();
   }
 
+  /**
+   * 戻しても盤が変わらない控えがある。ヒント表示が切のときに打った手へ戻して、
+   * 戻した盤面でまた埋まったとき（TODO-044）と、同じ場所へ置き直した手。
+   * 押したのに何も起きないように見えるので、盤が変わるまで続けて戻す。
+   */
   undo() {
     if (this.history.length === 0) return;
     audio.undo();
-    this.restoreState(this.history.pop(), true);
+    const before = boardKey(this.board);
+    do {
+      this.restoreState(this.history.pop(), true);
+    } while (this.history.length > 0 && boardKey(this.board) === before);
   }
 
   // ---- 遊びかけの保存（TODO-030）---------------------------------------
@@ -1006,16 +1014,9 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
-    const { name, cells, row, col } = result.placement;
-    const piece = this.pieces.find((entry) => entry.name === name);
+    const { name } = result.placement;
     this.history.push(this.snapshot());
-    piece.cells = cells;
-    piece.location = 'board';
-    piece.row = row;
-    piece.col = col;
-    this.board = place(this.board, name, cells, row, col);
-    this.refreshPiece(piece);
-    this.settlePiece(piece, true);
+    this.slideIn(result.placement);
     this.usedAuto = true;
     // 導いた解を覚えて、次からはそれも避ける（TODO-016）。おまかせを頼りに
     // 解いた回は達成度（`addFound`）には入らないので、こちらで別に貯める。
@@ -1043,7 +1044,8 @@ export default class GameScene extends Phaser.Scene {
     if (this.hinting) {
       // 一度でも入にしたら、答えに頼ったものとして扱う（TODO-020 へ渡す）。
       this.usedHint = true;
-      this.runHint();
+      // 入にした時点で、形の決まった空きを埋める（TODO-044）。
+      this.refreshHud();
       return;
     }
     this.hintState = null;
@@ -1124,18 +1126,61 @@ export default class GameScene extends Phaser.Scene {
 
   // ---- 進行 -----------------------------------------------------------
 
+  /** おまかせと自動で埋める手（TODO-044）が共通に使う、トレイから盤へ滑らせて置く動き。 */
+  slideIn({ name, cells, row, col }) {
+    const piece = this.pieces.find((entry) => entry.name === name);
+    piece.cells = cells;
+    piece.location = 'board';
+    piece.row = row;
+    piece.col = col;
+    this.board = place(this.board, name, cells, row, col);
+    this.refreshPiece(piece);
+    this.settlePiece(piece, true);
+  }
+
+  /**
+   * ヒント表示が入で解ける盤面なら、残りのピースと同じ形の切り離された空きを埋める
+   * （TODO-044）。その空きはそのピースで埋めるしかないので、手で置かせる意味が無い。
+   *
+   * 履歴は積まない。積まないことで、直前の手の控え（`history` の末尾）を戻す
+   * 「一手戻す」1 回で、直前の手と自動で埋めた手がまとめて戻る。
+   * `usedAuto` は立てない（ヒント表示を入にした時点で `usedHint` が立っている）。
+   * 埋めたら真を返す。
+   */
+  fillForced() {
+    if (!this.playing || !this.hinting || !this.solutions) return false;
+    if (!hasSolution(this.solutions, this.board)) return false;
+    const names = this.pieces.filter((piece) => piece.location === 'tray').map((piece) => piece.name);
+    const placements = forcedPlacements(this.board, names);
+    if (placements.length === 0) return false;
+    for (const placement of placements) this.slideIn(placement);
+    audio.auto();
+    this.showMessage(`${placements.map((entry) => entry.name).join('・')} を置いた`);
+    return true;
+  }
+
+  /**
+   * 盤が変わるところ（置く・外す・向きを変える・戻す・おまかせ・ヒント表示を入にする）は
+   * どれもここを通るので、形の決まった空きを埋める（TODO-044）・解の有無を調べ直す・
+   * 遊びかけを控える入口をここ 1 つにまとめてある。埋めるのを先にするのは、
+   * 残りの数・ボタン・解の有無・控えを埋めたあとの盤面で出すため。
+   */
   refreshHud() {
+    const filled = this.fillForced();
+    // 囲まれたピースを外すと、その空きへ同じピースが埋め戻されて外す前と同じ盤に
+    // なる。そのとき積んだ控えを残すと、次の一手戻すが空振りするので捨てる。
+    const last = this.history[this.history.length - 1];
+    if (filled && last && boardKey(last.board) === boardKey(this.board)) this.history.pop();
     const left = this.pieces.filter((piece) => piece.location === 'tray').length;
     this.remainText.setText(`残り ${left}`);
     this.undoButton.setEnabled(this.playing && this.history.length > 0);
     // 全解のデータが届くまでは、おまかせもヒント表示も出せない（TODO-022）。
     this.autoButton.setEnabled(this.playing && left > 0 && this.solutions !== null);
     this.hintButton.setEnabled(this.solutions !== null);
-    // 盤が変わるところは置く・外す・向きを変える・戻す・おまかせのどれも
-    // ここを通るので、解の有無を調べ直す入口をここ 1 つにまとめてある。
     this.runHint();
-    // 遊びかけを控える入口も同じ理由でここ（TODO-030）。
-    if (this.ready) this.persist();
+    if (this.ready) this.persist(); // TODO-030
+    // 最後の 1 個を埋めたら、そのままクリア。
+    if (filled) this.checkSolved();
   }
 
   showMessage(text) {
@@ -1148,6 +1193,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   checkSolved() {
+    // 自動で埋めて `refreshHud()` が先にクリアへ進めたあと、呼んだ側
+    // （`dropDrag()`・`useAuto()`）がもう一度呼ぶので、二重に `Clear` へ移らないように。
+    if (!this.playing) return;
     if (!isSolved(this.board)) return;
     this.playing = false;
     // 解き切った盤面に続きは無いので、遊びかけは捨てる（TODO-030）。

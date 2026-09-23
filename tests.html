@@ -44,6 +44,7 @@ import {
   nextPlaceableTurn, snapSpot, shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
+  forcedPlacements,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
   solveSteps,
 } from './src/logic.js';
@@ -589,6 +590,84 @@ test('formatTime は mm:ss、1 時間を超えたら h:mm:ss', () => {
   assertSame(formatTime(599000), '09:59');
   assertSame(formatTime(3661000), '1:01:01');
 });
+
+// ---- logic：forcedPlacements（TODO-044）----------------------------------
+//
+// 解 1 つ（boardStates の solved）からピースを取り除き、その空きが
+// 残りのピースのどれかとしか埋まらないことを確かめる。
+
+group('src/logic.js — forcedPlacements');
+
+/** a と b が盤の中で辺を接しているか（隣り合う 2 つを取り除いたときの判定用）。 */
+function touchesInBoard(board, spec, a, b) {
+  return board.grid.some((value, i) => value === a && (
+    (i % spec.cols > 0 && board.grid[i - 1] === b)
+    || (i % spec.cols < spec.cols - 1 && board.grid[i + 1] === b)
+    || board.grid[i - spec.cols] === b
+    || board.grid[i + spec.cols] === b));
+}
+
+/** 縦 5 マスの空きを 2 か所（列を空けて隔てる）だけ持つ盤。同じピースが 2 度当たる形を作る。 */
+function dupHoleBoard(spec) {
+  const grid = new Array(spec.rows * spec.cols).fill(HOLE);
+  for (const col of [0, 2]) {
+    for (let row = 0; row < PIECE_SIZE; row += 1) grid[row * spec.cols + col] = null;
+  }
+  return { rows: spec.rows, cols: spec.cols, grid };
+}
+
+for (const state of boardStates) {
+  const { spec, emptyBoard, solved } = state;
+
+  test(`取り除いた 1 つのピースだけを返し、置き直すと元の盤に戻る（${spec.label}）`, () => {
+    for (const name of NAMES) {
+      const board = remove(solved, name);
+      const got = forcedPlacements(board, NAMES);
+      assertSame(got.length, 1, `${name} を取り除いたのに ${got.length} 件返した`);
+      assertSame(got[0].name, name, `${name} ではなく ${got[0].name} を返した`);
+      const after = place(board, got[0].name, got[0].cells, got[0].row, got[0].col);
+      assertSame(boardKey(after), boardKey(solved), `${name} を置き直しても元の盤に戻らない`);
+    }
+  });
+
+  test(`names に無いピースの形の空きは返さない（${spec.label}）`, () => {
+    for (const name of NAMES) {
+      const board = remove(solved, name);
+      assertSame(forcedPlacements(board, NAMES.filter((n) => n !== name)).length, 0,
+        `${name} を names から外したのに返した`);
+    }
+  });
+
+  test(`隣り合わない 2 つを取り除くと両方返し、隣り合う 2 つは何も返さない（${spec.label}）`, () => {
+    for (let i = 0; i < NAMES.length; i += 1) {
+      for (let j = i + 1; j < NAMES.length; j += 1) {
+        const a = NAMES[i];
+        const b = NAMES[j];
+        const board = remove(remove(solved, a), b);
+        const got = forcedPlacements(board, NAMES);
+        if (touchesInBoard(solved, spec, a, b)) {
+          assertSame(got.length, 0, `${a}/${b} は隣り合うのに返した`);
+        } else {
+          assertSame(got.length, 2, `${a}/${b} を両方返さなかった`);
+          assert(got.every((p) => p.name === a || p.name === b), `${a}/${b} 以外を返した`);
+          let after = board;
+          for (const p of got) after = place(after, p.name, p.cells, p.row, p.col);
+          assertSame(boardKey(after), boardKey(solved), `${a}/${b} を置き直しても元の盤に戻らない`);
+        }
+      }
+    }
+  });
+
+  test(`同じピースの形の空きが 2 か所にあっても 1 回だけ返す（${spec.label}）`, () => {
+    const got = forcedPlacements(dupHoleBoard(spec), NAMES);
+    assertSame(got.length, 1, '1 回だけ返らなかった');
+    assertSame(got[0].name, 'I', 'I 以外を返した');
+  });
+
+  test(`空の盤では何も返さない（${spec.label}）`, () => {
+    assertSame(forcedPlacements(emptyBoard, NAMES).length, 0);
+  });
+}
 
 // ---- logic：対称な解の重複除去（TODO-012）--------------------------------
 

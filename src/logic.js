@@ -293,21 +293,21 @@ export function isSolved(board) {
 }
 
 /**
- * 空き領域を上下左右の連結で分け、それぞれの大きさを返す。
- * 求解では「5 で割り切れない塊があれば置き方が無い」という枝刈りに使う。
+ * 空き領域を上下左右の連結で分け、領域ごとのマスの添字を返す（見つけた順は行優先）。
+ * 大きさだけ要る枝刈りと、形まで要る `forcedPlacements()` で塗り方を 1 つにするため。
  */
-export function emptyRegionSizes(board) {
+function emptyRegions(board) {
   const seen = new Uint8Array(board.grid.length);
-  const sizes = [];
+  const regions = [];
   const stack = [];
   for (let start = 0; start < board.grid.length; start += 1) {
     if (board.grid[start] !== null || seen[start]) continue;
-    let size = 0;
+    const region = [];
     seen[start] = 1;
     stack.push(start);
     while (stack.length > 0) {
       const index = stack.pop();
-      size += 1;
+      region.push(index);
       const row = Math.floor(index / board.cols);
       const col = index % board.cols;
       if (col > 0) pushIfEmpty(board, seen, stack, index - 1);
@@ -315,9 +315,17 @@ export function emptyRegionSizes(board) {
       if (row > 0) pushIfEmpty(board, seen, stack, index - board.cols);
       if (row < board.rows - 1) pushIfEmpty(board, seen, stack, index + board.cols);
     }
-    sizes.push(size);
+    regions.push(region);
   }
-  return sizes;
+  return regions;
+}
+
+/**
+ * 空き領域を上下左右の連結で分け、それぞれの大きさを返す。
+ * 求解では「5 で割り切れない塊があれば置き方が無い」という枝刈りに使う。
+ */
+export function emptyRegionSizes(board) {
+  return emptyRegions(board).map((region) => region.length);
 }
 
 function pushIfEmpty(board, seen, stack, index) {
@@ -325,6 +333,34 @@ function pushIfEmpty(board, seen, stack, index) {
     seen[index] = 1;
     stack.push(index);
   }
+}
+
+/**
+ * 周りから切り離された 5 マスの空きのうち、残りのピース `names` のどれかと同じ形のものを、
+ * そのピースの置き方 `{ name, cells, row, col }` にして返す（TODO-044。`place()` にそのまま渡せる）。
+ *
+ * 解ける盤面なら、その空きはそのピースで埋めるしかない（12 種の形はどれも違う）ので、
+ * 埋めても解けるまま。1 つ埋めても他の空きは変わらないので、一度に全部返す。
+ * 解の有無は見ない（形だけ）。同じピースが 2 つの空きに当たる盤面は解なしだが、
+ * 1 つのピースを 2 回置く手は返さないよう、最初の 1 つだけにする。
+ */
+export function forcedPlacements(board, names) {
+  const shapes = PIECES
+    .filter((piece) => names.includes(piece.name))
+    .map((piece) => ({ name: piece.name, turns: orientations(piece.cells) }));
+  const found = [];
+  for (const region of emptyRegions(board)) {
+    if (region.length !== PIECE_SIZE) continue;
+    const cells = region.map((index) => [Math.floor(index / board.cols), index % board.cols]);
+    const shape = normalize(cells);
+    const match = shapes.find(({ name, turns }) => !found.some((entry) => entry.name === name)
+      && turns.some((turn) => sameShape(turn, shape)));
+    if (!match) continue;
+    const row = Math.min(...cells.map(([r]) => r));
+    const col = Math.min(...cells.map(([, c]) => c));
+    found.push({ name: match.name, cells: shape, row, col });
+  }
+  return found;
 }
 
 /** 空き領域の大きさがすべて 5 の倍数か。`emptyRegionSizes()` の判定部分。 */
