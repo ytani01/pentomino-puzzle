@@ -449,6 +449,99 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
 }
 
 /**
+ * `solveSteps()` の幅優先版（デモで探し方を選べるようにするため。TODO-050）。
+ *
+ * 深さ優先と並べて、途中の盤面を置いた枚数（段）の順に調べる様子を見せる。
+ * 返す手・`random` と `canContinue` の受け方・1 つの盤面からの展開の仕方
+ * （一番若い空きマスを埋め、捨てる手も place と remove の 2 手で返す）は
+ * `solveSteps()` と同じ。違うのは、先へ進める手も**その場で外して**次の段の
+ * 候補に積むこと。
+ *
+ * 次の盤面へ移るときは、今の盤面と置いた順の先頭が一致する分を残し、
+ * 違うピースだけ 1 手ずつ外して置き直す（盤を空にしてから並べ直すと、
+ * 段が深くなるほど見ている時間の大半が置き直しになるため）。置き直しの
+ * place には `replay: true` を付ける。試した手ではないので、デモが数えないため。
+ * 全マス埋まった盤面へ移ったら `{ type: 'solved' }` を返す。
+ *
+ * 途中の盤面は親への参照を持つ手の連なりで持つ（共通の先頭を 1 つで済ませ、
+ * 共通部分は同じものかどうかで比べられるため）。探索の盤をその場で
+ * 書き換える理由は `solveSteps()` と同じ。
+ */
+export function* solveStepsBreadth(spec, random, canContinue = regionsFitPieces) {
+  const board = createBoard(spec);
+  const { cols, grid } = board;
+  const order = shuffle(PIECES.map((piece) => piece.name), random);
+  const shapes = new Map(PIECES.map(
+    (piece) => [piece.name, shuffle(orientations(piece.cells), random)],
+  ));
+  const placed = new Set();
+
+  const fill = (move, value) => {
+    for (const [dr, dc] of move.cells) grid[(move.row + dr) * cols + (move.col + dc)] = value;
+  };
+  const pathOf = (node) => {
+    const path = [];
+    for (let at = node; at; at = at.parent) path.unshift(at);
+    return path;
+  };
+
+  // 盤に今並んでいる手（置いた順）。
+  let current = [];
+  let level = [null]; // null は空の盤
+  while (level.length > 0) {
+    const nextLevel = [];
+    for (const node of level) {
+      const path = pathOf(node);
+      let common = 0;
+      while (common < current.length && current[common] === path[common]) common += 1;
+      while (current.length > common) {
+        const move = current.pop();
+        fill(move, null);
+        placed.delete(move.name);
+        yield { type: 'remove', name: move.name };
+      }
+      for (const move of path.slice(common)) {
+        fill(move, move.name);
+        placed.add(move.name);
+        current.push(move);
+        yield {
+          type: 'place', name: move.name, cells: move.cells, row: move.row, col: move.col,
+          ok: true, replay: true,
+        };
+      }
+
+      const target = grid.indexOf(null);
+      if (target < 0) {
+        yield { type: 'solved' };
+        continue;
+      }
+      const targetRow = Math.floor(target / cols);
+      const targetCol = target % cols;
+      for (const name of order) {
+        if (placed.has(name)) continue;
+        for (const shape of shapes.get(name)) {
+          const row = targetRow - shape[0][0];
+          const col = targetCol - shape[0][1];
+          if (!canPlace(board, shape, row, col).ok) continue;
+          const move = {
+            parent: node, name, cells: shape, row, col,
+          };
+          fill(move, name);
+          const ok = canContinue(board);
+          yield {
+            type: 'place', name, cells: shape, row, col, ok,
+          };
+          if (ok) nextLevel.push(move);
+          fill(move, null);
+          yield { type: 'remove', name };
+        }
+      }
+    }
+    level = nextLevel;
+  }
+}
+
+/**
  * 盤面を右 90° 回転した盤面を新しく作る。行と列が入れ替わる。
  * `(行, 列) → (列, 行数-1-行)` で、`rotateCw()` と同じ向きの回転になる。
  */

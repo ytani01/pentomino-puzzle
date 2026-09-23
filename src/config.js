@@ -244,6 +244,7 @@ const HUD_ROW = 56;        // HUD 1 段ぶんの高さ
 const HUD_PAD = 20;        // HUD の枠と、その中身の間
 const HUD_GAP = 8;         // ボタンどうしの間
 const HUD_BUTTONS = 6;     // HUD に並ぶボタンの数（`createHudButtons()` に渡す数と合わせる）
+const DEMO_HUD_BUTTONS = 7; // デモの HUD のボタンの数。探し方の切り替えの分だけ多い（TODO-050）
 const HUD_BUTTON_MAX = 130; // ボタン 1 個の幅。場所が足りなければここから詰める
 const HUD_BUTTON_HEIGHT = 44;
 const HUD_REMAIN_X = 140;  // 段の中身の左端から見た「残り n」の位置
@@ -291,13 +292,14 @@ function screenSize(portrait) {
  * - 縦画面（盤が上・トレイが下）… トレイは幅いっぱいなので、1 スロットの
  *   **幅**から一辺を決め、必要な高さを盤の取り分から差し引く
  */
-export function makeLayout({ portrait, board }) {
+export function makeLayout({ portrait, board, buttons = HUD_BUTTONS }) {
   const { width, height } = screenSize(portrait);
 
-  // 縦画面は横幅が狭く、ボタン 6 個が 1 段に並ばないので 3 個ずつ折り返す
+  // 縦画面は横幅が狭く、ボタン 6 個が 1 段に並ばないので 2 段に折り返す
   // （TODO-013 でボタンが 6 個になり、幅を詰めても 1 段には収まらなくなった）。
-  const buttonsPerRow = portrait ? 3 : HUD_BUTTONS;
-  const buttonRows = Math.ceil(HUD_BUTTONS / buttonsPerRow);
+  // デモの 7 個（TODO-050）も 2 段に収め、盤とトレイを本編と同じ位置に保つ。
+  const buttonsPerRow = portrait ? Math.ceil(buttons / 2) : buttons;
+  const buttonRows = Math.ceil(buttons / buttonsPerRow);
   // 文字（時間・残り・解の有無）とボタンは段を分ける。横画面は同じ段に並べて
   // いたが、TODO-026 で文字を大きくするとボタン 1 個が 85 では収まらなくなった。
   const hudRows = buttonRows + 1;
@@ -432,6 +434,17 @@ export const SCREEN = { portrait: PORTRAIT, margin: MARGIN, ...screenSize(PORTRA
  */
 export const LAYOUTS = Object.fromEntries(
   Object.values(BOARDS).map((board) => [board.key, makeLayout({ portrait: PORTRAIT, board })]),
+);
+
+/**
+ * デモの配置（TODO-050）。HUD のボタンが本編より 1 つ多いので別に作る。
+ * 本編の `LAYOUTS` を触らずに済ませ、本編の見た目を変えないため。
+ * ボタンの段数は本編と同じなので、盤とトレイの位置・マスの大きさは本編と同じになる。
+ */
+export const DEMO_LAYOUTS = Object.fromEntries(
+  Object.values(BOARDS).map((board) => [
+    board.key, makeLayout({ portrait: PORTRAIT, board, buttons: DEMO_HUD_BUTTONS }),
+  ]),
 );
 
 /**

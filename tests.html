@@ -46,7 +46,7 @@ import {
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
   forcedPlacements,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
-  solveSteps,
+  solveSteps, solveStepsBreadth,
 } from './src/logic.js';
 import {
   autoFrom, buildSolutions, consistentSolutions, hasSolution, placementIn,
@@ -1023,6 +1023,165 @@ for (const spec of BOARD_LIST) {
     assertSame(steps[0].ok, false, '最初の place の ok が false でない');
     assertSame(steps[1].type, 'remove', '最初の place の直後が remove でない');
     assertSame(steps[1].name, steps[0].name, '同じピースの remove でない');
+  });
+}
+
+// ---- logic：試行錯誤の探索（solveStepsBreadth, TODO-050）------------------
+
+group('src/logic.js — 試行錯誤の探索（solveStepsBreadth, TODO-050）');
+
+// 幅優先は最初の解までに深さ優先よりずっと多くの手を要る（既定の
+// regionsFitPieces だと 8×8 で 10 秒を超える。TODO-050）。整合を見るだけの
+// テストは全部を待たず、limit 手までで打ち切る。
+
+/** solveStepsBreadth を limit 手までまとめて集める（全部は待たない）。 */
+function breadthSteps(spec, random, canContinue, limit) {
+  const steps = [];
+  for (const step of solveStepsBreadth(spec, random, canContinue)) {
+    steps.push(step);
+    if (steps.length >= limit) break;
+  }
+  return steps;
+}
+
+for (const spec of BOARD_LIST) {
+  const steps = breadthSteps(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces, 4000);
+
+  test(`place は空いたマスにだけ置かれ、remove は置いてあるピースだけを外す（幅優先, ${spec.label}）`, () => {
+    let board = createBoard(spec);
+    for (const step of steps) {
+      if (step.type === 'place') {
+        assert(canPlace(board, step.cells, step.row, step.col).ok,
+          `${step.name} を置けない位置で place が出た`);
+        board = place(board, step.name, step.cells, step.row, step.col);
+      } else if (step.type === 'remove') {
+        assert(placedNames(board).includes(step.name),
+          `${step.name} は盤に無いのに remove が出た`);
+        board = remove(board, step.name);
+      }
+    }
+  });
+
+  test(`今の盤面と次の盤面の共通の先頭は残し、違うピースだけ remove して置き直す（${spec.label}）`, () => {
+    // 同じ名前でも枝が違えば別の場所へ置き直すことがあるので、trim
+    // （persistent な remove）の直後に続く replay の place（置き直し）に、
+    // trim で外したのと同じ「名前＋場所」が出てこないことを見る（名前だけ
+    // 見ると、別の枝で同じ名前を違う場所へ置き直す正しい動きまで拾ってしまう）。
+    // 共通の先頭まで外してしまう実装（毎回盤を空にしてから並べ直すなど）だと、
+    // 外したのと同じ場所への置き直しがすぐ出てきて食い違う。
+    // row・col だけだと、同じ位置に別の向きが載ることがあり区別できない（向きで
+    // 座標の基準が変わるため）。cells も含めて場所を区別する。
+    const signatureOf = (step) => `${step.name}@${step.row},${step.col}:${JSON.stringify(step.cells)}`;
+    const persistent = new Map(); // name -> signature
+    let trimmed = null;
+    let trimCount = 0;
+    let i = 0;
+    while (i < steps.length) {
+      const step = steps[i];
+      if (step.type === 'place' && !step.replay) {
+        i += 2; // 試した手（place と直後の remove）は persistent に触れず読み飛ばす
+        trimmed = null;
+        continue;
+      }
+      if (step.type === 'place') { // replay（置き直し）
+        if (trimmed) {
+          assert(!trimmed.has(signatureOf(step)),
+            `${step.name} を trim で外した場所へ、直後の置き直しでまた置いた`);
+        }
+        persistent.set(step.name, signatureOf(step));
+      } else if (step.type === 'remove') {
+        assert(persistent.has(step.name), `${step.name} は盤に無いのに remove が出た`);
+        trimmed = trimmed ?? new Set();
+        trimmed.add(persistent.get(step.name));
+        persistent.delete(step.name);
+        trimCount += 1;
+      } else {
+        trimmed = null; // solved
+      }
+      i += 1;
+    }
+    assert(trimCount > 0, 'remove が 1 度も起きなかった（limit を見直すこと）');
+  });
+
+  test(`replay でない place の直前の盤面の枚数は、段が進む向きにしか変わらない（${spec.label}）`, () => {
+    // 幅優先は段（置いた枚数）の順に候補を試す。replay でない place の
+    // 直前は、その時点で盤に持続して残っているピースの枚数＝段の深さに
+    // なるはずで、これが後戻りして減ることは無い（0,1,2… と増える向きだけ）。
+    const onBoard = new Set();
+    const depths = [];
+    for (const step of steps) {
+      if (step.type === 'place') {
+        if (!step.replay) depths.push(onBoard.size);
+        onBoard.add(step.name);
+      } else if (step.type === 'remove') {
+        onBoard.delete(step.name);
+      }
+    }
+    for (let i = 1; i < depths.length; i += 1) {
+      assert(depths[i] >= depths[i - 1],
+        `段が ${depths[i - 1]} から ${depths[i]} へ戻った（${i} 件目の試した手）`);
+    }
+    assert(depths.some((d) => d > 0), '段が 1 度も進まなかった（limit を見直すこと）');
+  });
+
+  test(`ok: false の place の直後は同じピースの remove（${spec.label}）`, () => {
+    let falseCount = 0;
+    for (let i = 0; i < steps.length; i += 1) {
+      const step = steps[i];
+      if (step.type === 'place' && step.ok === false) {
+        falseCount += 1;
+        const next = steps[i + 1];
+        assert(next && next.type === 'remove' && next.name === step.name,
+          `${step.name} を置いて ok:false になったのに、次が同じピースの remove でない`);
+      }
+    }
+    assert(falseCount > 0, '選んだシード・limit で ok:false が一度も起きなかった');
+  });
+
+  test(`渡した判定が使われている: 常に偽を返す判定だと出し切って done になる（${spec.label}）`, () => {
+    const doneSteps = [];
+    let taken = 0;
+    for (const step of solveStepsBreadth(spec, mulberry32(FAST_SEED[spec.key]), () => false)) {
+      doneSteps.push(step);
+      taken += 1;
+      if (taken > 2000) throw new Error('渡した判定が使われていない（手数が多すぎる）');
+    }
+    assert(!doneSteps.some((step) => step.type === 'solved'), 'solved に至ってしまった');
+    assertSame(doneSteps[0].type, 'place', '最初の手が place でない');
+    assertSame(doneSteps[0].ok, false, '最初の place の ok が false でない');
+    assertSame(doneSteps[1].type, 'remove', '最初の place の直後が remove でない');
+    assertSame(doneSteps[1].name, doneSteps[0].name, '同じピースの remove でない');
+  });
+}
+
+// 全解の判定（hasSolution）を渡すと最初の解までが 1 秒もかからず済む（TODO-050）。
+// 6×10 は同じ判定でも数十秒かかるため、solved まで走らせる確認は 8×8 だけにする。
+{
+  const state = boardStates.find((s) => s.spec.key === '8x8');
+  const { spec, solutions } = state;
+  const canContinue = (board) => hasSolution(solutions, board);
+
+  /** 最初の solved に至るまでの手を集める（測っておいた実測値の余裕を見て 200,000 手で打ち切る）。 */
+  function firstSolvedBreadth(random, limit = 200000) {
+    const steps = [];
+    for (const step of solveStepsBreadth(spec, random, canContinue)) {
+      steps.push(step);
+      if (step.type === 'solved') return steps;
+      if (steps.length > limit) throw new Error('手数の上限を超えた');
+    }
+    throw new Error('解に至らずに探索が終わった');
+  }
+
+  test(`hasSolution を渡すと最初の solved で全マス埋まり、12 種が 1 枚ずつで、解のデータに含まれる（幅優先, ${spec.label}）`, () => {
+    const steps = firstSolvedBreadth(mulberry32(1));
+    let board = createBoard(spec);
+    for (const step of steps) {
+      if (step.type === 'place') board = place(board, step.name, step.cells, step.row, step.col);
+      else if (step.type === 'remove') board = remove(board, step.name);
+    }
+    assert(isSolved(board), '完成していない');
+    assertSame(placedNames(board).sort(), NAMES, '12 種すべてが揃っていない');
+    assert(hasSolution(solutions, board), '解のデータに含まれない盤面で solved になった');
   });
 }
 

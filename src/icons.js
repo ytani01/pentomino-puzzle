@@ -160,6 +160,22 @@ export const ICONS = {
     g.lineStyle(ICON.lineWidth + 1, color, 1);
     g.lineBetween(0.15 * U, 0.15 * U, 0.85 * U, 0.85 * U);
   },
+
+  /**
+   * デモの探し方（TODO-050）。上の根から、深さ優先は 1 本を下へ深く、
+   * 幅優先は同じ段の横へ広げる。点の並ぶ向きで進む向きを見せる。
+   */
+  depthFirst(g, color) {
+    begin(g, color);
+    g.lineBetween(0, -0.75 * U, 0, 0.75 * U);
+    for (const y of [-0.75, 0, 0.75]) g.fillCircle(0, y * U, 0.22 * U);
+  },
+  breadthFirst(g, color) {
+    begin(g, color);
+    for (const x of [-0.75, 0, 0.75]) g.lineBetween(0, -0.7 * U, x * U, 0.6 * U);
+    g.fillCircle(0, -0.7 * U, 0.22 * U);
+    for (const x of [-0.75, 0, 0.75]) g.fillCircle(x * U, 0.6 * U, 0.22 * U);
+  },
 };
 
 /**

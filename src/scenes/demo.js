@@ -1,6 +1,7 @@
 /**
- * デモ（TODO-040）。コンピューターが深さ優先の探索でピースを置いたり
- * 外したりしながら解に至る様子を、本編と同じ盤とトレイの上で見せる。
+ * デモ（TODO-040）。コンピューターが探索でピースを置いたり外したり
+ * しながら解に至る様子を、本編と同じ盤とトレイの上で見せる。探し方は
+ * 深さ優先（既定）と幅優先から HUD で選ぶ（TODO-050）。
  *
  * 盤・トレイ・ピースの描画は本編（`GameScene`）をそのまま使い回したいので
  * 継承する。`create()` は上書きして描画に要るものだけを組み、入力・ヒント・
@@ -8,7 +9,8 @@
  * （記録・遊びかけ・見つけた解に何も残さないため）。本編の `create()` を
  * 通らないので、遊びかけを控える shutdown の処理も登録されない。
  *
- * 探索は `logic.js` の `solveSteps()`（generator）で、`update()` が速さに
+ * 探索は `logic.js` の `solveSteps()`（深さ優先）か `solveStepsBreadth()`
+ * （幅優先）の generator で、`update()` が速さに
  * 応じた間隔で 1 手ずつ進める。1 フレームに 1 手までなので画面は止まらない。
  * 置いたら全解のデータで「解ける／解なし」を調べ、解なしならすぐ外す。
  * ヒント表示を入にして解く人と同じ動きで、HUD にも本編のヒント表示と同じ
@@ -17,10 +19,10 @@
  */
 
 import {
-  BOARDS, BOARD_REGISTRY_KEY, COLORS, DEMO, FONT, LAYOUTS, PALETTES,
+  BOARDS, BOARD_REGISTRY_KEY, COLORS, DEMO, DEMO_LAYOUTS, FONT, PALETTES,
   PALETTE_REGISTRY_KEY, TEXT_COLORS,
 } from '../config.js';
-import { createBoard, solveSteps } from '../logic.js';
+import { createBoard, solveSteps, solveStepsBreadth } from '../logic.js';
 import { ensureSolutions, hasSolution } from '../solutions.js';
 import * as audio from '../audio.js';
 import { createHintBadge, createPanel, createVersionText } from '../ui.js';
@@ -29,6 +31,12 @@ import GameScene, { DEPTH } from './game.js';
 
 /** 速さの並び。HUD のボタンの前半 3 つと同じ順。 */
 const SPEEDS = ['slow', 'fast', 'fastest'];
+
+/** 探し方ごとの generator とボタンの見た目。ボタンは今の探し方を見せる（音のボタンと同じ）。 */
+const STRATEGIES = {
+  depth: { solve: solveSteps, icon: ICONS.depthFirst, tooltip: '探し方: 深さ優先' },
+  breadth: { solve: solveStepsBreadth, icon: ICONS.breadthFirst, tooltip: '探し方: 幅優先' },
+};
 
 export default class DemoScene extends GameScene {
   constructor() {
@@ -40,7 +48,8 @@ export default class DemoScene extends GameScene {
     // 盤と色の組はタイトルで選んだもの（本編と同じ読み方）。
     this.boardKey = this.registry.get(BOARD_REGISTRY_KEY);
     this.spec = BOARDS[this.boardKey];
-    this.layout = LAYOUTS[this.boardKey];
+    // ボタンが本編より 1 つ多い分だけ HUD が違う。盤とトレイは本編と同じ（TODO-050）。
+    this.layout = DEMO_LAYOUTS[this.boardKey];
     this.palette = PALETTES[this.registry.get(PALETTE_REGISTRY_KEY)];
     // `drawBoard()` が穴の位置を見るためだけに持つ。探索の盤は generator の中にある。
     this.board = createBoard(this.spec);
@@ -49,6 +58,8 @@ export default class DemoScene extends GameScene {
     // 'solved'（解を見つけて止まっている）・'done'（出し切った）
     this.state = 'loading';
     this.steps = null;
+    this.solutions = null;
+    this.strategy = 'depth';
     // 直前に置いた手が解につながるか。null は表示を空にする（解けたとき）。
     this.hintState = 'ok';
     this.speed = DEMO.defaultSpeed;
@@ -73,8 +84,8 @@ export default class DemoScene extends GameScene {
     ensureSolutions(this.registry, this.spec).then((solutions) => {
       if (!this.scene.isActive() || this.state !== 'loading') return;
       if (solutions.spec.key !== this.spec.key) return;
-      this.steps = solveSteps(this.spec, Math.random, (board) => hasSolution(solutions, board));
-      this.state = 'running';
+      this.solutions = solutions;
+      this.startSearch();
     });
   }
 
@@ -104,7 +115,8 @@ export default class DemoScene extends GameScene {
     const { animate } = DEMO.speeds[this.speed];
     const piece = this.pieceByName.get(value.name);
     if (value.type === 'place') {
-      this.tried += 1;
+      // 幅優先が次の盤面へ移るための置き直しは、試した手に数えない。
+      if (!value.replay) this.tried += 1;
       piece.cells = value.cells;
       piece.location = 'board';
       piece.row = value.row;
@@ -174,13 +186,15 @@ export default class DemoScene extends GameScene {
         icon: ICONS[speed], tooltip: speedTips[speed], onClick: () => this.selectSpeed(speed),
       })),
       { icon: ICONS.next, tooltip: '次の解を探す', onClick: () => this.searchNext() },
+      { ...STRATEGIES[this.strategy], onClick: () => this.toggleStrategy() },
       { ...this.muteFace(audio.isMuted()), onClick: () => this.toggleMute() },
       // 失うものが無いので確認を出さずに戻る。
       { icon: ICONS.title, tooltip: 'タイトルへ', onClick: () => this.goToTitle() },
     ]);
     this.speedButtons = this.buttons.slice(0, SPEEDS.length);
     this.nextButton = this.buttons[3];
-    this.muteButton = this.buttons[4];
+    this.strategyButton = this.buttons[4];
+    this.muteButton = this.buttons[5];
   }
 
   refreshHud() {
@@ -203,6 +217,43 @@ export default class DemoScene extends GameScene {
     audio.button();
     this.speed = speed;
     this.waited = 0;
+    this.refreshHud();
+  }
+
+  /**
+   * 探し方を切り替えて空の盤から探し直す。途中から続けないのは、2 つの
+   * 探し方で盤面の辿り方が違い、今の盤面を引き継げないため。全解のデータを
+   * 待っている間は探し方だけ変え、届いたときに `startSearch()` が使う。
+   */
+  toggleStrategy() {
+    audio.button();
+    this.strategy = this.strategy === 'depth' ? 'breadth' : 'depth';
+    const face = STRATEGIES[this.strategy];
+    this.strategyButton.setIcon(face.icon).setTooltip(face.tooltip);
+    if (this.solutions) this.startSearch();
+  }
+
+  /**
+   * 探し直すときは、盤のピースを滑らせずにトレイへ戻す。何枚も同時に滑らせると
+   * 探索の 1 手と見分けがつかず、次の探索の最初の手とも重なるため。
+   */
+  startSearch() {
+    for (const piece of this.pieces) {
+      if (piece.location !== 'board') continue;
+      piece.location = 'tray';
+      this.refreshPiece(piece);
+      this.settlePiece(piece, false);
+    }
+    const { solutions } = this;
+    this.steps = STRATEGIES[this.strategy].solve(
+      this.spec, Math.random, (board) => hasSolution(solutions, board),
+    );
+    this.state = 'running';
+    this.tried = 0;
+    this.solvedCount = 0;
+    this.hintState = 'ok';
+    this.waited = 0;
+    this.messageText.setText('');
     this.refreshHud();
   }
 
