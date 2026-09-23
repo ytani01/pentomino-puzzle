@@ -242,7 +242,7 @@ const HUD_TOP = 10;        // 画面の上端と HUD の間
 const HUD_ROW = 56;        // HUD 1 段ぶんの高さ
 const HUD_PAD = 20;        // HUD の枠と、その中身の間
 const HUD_GAP = 8;         // ボタンどうしの間
-const HUD_BUTTONS = 6;     // HUD に並ぶボタンの数（`game.js` の `labels` と合わせる）
+const HUD_BUTTONS = 6;     // HUD に並ぶボタンの数（`createHudButtons()` に渡す数と合わせる）
 const HUD_BUTTON_MAX = 130; // ボタン 1 個の幅。場所が足りなければここから詰める
 const HUD_BUTTON_HEIGHT = 44;
 const HUD_REMAIN_X = 140;  // 段の中身の左端から見た「残り n」の位置
@@ -585,6 +585,36 @@ export const INPUT = {
   invalidFlashMs: 260,
   returnTweenMs: 180,
   messageMs: 2600,
+};
+
+/**
+ * HUD のボタンのアイコン（`src/icons.js`。TODO-042）。
+ *
+ * - `size` … アイコンを収める正方形の一辺。ボタンの高さ（44）から上下に
+ *   余白が残る大きさ。`Scale.FIT` で 0.5 倍まで縮むので、線は太めにしてある
+ * - `lineWidth` … 線の太さ
+ */
+export const ICON = {
+  size: 28,
+  lineWidth: 3,
+};
+
+/**
+ * HUD のボタンの説明（ツールチップ。TODO-042）。
+ *
+ * - `hoverDelayMs` … マウスを載せてから出すまで。横切っただけで出さないため
+ * - `touchMs` … タッチで押したときに出しておく時間。タッチにはホバーが無いので、
+ *   押した動作と一緒に短く出して消す
+ * - `padX` / `padY` … 文字と枠の間
+ * - `gap` … ボタンの下端と説明の上端の間
+ * - 文字の大きさは `FONT.small`
+ */
+export const TOOLTIP = {
+  hoverDelayMs: 400,
+  touchMs: 1200,
+  padX: 10,
+  padY: 6,
+  gap: 6,
 };
 
 /**

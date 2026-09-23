@@ -23,13 +23,17 @@ import {
   addAuto, clearProgress, loadAuto, loadFound, loadProgress, saveProgress,
 } from '../storage.js';
 import * as audio from '../audio.js';
-import { createButton, createPanel, createVersionText } from '../ui.js';
+import {
+  createButton, createPanel, createTooltip, createVersionText,
+} from '../ui.js';
+import { ICONS } from '../icons.js';
 import { darken, pieceColor, TEX } from './boot.js';
 
 /** 重なりの順。盤の上にピース、トレイの当たり判定はその上、ドラッグ中の
- *  ピースはさらに上、確認ダイアログが最前面。 */
+ *  ピースはさらに上、確認ダイアログが最前面。ボタンの説明（TODO-042）は
+ *  HUD の下へはみ出して盤やピースに重なるので HUD より上、確認よりは下。 */
 export const DEPTH = {
-  board: 0, ghost: 5, piece: 10, traySlot: 15, dragging: 20, hud: 30, confirm: 40,
+  board: 0, ghost: 5, piece: 10, traySlot: 15, dragging: 20, hud: 30, tooltip: 35, confirm: 40,
 };
 
 export default class GameScene extends Phaser.Scene {
@@ -279,19 +283,14 @@ export default class GameScene extends Phaser.Scene {
 
     // 前半 3 つが「解くのを助けるもの」、後半 3 つが「遊び方を変えるもの」。
     // 縦画面ではこの 3 つずつがそのまま 1 段になる。
-    const labels = [
-      '一手戻す', 'おまかせ', 'ヒント表示',
-      'やり直し', audio.isMuted() ? '音 OFF' : '音 ON', 'タイトルへ',
-    ];
-    const actions = [
-      () => this.undo(),
-      () => this.useAuto(),
-      () => this.toggleHint(),
-      () => this.restart(),
-      () => this.toggleMute(),
-      () => this.confirmToTitle(),
-    ];
-    this.buttons = this.createHudButtons(labels, actions);
+    this.buttons = this.createHudButtons([
+      { icon: ICONS.undo, tooltip: '一手戻す', onClick: () => this.undo() },
+      { icon: ICONS.auto, tooltip: 'おまかせ', onClick: () => this.useAuto() },
+      { icon: ICONS.hint, tooltip: 'ヒント表示', onClick: () => this.toggleHint() },
+      { icon: ICONS.restart, tooltip: 'やり直し', onClick: () => this.restart() },
+      { ...this.muteFace(audio.isMuted()), onClick: () => this.toggleMute() },
+      { icon: ICONS.title, tooltip: 'タイトルへ', onClick: () => this.confirmToTitle() },
+    ]);
     this.undoButton = this.buttons[0];
     this.autoButton = this.buttons[1];
     this.hintButton = this.buttons[2];
@@ -300,18 +299,23 @@ export default class GameScene extends Phaser.Scene {
 
   /**
    * HUD のボタンを並べる。デモ（TODO-040）も同じ並びでボタンを置くので、
-   * 位置の決め方をここに分けてある。
+   * 位置の決め方をここに分けてある。ボタンは文字でなくアイコンで、説明は
+   * ホバー／タップで出す（TODO-042）。説明の枠はシーンに 1 つだけ要り、本編と
+   * デモの両方が通るのはここだけなので、ここで作る。
+   *
+   * @param {{icon: Function, tooltip: string, onClick: Function}[]} items
    */
-  createHudButtons(labels, actions) {
+  createHudButtons(items) {
+    this.tooltip = createTooltip(this).setDepth(DEPTH.tooltip);
     const hud = this.layout.hud;
     const rowY = (row) => hud.y + hud.rowHeight * (row + 0.5);
     // ボタンだけの段は中央へ寄せる。時間の表示と段を分け合うなら右へ寄せるが、
     // 今は必ず段が分かれる（`config.js` の `firstButtonRow`）ので中央だけを通る。
     const perRow = hud.buttonsPerRow;
     const centered = hud.firstButtonRow > 0;
-    return labels.map((label, index) => {
+    return items.map((item, index) => {
       const row = Math.floor(index / perRow);
-      const count = Math.min(perRow, labels.length - row * perRow);
+      const count = Math.min(perRow, items.length - row * perRow);
       const total = count * hud.buttonWidth + (count - 1) * hud.gap;
       const left = centered
         ? hud.x + (hud.width - total) / 2
@@ -321,9 +325,9 @@ export default class GameScene extends Phaser.Scene {
         y: rowY(hud.firstButtonRow + row),
         width: hud.buttonWidth,
         height: hud.buttonHeight,
-        label,
-        fontSize: FONT.small,
-        onClick: actions[index],
+        icon: item.icon,
+        tooltip: item.tooltip,
+        onClick: item.onClick,
       }).setDepth(DEPTH.hud);
     });
   }
@@ -1092,9 +1096,20 @@ export default class GameScene extends Phaser.Scene {
     this.scene.restart({ resume: false });
   }
 
+  /**
+   * 音のボタンのアイコンと説明の対応。本編とデモの組み立てと切り替え
+   * （`toggleMute()`）の 3 か所で同じ対応を使うので、ここに 1 つだけ置く。
+   */
+  muteFace(muted) {
+    return muted
+      ? { icon: ICONS.soundOff, tooltip: '音 OFF' }
+      : { icon: ICONS.soundOn, tooltip: '音 ON' };
+  }
+
   toggleMute() {
     const muted = audio.toggleMuted();
-    this.muteButton.setLabel(muted ? '音 OFF' : '音 ON');
+    const face = this.muteFace(muted);
+    this.muteButton.setIcon(face.icon).setTooltip(face.tooltip);
     if (!muted) audio.button();
   }
 

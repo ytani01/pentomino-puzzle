@@ -1,0 +1,161 @@
+/**
+ * HUD のボタンのアイコン（TODO-042）。
+ *
+ * Unicode の記号や絵文字は OS やフォントで形が変わり、色の組とも合わないので、
+ * Graphics API の線画で描く。どれも `(graphics, color) => void` で、
+ * `createButton()`（`ui.js`）がボタンの中央を原点にして呼ぶ。色はボタンの状態
+ * （通常・押せない・選んである）で変わるので、呼ぶ側から受け取る。
+ *
+ * 一手戻すとやり直しは「曲がった矢印」で似やすい。一手戻すは左へ折り返す U 字、
+ * やり直しは閉じかけた円にして、並べたときに見分けられるようにしてある。
+ */
+
+import { ICON } from './config.js';
+
+const U = ICON.size / 2;
+
+/** 先端を `(x, y)` に置き、向き `angle` へ尖った三角。 */
+function arrowHead(g, x, y, angle, length) {
+  const back = angle + Math.PI;
+  const side = Math.PI / 2;
+  const bx = x + Math.cos(back) * length;
+  const by = y + Math.sin(back) * length;
+  const half = length * 0.7;
+  g.fillTriangle(
+    x, y,
+    bx + Math.cos(angle + side) * half, by + Math.sin(angle + side) * half,
+    bx + Math.cos(angle - side) * half, by + Math.sin(angle - side) * half,
+  );
+}
+
+function begin(g, color, width = ICON.lineWidth) {
+  g.lineStyle(width, color, 1);
+  g.fillStyle(color, 1);
+}
+
+/** スピーカーの本体。音の ON / OFF で共通。 */
+function speaker(g) {
+  g.fillPoints([
+    { x: -0.9 * U, y: -0.3 * U }, { x: -0.5 * U, y: -0.3 * U },
+    { x: -0.05 * U, y: -0.75 * U }, { x: -0.05 * U, y: 0.75 * U },
+    { x: -0.5 * U, y: 0.3 * U }, { x: -0.9 * U, y: 0.3 * U },
+  ], true);
+}
+
+/** 右向きの三角を `count` 個並べる。デモの速さの段階を個数で見せる。 */
+function triangles(count) {
+  return (g, color) => {
+    begin(g, color);
+    const width = 0.6 * U;
+    const left = (-count * width) / 2;
+    for (let i = 0; i < count; i += 1) {
+      const x = left + i * width;
+      g.fillTriangle(x, -0.6 * U, x, 0.6 * U, x + width, 0);
+    }
+  };
+}
+
+export const ICONS = {
+  /** 一手戻す: 左へ折り返す U 字の矢印。 */
+  undo(g, color) {
+    begin(g, color);
+    g.beginPath();
+    g.moveTo(-0.5 * U, -0.35 * U);
+    g.lineTo(0.2 * U, -0.35 * U);
+    g.arc(0.2 * U, 0.15 * U, 0.5 * U, -Math.PI / 2, Math.PI / 2, false);
+    g.lineTo(-0.5 * U, 0.65 * U);
+    g.strokePath();
+    arrowHead(g, -0.95 * U, -0.35 * U, Math.PI, 0.5 * U);
+  },
+
+  /** おまかせ: 魔法の杖と星のきらめき。 */
+  auto(g, color) {
+    begin(g, color, ICON.lineWidth + 1);
+    g.lineBetween(-0.85 * U, 0.85 * U, 0.1 * U, -0.1 * U);
+    const cx = 0.4 * U;
+    const cy = -0.4 * U;
+    const r = 0.55 * U;
+    const k = 0.14 * U;
+    g.fillPoints([
+      { x: cx, y: cy - r }, { x: cx + k, y: cy - k }, { x: cx + r, y: cy },
+      { x: cx + k, y: cy + k }, { x: cx, y: cy + r }, { x: cx - k, y: cy + k },
+      { x: cx - r, y: cy }, { x: cx - k, y: cy - k },
+    ], true);
+    g.fillCircle(-0.45 * U, -0.6 * U, 0.14 * U);
+    g.fillCircle(0.75 * U, 0.45 * U, 0.14 * U);
+  },
+
+  /** ヒント表示: 電球。 */
+  hint(g, color) {
+    begin(g, color);
+    g.strokeCircle(0, -0.3 * U, 0.5 * U);
+    g.lineBetween(-0.25 * U, 0.13 * U, -0.25 * U, 0.5 * U);
+    g.lineBetween(0.25 * U, 0.13 * U, 0.25 * U, 0.5 * U);
+    g.lineBetween(-0.3 * U, 0.5 * U, 0.3 * U, 0.5 * U);
+    g.lineBetween(-0.2 * U, 0.8 * U, 0.2 * U, 0.8 * U);
+  },
+
+  /** やり直し: 閉じかけた円の矢印（上に切れ目）。 */
+  restart(g, color) {
+    begin(g, color);
+    const r = 0.62 * U;
+    const start = -Math.PI / 3;
+    const end = (4 * Math.PI) / 3;
+    g.beginPath();
+    g.arc(0, 0.05 * U, r, start, end, false);
+    g.strokePath();
+    // 時計回りに進んだ先へ尖らせる。円の接線は角度 + 90°。
+    const tipAngle = end + Math.PI / 2;
+    const len = 0.5 * U;
+    const ex = Math.cos(end) * r;
+    const ey = 0.05 * U + Math.sin(end) * r;
+    arrowHead(g, ex + Math.cos(tipAngle) * len * 0.6, ey + Math.sin(tipAngle) * len * 0.6,
+      tipAngle, len);
+  },
+
+  /** 音 ON: スピーカーと音の波。 */
+  soundOn(g, color) {
+    begin(g, color);
+    speaker(g);
+    [0.45, 0.85].forEach((r) => {
+      g.beginPath();
+      g.arc(-0.05 * U, 0, r * U, -Math.PI / 4, Math.PI / 4, false);
+      g.strokePath();
+    });
+  },
+
+  /** 音 OFF: スピーカーと ×。 */
+  soundOff(g, color) {
+    begin(g, color);
+    speaker(g);
+    const cx = 0.5 * U;
+    const h = 0.3 * U;
+    g.lineBetween(cx - h, -h, cx + h, h);
+    g.lineBetween(cx - h, h, cx + h, -h);
+  },
+
+  /** タイトルへ: 家。 */
+  title(g, color) {
+    begin(g, color);
+    g.beginPath();
+    g.moveTo(-0.9 * U, 0);
+    g.lineTo(0, -0.85 * U);
+    g.lineTo(0.9 * U, 0);
+    g.strokePath();
+    g.strokeRect(-0.6 * U, -0.05 * U, 1.2 * U, 0.85 * U);
+    g.fillRect(-0.18 * U, 0.35 * U, 0.36 * U, 0.45 * U);
+  },
+
+  /** デモの速さ。三角の数が速さの段階。 */
+  slow: triangles(1),
+  fast: triangles(2),
+  fastest: triangles(3),
+
+  /** 次の解を探す: 虫眼鏡。速さの三角と取り違えないよう、形の系統を変えてある。 */
+  next(g, color) {
+    begin(g, color);
+    g.strokeCircle(-0.2 * U, -0.2 * U, 0.5 * U);
+    g.lineStyle(ICON.lineWidth + 1, color, 1);
+    g.lineBetween(0.15 * U, 0.15 * U, 0.85 * U, 0.85 * U);
+  },
+};

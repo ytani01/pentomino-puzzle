@@ -6,7 +6,9 @@
  * 状態はモジュールに持たず、作った Container のプロパティに持たせる。
  */
 
-import { COLORS, FONT, SCREEN, TEXT_COLORS, VERSION } from './config.js';
+import {
+  COLORS, FONT, SCREEN, TEXT_COLORS, TOOLTIP, VERSION,
+} from './config.js';
 
 /**
  * 右下にバージョンを出す。問い合わせのときにどの版かを画面から読めるように、
@@ -105,6 +107,12 @@ export function createChoiceRow(scene, cx, y, label, choices, onSelect) {
  * `mark`（あれば）を右端へ右寄せで置く（TODO-027）。記録の一覧の行のように、
  * **中身の長さが行ごとに変わる**ところで使う——中央寄せのままだと、印の
  * 有無で日時や時間の位置が行ごとにずれて読みにくい。
+ *
+ * `icon`（`icons.js` の描画関数）を渡すと、文字の代わりにアイコンを描く。
+ * HUD のボタンは 6 個並べると文字が窮屈になるため（TODO-042）。アイコンだけでは
+ * 何のボタンか分からないことがあるので、`tooltip` に説明を渡すと、マウスでは
+ * 載せたとき、タッチでは押したときに `scene.tooltip`（`createTooltip()` で作る。
+ * 1 シーンに 1 つ）へ出す。`setIcon()`・`setTooltip()` で差し替えられる。
  */
 
 /** 左寄せのボタンで、ラベル・印と枠の間に空ける分。 */
@@ -115,11 +123,13 @@ export function createButton(scene, options) {
     x, y, width, height, label, onClick,
     fontSize = FONT.body, align = 'center', mark = '',
   } = options;
+  let { icon = null, tooltip = null } = options;
 
   const container = scene.add.container(x, y);
   const face = scene.add.graphics();
+  const iconGraphics = scene.add.graphics();
   const left = align === 'left';
-  const text = scene.add.text(left ? -width / 2 + BUTTON_PAD : 0, 0, label, {
+  const text = scene.add.text(left ? -width / 2 + BUTTON_PAD : 0, 0, icon ? '' : label, {
     fontFamily: FONT.family,
     fontSize: `${fontSize}px`,
     color: TEXT_COLORS.normal,
@@ -130,7 +140,7 @@ export function createButton(scene, options) {
     fontSize: `${Math.round(fontSize * 0.85)}px`,
     color: TEXT_COLORS.dim,
   }).setOrigin(1, 0.5);
-  container.add([face, text, markText]);
+  container.add([face, iconGraphics, text, markText]);
 
   container.enabled = true;
   container.hovered = false;
@@ -156,6 +166,13 @@ export function createButton(scene, options) {
     if (!container.enabled) color = TEXT_COLORS.disabled;
     else if (container.selected) color = TEXT_COLORS.accent;
     text.setColor(color);
+    // アイコンも文字と同じ規則で色を変える。Graphics は数値の色を取るので
+    // `TEXT_COLORS` に対応する `COLORS` の値を使う。
+    let iconColor = COLORS.text;
+    if (!container.enabled) iconColor = COLORS.buttonTextDisabled;
+    else if (container.selected) iconColor = COLORS.accent;
+    iconGraphics.clear();
+    if (icon) icon(iconGraphics, iconColor);
     // 印もラベルと同じ状態に連れていく。選んだ行だけ印が地の色のまま残ると、
     // 行が選ばれていることが伝わりにくい（TODO-027）。
     let markColor = TEXT_COLORS.dim;
@@ -166,14 +183,35 @@ export function createButton(scene, options) {
 
   container.setSize(width, height);
   container.setInteractive({ useHandCursor: true });
-  container.on('pointerover', () => { container.hovered = true; redraw(); });
-  container.on('pointerout', () => { container.hovered = false; container.pressed = false; redraw(); });
-  container.on('pointerdown', () => { container.pressed = true; redraw(); });
-  container.on('pointerup', () => {
+  // 説明はマウスとタッチで出し方を分ける（`pointer.wasTouch` で見分ける）。
+  // Phaser はタッチでも over / out を出すので、タッチの over では出さず、
+  // out でも消さない（押した直後に出した説明を、指を離したときの out で
+  // すぐ消してしまわないため）。押せないボタンでも出す——なぜ押せないかは
+  // 分からなくても、何のボタンかは分かるように。
+  const tip = () => (tooltip ? scene.tooltip : null);
+  container.on('pointerover', (pointer) => {
+    container.hovered = true;
+    redraw();
+    if (!pointer.wasTouch) tip()?.showLater(container, tooltip);
+  });
+  container.on('pointerout', (pointer) => {
+    container.hovered = false;
+    container.pressed = false;
+    redraw();
+    if (!pointer.wasTouch) tip()?.hide();
+  });
+  container.on('pointerdown', () => {
+    container.pressed = true;
+    redraw();
+    tip()?.hide();
+  });
+  container.on('pointerup', (pointer) => {
     const wasPressed = container.pressed;
     container.pressed = false;
     redraw();
     if (wasPressed && container.enabled) onClick();
+    // 動作のあとに出すので、音の ON / OFF は切り替えたあとの説明になる。
+    if (wasPressed && pointer.wasTouch) tip()?.flash(container, tooltip);
   });
 
   container.setEnabled = (value) => {
@@ -183,6 +221,15 @@ export function createButton(scene, options) {
   };
   container.setLabel = (value) => {
     text.setText(value);
+    return container;
+  };
+  container.setIcon = (value) => {
+    icon = value;
+    redraw();
+    return container;
+  };
+  container.setTooltip = (value) => {
+    tooltip = value;
     return container;
   };
   container.setMark = (value) => {
@@ -197,4 +244,75 @@ export function createButton(scene, options) {
 
   redraw();
   return container;
+}
+
+/**
+ * ボタンの説明を出す枠。**1 シーンに 1 つだけ作り、シーンの `tooltip` に持たせる**
+ * （TODO-042）。ボタンごとに作ると、隣のボタンへ移ったときに前の説明が
+ * 残って重なりうるため。状態（消すまでのタイマー）も
+ * この Container に持たせ、モジュールには置かない。
+ *
+ * HUD は画面の上端にあるので、ボタンの下へ出す。左右は画面の内側に収める。
+ * 当たり判定は持たせない（説明がほかのボタンを塞がないように）。
+ * 重なりの順は呼ぶ側が `setDepth()` で決める。
+ */
+export function createTooltip(scene) {
+  const box = scene.add.container(0, 0).setVisible(false);
+  const back = scene.add.graphics();
+  const label = scene.add.text(TOOLTIP.padX, TOOLTIP.padY, '', {
+    fontFamily: FONT.family,
+    fontSize: `${FONT.small}px`,
+    color: TEXT_COLORS.normal,
+  });
+  box.add([back, label]);
+  box.timer = null;
+
+  const cancel = () => {
+    if (box.timer) box.timer.remove(false);
+    box.timer = null;
+  };
+
+  const show = (button, text) => {
+    label.setText(text);
+    const width = label.width + TOOLTIP.padX * 2;
+    const height = label.height + TOOLTIP.padY * 2;
+    back.clear();
+    back.fillStyle(COLORS.panel, 1);
+    back.fillRoundedRect(0, 0, width, height, 6);
+    back.lineStyle(2, COLORS.buttonEdge, 1);
+    back.strokeRoundedRect(0, 0, width, height, 6);
+    const x = Phaser.Math.Clamp(button.x - width / 2,
+      SCREEN.margin, SCREEN.width - SCREEN.margin - width);
+    box.setPosition(x, button.y + button.height / 2 + TOOLTIP.gap);
+    box.setVisible(true);
+  };
+
+  /** マウス: 少し待ってから出す。横切っただけで出さないため。 */
+  box.showLater = (button, text) => {
+    cancel();
+    box.timer = scene.time.delayedCall(TOOLTIP.hoverDelayMs, () => {
+      box.timer = null;
+      show(button, text);
+    });
+  };
+  /** タッチ: ホバーが無いので、押した動作と一緒に出す（時間は `TOOLTIP.touchMs` の説明）。 */
+  box.flash = (button, text) => {
+    cancel();
+    show(button, text);
+    box.timer = scene.time.delayedCall(TOOLTIP.touchMs, () => {
+      box.timer = null;
+      box.hide();
+    });
+  };
+  box.hide = () => {
+    cancel();
+    box.setVisible(false);
+  };
+  // ボタンから 1 回の移動で Canvas の外へ出ると `pointerout` が来ないので、
+  // 説明が盤の上に残らないよう `gameout` でも消す。
+  scene.input.on(Phaser.Input.Events.GAME_OUT, box.hide);
+  box.once(Phaser.GameObjects.Events.DESTROY, () => {
+    scene.input.off(Phaser.Input.Events.GAME_OUT, box.hide);
+  });
+  return box;
 }

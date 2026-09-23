@@ -64,7 +64,8 @@ Chromium を動かして撮る。TODO-034）。
 | `src/data/8x8.js` ・ `src/data/6x10.js` | 盤ごとの全解（代表形 65 件 / 2339 件）。**手で書き換えない** |
 | `src/audio.js` | 効果音の合成。最初のユーザー操作で `unlock()` を呼ぶ |
 | `src/storage.js` | クリア記録（最短時間・履歴・見つけた解の番号・おまかせで導いた解の番号）、色の組（TODO-015）、遊びかけの盤面（TODO-030）の保存（失敗しても遊べるようにする） |
-| `src/ui.js` | ボタンと枠の組み立て。5 つのシーンが同じ見た目を使うため |
+| `src/ui.js` | ボタンと枠の組み立て。5 つのシーンが同じ見た目を使うため。HUD のボタンの説明（ツールチップ。TODO-042） |
+| `src/icons.js` | HUD のボタンのアイコン。Graphics API の線画（TODO-042） |
 | `src/scenes/boot.js` | マス目テクスチャの生成。ピースの色ごとに 1 枚 |
 | `src/scenes/title.js` | タイトル |
 | `src/scenes/game.js` | 本編。Phaser とのつなぎに徹し、判定は `logic.js` に任せる |

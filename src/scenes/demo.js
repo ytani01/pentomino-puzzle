@@ -19,6 +19,7 @@ import {
 import { createBoard, solveSteps } from '../logic.js';
 import * as audio from '../audio.js';
 import { createPanel, createVersionText } from '../ui.js';
+import { ICONS } from '../icons.js';
 import GameScene, { DEPTH } from './game.js';
 
 /** 速さの並び。HUD のボタンの前半 3 つと同じ順。 */
@@ -134,18 +135,16 @@ export default class DemoScene extends GameScene {
       color: TEXT_COLORS.normal,
     }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
 
-    const labels = [
-      'ゆっくり', '速い', '最速',
-      '次の解を探す', audio.isMuted() ? '音 OFF' : '音 ON', 'タイトルへ',
-    ];
-    const actions = [
-      ...SPEEDS.map((speed) => () => this.selectSpeed(speed)),
-      () => this.searchNext(),
-      () => this.toggleMute(),
+    const speedTips = { slow: 'ゆっくり', fast: '速い', fastest: '最速' };
+    this.buttons = this.createHudButtons([
+      ...SPEEDS.map((speed) => ({
+        icon: ICONS[speed], tooltip: speedTips[speed], onClick: () => this.selectSpeed(speed),
+      })),
+      { icon: ICONS.next, tooltip: '次の解を探す', onClick: () => this.searchNext() },
+      { ...this.muteFace(audio.isMuted()), onClick: () => this.toggleMute() },
       // 失うものが無いので確認を出さずに戻る。
-      () => this.goToTitle(),
-    ];
-    this.buttons = this.createHudButtons(labels, actions);
+      { icon: ICONS.title, tooltip: 'タイトルへ', onClick: () => this.goToTitle() },
+    ]);
     this.speedButtons = this.buttons.slice(0, SPEEDS.length);
     this.nextButton = this.buttons[3];
     this.muteButton = this.buttons[4];
