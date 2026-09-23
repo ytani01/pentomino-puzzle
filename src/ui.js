@@ -117,6 +117,9 @@ const CHOICE_BUTTON = {
  * タイトルの盤・色の選択だけだった頃はあちらの private メソッドだったが、
  * 記録の画面（TODO-008）も盤を切り替えるのに同じ行を使うのでここへ寄せた。
  * 「今どれが選ばれているか」の見え方を 2 つの画面で揃えるため。
+ *
+ * 選択肢に `icon` があれば文字の代わりに図を描き、`tooltip` があれば説明を出す
+ * （タイトルの盤・色。TODO-046）。図にするなら名前を説明に回すこと。
  */
 export function createChoiceRow(scene, cx, y, label, choices, onSelect) {
   const buttons = choices.length * CHOICE_BUTTON.width
@@ -135,6 +138,8 @@ export function createChoiceRow(scene, cx, y, label, choices, onSelect) {
       width: CHOICE_BUTTON.width,
       height: CHOICE_BUTTON.height,
       label: choice.label,
+      icon: choice.icon,
+      tooltip: choice.tooltip,
       onClick: () => onSelect(choice),
     });
     button.choiceKey = choice.key;

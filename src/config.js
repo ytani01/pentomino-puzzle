@@ -600,6 +600,26 @@ export const ICON = {
 };
 
 /**
+ * タイトルの盤・色の選択肢に描く図（`src/icons.js`。TODO-046）。
+ *
+ * - `boardCell` / `boardGap` … 盤の図の 1 マスと、マスの間の隙間。8 マスで
+ *   ボタンの高さ（46）に余白が残る大きさ
+ * - `domino` … 色の見本の小片（2×1）の 1 マス
+ * - `dominoGap` … 小片どうしの間
+ * - `dominoStagger` … 小片を 1 つおきに上下へずらす量。一列に揃えると
+ *   帯に見えて、別々の小片に見えにくいため
+ * - `pieces` … 見本に使うピース。12 色の並びから色相が離れたものを選んである
+ */
+export const CHOICE_ICON = {
+  boardCell: 4.8,
+  boardGap: 1,
+  domino: 13,
+  dominoGap: 10,
+  dominoStagger: 4,
+  pieces: ['F', 'P', 'V'],
+};
+
+/**
  * HUD のボタンの説明（ツールチップ。TODO-042）。
  *
  * - `hoverDelayMs` … マウスを載せてから出すまで。横切っただけで出さないため

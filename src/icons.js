@@ -1,5 +1,5 @@
 /**
- * HUD のボタンのアイコン（TODO-042）。
+ * HUD のボタンのアイコン（TODO-042）と、タイトルの盤・色の選択肢の図（TODO-046）。
  *
  * Unicode の記号や絵文字は OS やフォントで形が変わり、色の組とも合わないので、
  * Graphics API の線画で描く。どれも `(graphics, color) => void` で、
@@ -10,7 +10,9 @@
  * やり直しは閉じかけた円にして、並べたときに見分けられるようにしてある。
  */
 
-import { ICON } from './config.js';
+import { CHOICE_ICON, GLASS, ICON, NEON, PIECES, TILE } from './config.js';
+import { boardCells } from './logic.js';
+import { darken, pieceColor } from './scenes/boot.js';
 
 const U = ICON.size / 2;
 
@@ -159,3 +161,53 @@ export const ICONS = {
     g.lineBetween(0.15 * U, 0.15 * U, 0.85 * U, 0.85 * U);
   },
 };
+
+/**
+ * タイトルで選ぶ盤の形（TODO-046）。文字の「8×8」より、穴のある正方形と
+ * 横長の長方形を見せたほうが、どちらの盤か一目で分かる。マスは選択の状態で
+ * 変わる色（`color`）で塗り、選んだ盤が文字と同じく強調色になるようにする。
+ */
+export function boardIcon(board) {
+  const { boardCell: cell, boardGap: gap } = CHOICE_ICON;
+  const cells = boardCells(board);
+  return (g, color) => {
+    g.fillStyle(color, 1);
+    for (const [row, col] of cells) {
+      g.fillRect((col - board.cols / 2) * cell + gap / 2, (row - board.rows / 2) * cell + gap / 2,
+                 cell - gap, cell - gap);
+    }
+  };
+}
+
+/**
+ * タイトルで選ぶ色の組の見本（TODO-046）。2×1 の小片を 3 つ描く。
+ * 塗り・マスの区切り・外周の色と太さは、盤のマス目（`boot.js`）とピースの
+ * 外周（`game.js`）に揃える。外周は本編と同じく線の太さの半分だけ内側へ寄せる。
+ * 12 色の立体感、ガラスの光の筋、ネオンのにじみは、この大きさでは潰れるので描かない。
+ *
+ * マス目テクスチャを縮めて貼らないのは、蛍光の組の光る縁が細くなって暗く
+ * 沈むため。見本の色は組ごとに決まっているので、選択の状態の `color` は使わない
+ * （枠の強調色で選択が分かる）。
+ */
+export function paletteIcon(palette) {
+  const { domino: cell, dominoGap: gap, dominoStagger: stagger, pieces } = CHOICE_ICON;
+  const step = cell * 2 + gap;
+  const inset = palette.outlineWidth / 2;
+  return (g) => {
+    pieces.forEach((name, i) => {
+      const color = pieceColor(palette, PIECES.find((piece) => piece.name === name));
+      const x = (i - (pieces.length - 1) / 2) * step - cell;
+      const y = (i % 2 ? -stagger : stagger) - cell / 2;
+      const alpha = palette.glass ? GLASS.fillAlpha : 1;
+      const fill = palette.neon ? darken(color, NEON.fillDarken) : color;
+      g.fillStyle(fill, alpha);
+      g.fillRect(x, y, cell * 2, cell);
+      if (palette.glass) g.lineStyle(TILE.border, GLASS.gridColor, GLASS.gridAlpha);
+      else if (palette.neon) g.lineStyle(TILE.border, color, NEON.gridAlpha);
+      else g.lineStyle(TILE.border, darken(color, TILE.edgeDarken), 1);
+      g.lineBetween(x + cell, y, x + cell, y + cell);
+      g.lineStyle(palette.outlineWidth, darken(color, palette.outlineDarken), 1);
+      g.strokeRect(x + inset, y + inset, cell * 2 - inset * 2, cell - inset * 2);
+    });
+  };
+}

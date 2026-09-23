@@ -14,8 +14,9 @@ import { formatTime } from '../logic.js';
 import { loadBest, loadProgress, savePalette } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  createButton, createChoiceRow, createPanel, createVersionText, stackTops,
+  createButton, createChoiceRow, createPanel, createTooltip, createVersionText, stackTops,
 } from '../ui.js';
+import { boardIcon, paletteIcon } from '../icons.js';
 
 /**
  * 上から順に積む部品。`height` は部品の高さ、`gap` は次の部品までの間隔で、
@@ -121,11 +122,16 @@ export default class TitleScene extends Phaser.Scene {
     // 変えられない（途中の盤面を捨てる確認を出さずに済ませるため。TODO-009）。
     // 盤と色の 2 行を同じ形にしてあるのは、どちらも「今どれが選ばれているか」を
     // 同じ見え方で示すため（TODO-015）。
-    this.boardButtons = createChoiceRow(this, cx, centerOf('size'), '盤',
-                                        Object.values(BOARDS),
+    // 選択肢は文字でなく図で見せ、名前は説明に回す（TODO-046）。
+    const boardChoices = Object.values(BOARDS).map((board) => ({
+      ...board, icon: boardIcon(board), tooltip: `${board.label}（${board.note}）`,
+    }));
+    const paletteChoices = Object.values(PALETTES).map((palette) => ({
+      ...palette, icon: paletteIcon(palette), tooltip: palette.label,
+    }));
+    this.boardButtons = createChoiceRow(this, cx, centerOf('size'), '盤', boardChoices,
                                         (choice) => this.selectBoard(choice.key));
-    this.paletteButtons = createChoiceRow(this, cx, centerOf('palette'), '色',
-                                          Object.values(PALETTES),
+    this.paletteButtons = createChoiceRow(this, cx, centerOf('palette'), '色', paletteChoices,
                                           (choice) => this.selectPalette(choice.key));
 
     this.bestText = this.add.text(cx, centerOf('best'), '', {
@@ -205,6 +211,8 @@ export default class TitleScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-ENTER', this.start, this);
 
     createVersionText(this);
+    // 盤・色の説明。最後に作り、ほかの部品より手前に出す。
+    this.tooltip = createTooltip(this);
   }
 
   /** 盤を選び直す。選んだ盤は `registry` に置き、他のシーンがそこから読む。 */
@@ -231,7 +239,7 @@ export default class TitleScene extends Phaser.Scene {
     this.refreshPalette();
   }
 
-  /** 選んでいる色の組をボタンへ反映する。見本はゲーム本編で見せる。 */
+  /** 選んでいる色の組をボタンへ反映する。 */
   refreshPalette() {
     this.paletteButtons.forEach((button) => button.setSelected(button.choiceKey === this.paletteKey));
   }
