@@ -3,18 +3,17 @@
 |      | main | 担当 |
 |------|------|------|
 | 見込み | Opus 5.5 / effort high | main（実装）+ reviewer（Opus 5.5 / high）+ screens（Sonnet 5 / low） |
-| 実施 | Opus 5.5 / effort high | main（実装・撮影）+ reviewer（Opus 5.5 / high）+ screens（Sonnet 5 / low。2 回とも止めた）+ verifier（Sonnet 5 / 記載なし） |
+| 実施 | Opus 5.5 / effort high | main（実装・撮影）+ reviewer（Opus 5.5 / high）+ screens（Sonnet 5 / low。2 回とも止めた）+ verifier（Sonnet 5 / medium） |
 
 | 担当 | モデル | effort | output | cache_creation | 料金の割合 |
 |------|--------|--------|--------|----------------|-----------|
 | main | Opus 5.5 | high | 48,128 | 100,972 | 84% |
 | reviewer | Opus 5.5 | high | 4,293 | 72,208 | 10% |
 | screens | Sonnet 5 | low | 359 | 107,851 | 4% |
-| verifier | Sonnet 5 | 記載なし | 2,098 | 42,255 | 2% |
+| verifier | Sonnet 5 | medium | 2,098 | 42,255 | 2% |
 | 合計 |  |  | 54,878 | 323,286 | 概算 $9.1 |
 
 - reviewer は定義のモデルが sonnet。挙動の変わる項目のレビューなので Opus 5.5 に上書きした
-- verifier は定義（`~/.claude/agents/verifier.md`）に `effort` の行が無い
 - screens は 2 回起こし、2 回ともブラウザが固まって止めた（下の「分担の振り返り」）。
   そのため撮影は main が行い、画像の判定を verifier に分けた
 - main には、同じ時間に立てた TODO-047 と、ユーザー全体の `CLAUDE.md` への追記、
