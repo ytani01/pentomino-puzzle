@@ -700,6 +700,8 @@ export const HINT_BADGE = {
  *   音も鳴らすか。**間隔を Tween より長くしてある**のは、枝刈りで捨てる手が
  *   「置いてすぐ外す」になり、短いと滑り切る前に次の Tween に止められるため。
  *   最速は間隔が 1 フレームしか無いので滑らせない
+ * - `pauseMs` … 解を見つけた・出し切ったあと、次へ進むまで止まる時間。
+ *   タイトルへ戻るまで見続けられるように、止まったままにはしない（TODO-052）
  */
 export const DEMO = {
   speeds: {
@@ -708,6 +710,7 @@ export const DEMO = {
     fastest: { intervalMs: 0, animate: false },
   },
   defaultSpeed: 'fast',
+  pauseMs: 10000,
 };
 
 /**

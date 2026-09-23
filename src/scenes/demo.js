@@ -13,6 +13,8 @@
  * （幅優先）の generator で、`update()` が速さに
  * 応じた間隔で 1 手ずつ進める。1 フレームに 1 手までなので画面は止まらない。
  * 置いたら全解のデータで「解ける／解なし」を調べ、解なしならすぐ外す。
+ * 解を見つけたら `DEMO.pauseMs` だけ止まって次の解へ、出し切ったら同じだけ
+ * 止まって空の盤から探し直す。タイトルへ戻るまで止まらない（TODO-052）。
  * ヒント表示を入にして解く人と同じ動きで、HUD にも本編のヒント表示と同じ
  * 文字を出す（TODO-043）。解につながる手だけを選んで置かないのは、それだと
  * 試行錯誤に見えなくなるため。全解のデータが届くまでは探索を始めない。
@@ -55,7 +57,7 @@ export default class DemoScene extends GameScene {
     this.board = createBoard(this.spec);
 
     // 'loading'（全解のデータを待っている）・'running'（探している）・
-    // 'solved'（解を見つけて止まっている）・'done'（出し切った）
+    // 'solved'（解を見つけて止まっている）・'done'（出し切って止まっている）
     this.state = 'loading';
     this.steps = null;
     this.solutions = null;
@@ -90,9 +92,13 @@ export default class DemoScene extends GameScene {
   }
 
   update(_time, delta) {
-    if (this.state !== 'running') return;
-    // 追いつくために何手もまとめて進めない。1 手ずつ見せるのが目的なので。
+    if (this.state === 'loading') return;
     this.waited += delta;
+    if (this.state !== 'running') {
+      if (this.waited >= DEMO.pauseMs) this.resume();
+      return;
+    }
+    // 追いつくために何手もまとめて進めない。1 手ずつ見せるのが目的なので。
     if (this.waited < DEMO.speeds[this.speed].intervalMs) return;
     this.waited = 0;
     this.advance();
@@ -216,7 +222,8 @@ export default class DemoScene extends GameScene {
   selectSpeed(speed) {
     audio.button();
     this.speed = speed;
-    this.waited = 0;
+    // 止まっている間は待ち時間を数え直さない（速さを変えるたびに延びるため）。
+    if (this.state === 'running') this.waited = 0;
     this.refreshHud();
   }
 
@@ -260,7 +267,20 @@ export default class DemoScene extends GameScene {
   searchNext() {
     if (this.state !== 'solved') return;
     audio.button();
+    this.resume();
+  }
+
+  /**
+   * 止まっていたところから進める。出し切ったあとは generator に続きが
+   * 無いので、空の盤から探し直してタイトルへ戻るまで止めない（TODO-052）。
+   */
+  resume() {
+    if (this.state === 'done') {
+      this.startSearch();
+      return;
+    }
     this.state = 'running';
+    this.waited = 0;
     this.messageText.setText('');
     this.refreshHud();
   }
