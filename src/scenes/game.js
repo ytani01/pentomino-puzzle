@@ -9,7 +9,7 @@
 
 import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, INPUT, LAYOUTS, NEON,
-  OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, TURN_MARK, VERSION,
+  OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, TURN_MARK,
 } from '../config.js';
 import {
   boardKey, canPlace, createBoard, flip, formatTime, isSolved,
@@ -23,7 +23,7 @@ import {
   addAuto, clearProgress, loadAuto, loadFound, loadProgress, saveProgress,
 } from '../storage.js';
 import * as audio from '../audio.js';
-import { createButton, createPanel } from '../ui.js';
+import { createButton, createPanel, createVersionText } from '../ui.js';
 import { darken, pieceColor, TEX } from './boot.js';
 
 /** 重なりの順。盤の上にピース、トレイの当たり判定はその上、ドラッグ中の
@@ -82,7 +82,7 @@ export default class GameScene extends Phaser.Scene {
     this.createHud();
     this.createMessage();
     this.createConfirmDialog();
-    this.createVersionText();
+    createVersionText(this);
 
     // 全解のデータ（TODO-022）。6×10 は 139KB あるので動的 import で読む。
     // 届くまで [おまかせ] と [ヒント表示] は押せない（`refreshHud()` が見る）。
@@ -326,14 +326,6 @@ export default class GameScene extends Phaser.Scene {
         onClick: actions[index],
       }).setDepth(DEPTH.hud);
     });
-  }
-
-  createVersionText() {
-    this.add.text(this.layout.width - 12, this.layout.height - 12, VERSION, {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.small}px`,
-      color: TEXT_COLORS.dim,
-    }).setOrigin(1, 1).setAlpha(0.6);
   }
 
   createMessage() {

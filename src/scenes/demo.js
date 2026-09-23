@@ -18,7 +18,7 @@ import {
 } from '../config.js';
 import { createBoard, solveSteps } from '../logic.js';
 import * as audio from '../audio.js';
-import { createPanel } from '../ui.js';
+import { createPanel, createVersionText } from '../ui.js';
 import GameScene, { DEPTH } from './game.js';
 
 /** 速さの並び。HUD のボタンの前半 3 つと同じ順。 */
@@ -55,7 +55,7 @@ export default class DemoScene extends GameScene {
     for (const piece of this.pieces) piece.tiles.forEach((tile) => tile.disableInteractive());
     this.createHud();
     this.createMessage();
-    this.createVersionText();
+    createVersionText(this);
     this.refreshHud();
   }
 

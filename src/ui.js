@@ -6,7 +6,19 @@
  * 状態はモジュールに持たず、作った Container のプロパティに持たせる。
  */
 
-import { COLORS, FONT, TEXT_COLORS } from './config.js';
+import { COLORS, FONT, SCREEN, TEXT_COLORS, VERSION } from './config.js';
+
+/**
+ * 右下にバージョンを出す。問い合わせのときにどの版かを画面から読めるように、
+ * すべての画面に同じ位置で出す（TODO-041）。
+ */
+export function createVersionText(scene) {
+  return scene.add.text(SCREEN.width - 12, SCREEN.height - 12, VERSION, {
+    fontFamily: FONT.family,
+    fontSize: `${FONT.small}px`,
+    color: TEXT_COLORS.dim,
+  }).setOrigin(1, 1).setAlpha(0.6);
+}
 
 /**
  * 縦に積む部品の上端 `y` をまとめて出す。

@@ -8,12 +8,14 @@
 
 import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, PALETTES, PALETTE_REGISTRY_KEY,
-  SCREEN, TEXT_COLORS, VERSION,
+  SCREEN, TEXT_COLORS,
 } from '../config.js';
 import { formatTime } from '../logic.js';
 import { loadBest, loadProgress, savePalette } from '../storage.js';
 import * as audio from '../audio.js';
-import { createButton, createChoiceRow, createPanel, stackTops } from '../ui.js';
+import {
+  createButton, createChoiceRow, createPanel, createVersionText, stackTops,
+} from '../ui.js';
 
 /**
  * 上から順に積む部品。`height` は部品の高さ、`gap` は次の部品までの間隔で、
@@ -202,11 +204,7 @@ export default class TitleScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-SPACE', this.start, this);
     this.input.keyboard.on('keydown-ENTER', this.start, this);
 
-    this.add.text(SCREEN.width - 12, SCREEN.height - 12, VERSION, {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.small}px`,
-      color: TEXT_COLORS.dim,
-    }).setOrigin(1, 1).setAlpha(0.6);
+    createVersionText(this);
   }
 
   /** 盤を選び直す。選んだ盤は `registry` に置き、他のシーンがそこから読む。 */

@@ -14,7 +14,9 @@ import {
   addFound, addHistory, loadBest, saveBest, shouldRecordBest,
 } from '../storage.js';
 import * as audio from '../audio.js';
-import { createButton, createPanel, stackTops } from '../ui.js';
+import {
+  createButton, createPanel, createVersionText, stackTops,
+} from '../ui.js';
 
 /**
  * 上から順に積む部品。横画面での今までの見え方を写した値で、縦画面では
@@ -91,6 +93,7 @@ export default class ClearScene extends Phaser.Scene {
       addFound(board.key, this.no, solutions.canonical.length);
     }
     audio.fanfare();
+    createVersionText(this);
 
     const cx = SCREEN.width / 2;
     const [titleTop, panelTop, buttonTop] = stackTops(STACK, SCREEN.height, STACK_BIAS);

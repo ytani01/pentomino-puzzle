@@ -24,7 +24,9 @@ import {
   removeAuto, removeFound, removeHistory,
 } from '../storage.js';
 import * as audio from '../audio.js';
-import { createButton, createChoiceRow, createPanel } from '../ui.js';
+import {
+  createButton, createChoiceRow, createPanel, createVersionText,
+} from '../ui.js';
 import { darken, pieceColor } from './boot.js';
 
 /**
@@ -43,9 +45,11 @@ const L = SCREEN.portrait
     listWidth: 570,
     rowsPerPage: 7,
     detailY: 620,
-    boardBox: { x: 60, y: 660, width: 520, height: 350 },
-    achieveY: 1040,
-    buttonsY: 1090,
+    // ボタン列の下に右下のバージョン（`createVersionText`）の分を空けるため、
+    // 完成形の枠を 20 詰めて下の部品を上げてある（TODO-041）。
+    boardBox: { x: 60, y: 660, width: 520, height: 330 },
+    achieveY: 1020,
+    buttonsY: 1070,
   }
   : {
     headingY: 44,
@@ -194,6 +198,7 @@ export default class RecordsScene extends Phaser.Scene {
       },
     });
 
+    createVersionText(this);
     this.createConfirmDialog();
     this.reload();
   }
