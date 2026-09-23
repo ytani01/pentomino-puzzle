@@ -7,7 +7,7 @@
  */
 
 import {
-  COLORS, FONT, HINT_BADGE, SCREEN, TEXT_COLORS, TOOLTIP, VERSION,
+  ACRYLIC, COLORS, FONT, HINT_BADGE, SCREEN, TEXT_COLORS, TILE, TOOLTIP, VERSION,
 } from './config.js';
 
 /**
@@ -53,6 +53,45 @@ export function createPanel(scene, x, y, width, height, radius = 10) {
   g.lineStyle(2, COLORS.panelEdge, 1);
   g.strokeRoundedRect(x, y, width, height, radius);
   return g;
+}
+
+/**
+ * 穴に嵌めた透明アクリルふうの板（TODO-051）。本編（デモも使い回す）と
+ * 記録の完成形の 2 か所で同じ見た目にするため、ここに置く。
+ *
+ * 光の筋は板の外へはみ出さないよう、対角に沿った帯を矩形で切った多角形で
+ * 塗る（Graphics の塗りに切り抜きが無いため）。`x + y = t` の線が矩形を
+ * 横切る 2 点を結び、帯が角をまたぐときだけその角を頂点に足す。
+ */
+export function drawAcrylic(g, x, y, width, height) {
+  g.fillStyle(ACRYLIC.fill, ACRYLIC.fillAlpha);
+  g.fillRect(x, y, width, height);
+
+  const lower = (t) => ({ x: x + Math.max(0, t - height), y: y + Math.min(t, height) });
+  const upper = (t) => ({ x: x + Math.min(t, width), y: y + Math.max(0, t - width) });
+  for (const streak of ACRYLIC.streaks) {
+    const t1 = streak.from * (width + height);
+    const t2 = streak.to * (width + height);
+    const points = [lower(t1), upper(t1)];
+    if (t1 < width && width < t2) points.push({ x: x + width, y });
+    points.push(upper(t2), lower(t2));
+    if (t1 < height && height < t2) points.push({ x, y: y + height });
+    g.fillStyle(ACRYLIC.fill, streak.alpha);
+    g.fillPoints(points, true);
+  }
+
+  // 右と下の厚み。上と左を明るく、下と右を暗くするピースのマス（`TILE`）に揃える。
+  const th = ACRYLIC.thickness;
+  g.fillStyle(TILE.shadow, ACRYLIC.thicknessAlpha);
+  g.fillRect(x, y + height - th, width, th);
+  g.fillRect(x + width - th, y, th, height - th);
+
+  const inset = ACRYLIC.innerInset;
+  g.lineStyle(ACRYLIC.innerWidth, ACRYLIC.edge, ACRYLIC.innerAlpha);
+  g.strokeRect(x + inset, y + inset, width - inset * 2, height - inset * 2);
+  const half = ACRYLIC.edgeWidth / 2;
+  g.lineStyle(ACRYLIC.edgeWidth, ACRYLIC.edge, ACRYLIC.edgeAlpha);
+  g.strokeRect(x + half, y + half, width - ACRYLIC.edgeWidth, height - ACRYLIC.edgeWidth);
 }
 
 /**

@@ -26,7 +26,6 @@ import { loadPalette } from '../storage.js';
 export const TEX = {
   piece: (palette, name, cell) => `cell-${palette.key}-${palette.mono === null ? name : 'mono'}-${cell}`,
   boardCell: (cell) => `board-cell-${cell}`,
-  hole: (cell) => `board-hole-${cell}`,
   ghost: (cell) => `cell-ghost-${cell}`,
 };
 
@@ -67,10 +66,9 @@ export default class BootScene extends Phaser.Scene {
     this.scene.start('Title');
   }
 
-  /** 盤の地（マス・穴）と、置ける場所に出す影。色の組に依らない。 */
+  /** 盤の地（マス）と、置ける場所に出す影。色の組に依らない。 */
   makeBoardTiles(size) {
     this.makeTile(TEX.boardCell(size), size, COLORS.boardCell, false);
-    this.makeTile(TEX.hole(size), size, COLORS.hole, false);
     this.makeTile(TEX.ghost(size), size, COLORS.ghost, true);
   }
 

@@ -24,7 +24,7 @@ import {
 } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  createButton, createHintBadge, createPanel, createTooltip, createVersionText,
+  createButton, createHintBadge, createPanel, createTooltip, createVersionText, drawAcrylic,
 } from '../ui.js';
 import { ICONS } from '../icons.js';
 import { darken, pieceColor, TEX } from './boot.js';
@@ -140,12 +140,17 @@ export default class GameScene extends Phaser.Scene {
     const { x, y, cell } = this.layout.board;
     for (let row = 0; row < this.board.rows; row += 1) {
       for (let col = 0; col < this.board.cols; col += 1) {
-        const playable = this.board.grid[row * this.board.cols + col] === null;
-        this.add.image(x + col * cell, y + row * cell,
-                       playable ? TEX.boardCell(cell) : TEX.hole(cell))
+        // 穴のマスは描かず、下の枠の地をアクリルの板越しに見せる（TODO-051）。
+        if (this.board.grid[row * this.board.cols + col] !== null) continue;
+        this.add.image(x + col * cell, y + row * cell, TEX.boardCell(cell))
           .setOrigin(0)
           .setDepth(DEPTH.board);
       }
+    }
+    const { hole } = this.spec;
+    if (hole) {
+      drawAcrylic(this.add.graphics().setDepth(DEPTH.board),
+                  x + hole.col * cell, y + hole.row * cell, hole.cols * cell, hole.rows * cell);
     }
   }
 

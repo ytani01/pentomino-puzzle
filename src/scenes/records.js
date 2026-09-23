@@ -14,7 +14,7 @@
  */
 
 import {
-  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, LAYOUTS, NEON, PALETTES,
+  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, HOLE, LAYOUTS, NEON, PALETTES,
   PALETTE_REGISTRY_KEY, PIECES, SCREEN, TEXT_COLORS,
 } from '../config.js';
 import { formatTime } from '../logic.js';
@@ -25,7 +25,7 @@ import {
 } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  createButton, createChoiceRow, createPanel, createVersionText,
+  createButton, createChoiceRow, createPanel, createVersionText, drawAcrylic,
 } from '../ui.js';
 import { darken, pieceColor } from './boot.js';
 
@@ -555,9 +555,10 @@ export default class RecordsScene extends Phaser.Scene {
       for (let col = 0; col < board.cols; col += 1) {
         const ch = at(row, col);
         const piece = PIECE_BY_NAME.get(ch);
+        // 穴は塗らず、あとでアクリルの板を重ねる（TODO-051）。
+        if (ch === HOLE) continue;
         let color = COLORS.boardCell;
-        if (ch === '#') color = COLORS.hole;
-        else if (piece) color = pieceColor(this.palette, piece);
+        if (piece) color = pieceColor(this.palette, piece);
         // ネオンは本編と同じく地を沈め、外周だけを明るく残す（TODO-039）。
         if (piece && this.palette.neon) color = darken(color, NEON.fillDarken);
         this.mini.fillStyle(color, 1);
@@ -586,6 +587,12 @@ export default class RecordsScene extends Phaser.Scene {
           this.mini.lineBetween(x + cell - half, y, x + cell - half, y + cell);
         }
       }
+    }
+
+    if (board.hole) {
+      const { hole } = board;
+      drawAcrylic(this.mini, originX + hole.col * cell, originY + hole.row * cell,
+                  hole.cols * cell, hole.rows * cell);
     }
 
     this.mini.lineStyle(2, COLORS.panelEdge, 1);

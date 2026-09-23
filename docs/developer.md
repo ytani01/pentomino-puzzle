@@ -24,7 +24,7 @@ src/
     6x10.js           6×10 の全解（2339 件）。同上
   audio.js            Web Audio API による効果音
   storage.js          クリア記録と遊びかけの保存
-  ui.js               ボタンと枠（5 つのシーンで共通）
+  ui.js               ボタンと枠（5 つのシーンで共通）、穴のアクリルの板
   icons.js            HUD のボタンのアイコンと、タイトルの盤・色の選択肢の図
   scenes/
     boot.js           マス目テクスチャの生成

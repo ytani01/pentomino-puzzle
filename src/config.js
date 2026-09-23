@@ -189,7 +189,6 @@ export const COLORS = {
   panelEdge: 0x333b52,
   boardCell: 0x2b3145,
   boardCellEdge: 0x3c445e,
-  hole: 0x101219,
   ghost: 0xffffff,
   danger: 0xff5555,
   success: 0x3fbf6e,
@@ -490,6 +489,32 @@ export const GLASS = {
   streaks: [
     { from: 0.42, to: 0.72, alpha: 0.16 },
     { from: 0.86, to: 0.98, alpha: 0.1 },
+  ],
+};
+
+/**
+ * 8×8 の中央の穴に置く、透明アクリルふうの板（TODO-051）。
+ *
+ * 穴を暗く塗ると「マスが欠けている」ように見えるだけなので、動かせない
+ * 1 枚の板が嵌まっていると見せる。下の枠（パネル）の地がほぼそのまま
+ * 透けるよう、塗りはごく薄くする（`fillAlpha`）。板らしさは外周の縁、
+ * 内側の明るい縁、右下の厚みの影、斜めの光の筋で出す。筋の位置は
+ * `GLASS.streaks` と同じく、板の対角に対する割合。
+ */
+export const ACRYLIC = {
+  fill: 0xdfefff,
+  fillAlpha: 0.07,
+  edge: 0xdfefff,
+  edgeAlpha: 0.55,
+  edgeWidth: 2,
+  innerInset: 5,
+  innerAlpha: 0.25,
+  innerWidth: 1,
+  thickness: 3,
+  thicknessAlpha: 0.35,
+  streaks: [
+    { from: 0.3, to: 0.48, alpha: 0.12 },
+    { from: 0.56, to: 0.62, alpha: 0.08 },
   ],
 };
 
