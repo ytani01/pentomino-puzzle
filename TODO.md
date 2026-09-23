@@ -28,7 +28,7 @@ Boot は一瞬で切り替わるので対象外。分岐は変わらないので
 
 |      | main | 担当 |
 |------|------|------|
-| 見込み | Opus 5.5 / effort 記載なし | implementer（Opus 5.5 / medium）+ reviewer（Opus 5.5 / high）+ screens（Sonnet 5 / low）+ docs（Sonnet 5 / medium） |
+| 見込み | Opus 5.5 / effort 記載なし | implementer（Opus 5.5 / medium）+ reviewer（Opus 5.5 / high）+ screens（Sonnet 5 / low） |
 
 - [ ] 本編とデモの HUD のボタン（`createHudButtons()` を通る 12 個。音とタイトルへは共通）を
       文字からアイコンに替える。アイコンは Graphics API で描く
@@ -36,7 +36,9 @@ Boot は一瞬で切り替わるので対象外。分岐は変わらないので
 - [ ] タッチ端末では、押したときに動作させつつ説明を少しの間だけ出す
 - [ ] screens に横 568x320・縦 390x844 で本編とデモを撮らせ、アイコンの見分けと
       説明の出る位置（画面からはみ出さないか）を確かめる
-- [ ] docs に `README.md` と `docs/developer.md` のボタンの説明を合わせさせる
+- [ ] implementer に `README.md` と `docs/developer.md` のボタンの説明も合わせさせる
+      （docs の担当は立てない。直すのは数行で、コードを書いた本人なら読み直しが要らない。
+      文書とコードの食い違いは reviewer が差分で見る）
 
 背景（立てるときに決めたこと）:
 
