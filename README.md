@@ -85,7 +85,7 @@ tools/                開発時にだけ使う（公開しない）
   window-shim.mjs     Node から src/ を読むためのダミーの window
 tests.html            計算のテスト
 docs/developer.md     画面の用語、全解のデータ、GitHub 上の設定
-TODO.md               進行中の項目と、完了済みの目次（archives/todo/ に本体）
+TODO.md               進行中の項目（決着したものは archives/todo/、一覧は archives/index.md）
 ```
 
 `src/data/*.js` は**手で書き換えない**。作り直し方と、いつ作り直すのかは
