@@ -249,19 +249,54 @@ const HUD_BUTTON_HEIGHT = 44;
 const HUD_REMAIN_X = 140;  // 段の中身の左端から見た「残り n」の位置
 const HUD_STATUS_X = 250;  // 同じく、解の有無（TODO-013）の位置
 const MESSAGE_BAND = 40;   // 画面の下端に空ける、メッセージ 1 行ぶんの帯
-const TRAY_SPAN = 5;       // ペントミノは縦横どちらにも最大 5 マス（`I` の向き次第）
-const TRAY_SLOT_PAD = 12;  // トレイの 1 スロットで、ピースの周りに空ける分
+const TRAY_SLOT_PAD = 6;   // トレイの 1 スロットで、ピースの周りに空ける分
+                           // 12 から詰めた。指を動かす距離を縮めたく、間が狭くても掴みやすさは落ちない（TODO-053）
 const TRAY_CELL_MAX = 20;  // トレイのマスの上限。TODO-006 で掴みやすさを見て決めた値で、
                            // これより大きくしても掴みやすさは変わらず場所を食うだけ
 
-/** トレイの 1 スロットの一辺から、そこへ収まるマスの大きさを出す。 */
-function trayCellFor(slot) {
-  return Math.min(TRAY_CELL_MAX, Math.floor((slot - TRAY_SLOT_PAD) / TRAY_SPAN));
-}
+/**
+ * トレイのスロットを、盤に近い棚から詰めて並べる（TODO-053）。
+ *
+ * 等分のスロットをやめたのは、トレイの枠が広いほどピースどうしが離れ、
+ * 盤まで指を動かす距離が延びるため。スロットの一辺はピースの長い辺で決める。
+ * 回しても長い辺は変わらないので、どの向きにしてもはみ出さない。
+ * 大きい順に並べるのは、棚の奥行き（その棚で一番大きいスロット）を無駄にしないため。
+ *
+ * 返す座標は、沿う向き `along` を 0〜`length`、奥行き `depth` を盤の側の端から
+ * 測ったもの。画面の座標へは `makeLayout()` が盤の位置が決まってから直す。
+ */
+function packTray(length) {
+  const longSides = PIECES.map(({ cells }) => 1 + Math.max(
+    ...cells.map(([r]) => r), ...cells.map(([, c]) => c)));
+  let cell = TRAY_CELL_MAX;
+  while (Math.max(...longSides) * cell + TRAY_SLOT_PAD > length) cell -= 1;
 
-/** 逆に、マスの大きさから 1 スロットに要る一辺を出す。 */
-function traySlotFor(cell) {
-  return cell * TRAY_SPAN + TRAY_SLOT_PAD;
+  const order = longSides.map((_, i) => i)
+    .sort((a, b) => longSides[b] - longSides[a]);  // 安定ソートなので同じ大きさは PIECES の順
+  const shelves = [];
+  let shelf = null;
+  for (const i of order) {
+    const size = longSides[i] * cell + TRAY_SLOT_PAD;
+    if (!shelf || shelf.used + size > length) {
+      shelf = { used: 0, depth: 0, items: [] };
+      shelves.push(shelf);
+    }
+    shelf.items.push({ i, size, along: shelf.used });
+    shelf.used += size;
+    shelf.depth = Math.max(shelf.depth, size);
+  }
+
+  const slots = [];
+  let depth = 0;
+  for (const { used, depth: shelfDepth, items } of shelves) {
+    // 沿う向きはトレイの中央へ、奥行きは棚の中で中央へ寄せる
+    const offset = (length - used) / 2;
+    for (const { i, size, along } of items) {
+      slots[i] = { along: offset + along + size / 2, depth: depth + shelfDepth / 2, size };
+    }
+    depth += shelfDepth;
+  }
+  return { cell, slots, depth };
 }
 
 /**
@@ -286,10 +321,12 @@ function screenSize(portrait) {
  * 場所の取り合いは**トレイを先に決めて、余りを全部盤に回す**。トレイは
  * ピースが掴めるだけあればよく、大きく見せたいのは盤のほうだから。
  *
- * - 横画面（盤が左・トレイが右）… トレイは高さいっぱいなので、1 スロットの
- *   **高さ**から一辺を決め、必要な幅を盤の取り分から差し引く
- * - 縦画面（盤が上・トレイが下）… トレイは幅いっぱいなので、1 スロットの
- *   **幅**から一辺を決め、必要な高さを盤の取り分から差し引く
+ * - 横画面（盤が左・トレイが右）… トレイは高さいっぱいなので、スロットを
+ *   縦に詰めて棚にし、棚の幅の合計を盤の取り分から差し引く
+ * - 縦画面（盤が上・トレイが下）… トレイは幅いっぱいなので、スロットを
+ *   横に詰めて棚にし、棚の高さの合計を盤の取り分から差し引く
+ *
+ * スロットは `packTray()` が詰めて並べ、盤の側の端から置く（TODO-053）。
  */
 export function makeLayout({ portrait, board, buttons = HUD_BUTTONS }) {
   const { width, height } = screenSize(portrait);
@@ -331,21 +368,18 @@ export function makeLayout({ portrait, board, buttons = HUD_BUTTONS }) {
   const top = hud.y + hud.height + GAP;
   const bottom = height - MESSAGE_BAND;
 
-  // 12 個をどう並べるかは、縦横それぞれで盤に残る場所が一番広くなる形。
-  // 縦画面を 6 列 2 段にすると 1 スロットが横に狭まり、`I` の 5 マスを
-  // 収めるためにトレイのマスが 17 まで縮む（4 列 3 段なら 20 のまま）。
-  const tray = portrait ? { cols: 4, rows: 3 } : { cols: 3, rows: 4 };
+  // トレイに要る奥行き（棚の合計）だけを盤の取り分から引く。
+  const trayLength = portrait
+    ? width - MARGIN * 2 - PANEL_PAD * 2
+    : (bottom - top) - PANEL_PAD * 2;
+  const tray = packTray(trayLength);
   let boardBoxWidth;
   let boardBoxHeight;
   if (portrait) {
-    tray.cell = trayCellFor((width - MARGIN * 2 - PANEL_PAD * 2) / tray.cols);
     boardBoxWidth = width - MARGIN * 2;
-    boardBoxHeight = (bottom - top) - GAP
-      - (traySlotFor(tray.cell) * tray.rows + PANEL_PAD * 2);
+    boardBoxHeight = (bottom - top) - GAP - (tray.depth + PANEL_PAD * 2);
   } else {
-    tray.cell = trayCellFor(((bottom - top) - PANEL_PAD * 2) / tray.rows);
-    boardBoxWidth = (width - MARGIN * 2) - GAP
-      - (traySlotFor(tray.cell) * tray.cols + PANEL_PAD * 2);
+    boardBoxWidth = (width - MARGIN * 2) - GAP - (tray.depth + PANEL_PAD * 2);
     boardBoxHeight = bottom - top;
   }
 
@@ -366,7 +400,8 @@ export function makeLayout({ portrait, board, buttons = HUD_BUTTONS }) {
     ? top
     : top + Math.round(((bottom - top) - boardPanel.height) / 2);
 
-  // トレイの枠は残りを全部使う（`traySlotFor` で見積もった分よりは必ず広い）。
+  // トレイの枠は残りを全部使う（棚の奥行きの合計よりは必ず広い）。
+  // スロットは枠の盤側の端から詰めるので、余りは盤から遠い側に出る。
   const trayPanel = portrait
     ? {
       x: MARGIN,
@@ -383,6 +418,17 @@ export function makeLayout({ portrait, board, buttons = HUD_BUTTONS }) {
   trayPanel.height = portrait ? bottom - trayPanel.y : trayPanel.height;
   trayPanel.width = portrait ? trayPanel.width : width - MARGIN - trayPanel.x;
 
+  const trayInner = {
+    x: trayPanel.x + PANEL_PAD,
+    y: trayPanel.y + PANEL_PAD,
+    width: trayPanel.width - PANEL_PAD * 2,
+    height: trayPanel.height - PANEL_PAD * 2,
+  };
+  // PIECES と同じ順。`piece.slot` がそのまま添字になる
+  const slots = tray.slots.map(({ along, depth, size }) => (portrait
+    ? { x: trayInner.x + along, y: trayInner.y + depth, size }
+    : { x: trayInner.x + depth, y: trayInner.y + along, size }));
+
   return {
     width,
     height,
@@ -392,15 +438,7 @@ export function makeLayout({ portrait, board, buttons = HUD_BUTTONS }) {
     hud,
     board: { x: boardPanel.x + PANEL_PAD, y: boardPanel.y + PANEL_PAD, cell },
     boardPanel,
-    tray: {
-      x: trayPanel.x + PANEL_PAD,
-      y: trayPanel.y + PANEL_PAD,
-      width: trayPanel.width - PANEL_PAD * 2,
-      height: trayPanel.height - PANEL_PAD * 2,
-      cols: tray.cols,
-      rows: tray.rows,
-      cell: tray.cell,
-    },
+    tray: { ...trayInner, cell: tray.cell, slots },
     trayPanel,
     message: { x: width / 2, y: height - MESSAGE_BAND / 2 },
     confirm: {

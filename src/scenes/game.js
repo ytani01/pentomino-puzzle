@@ -235,17 +235,14 @@ export default class GameScene extends Phaser.Scene {
   /**
    * トレイのスロット全体を当たり判定にする。ピースの絵は 11px 幅の細い形にも
    * なりうるが（`I` の縦向きなど）、指のタップ目標としては狭すぎるため、
-   * スロット全体を覆う透明な矩形で受ける。`piece.slot` は作られてから
-   * 変わらないので、矩形とピースは 1 対 1 のまま固定でよい。
+   * スロット全体を覆う透明な矩形で受ける。スロットはピースの長い辺に合わせた
+   * 正方形で、詰めて並べてあるので隣と重ならない（`packTray()`。TODO-053）。
+   * `piece.slot` は作られてから変わらないので、矩形とピースは 1 対 1 のまま固定でよい。
    */
   createTraySlots() {
-    const tray = this.layout.tray;
-    const slotWidth = tray.width / tray.cols;
-    const slotHeight = tray.height / tray.rows;
     this.pieces.forEach((piece) => {
-      const centerX = tray.x + (piece.slot % tray.cols) * slotWidth + slotWidth / 2;
-      const centerY = tray.y + Math.floor(piece.slot / tray.cols) * slotHeight + slotHeight / 2;
-      const hit = this.add.rectangle(centerX, centerY, slotWidth, slotHeight, 0x000000, 0)
+      const { x, y, size } = this.layout.tray.slots[piece.slot];
+      const hit = this.add.rectangle(x, y, size, size, 0x000000, 0)
         .setDepth(DEPTH.traySlot)
         .setInteractive({ useHandCursor: true });
       hit.on('pointerdown', (pointer) => {
@@ -589,10 +586,7 @@ export default class GameScene extends Phaser.Scene {
       };
     }
     const tray = this.layout.tray;
-    const slotWidth = tray.width / tray.cols;
-    const slotHeight = tray.height / tray.rows;
-    const centerX = tray.x + (piece.slot % tray.cols) * slotWidth + slotWidth / 2;
-    const centerY = tray.y + Math.floor(piece.slot / tray.cols) * slotHeight + slotHeight / 2;
+    const { x: centerX, y: centerY } = tray.slots[piece.slot];
     const size = shapeSize(piece.cells);
     const scale = tray.cell / cell;
     return {

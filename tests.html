@@ -38,7 +38,7 @@
 <div id="results"></div>
 
 <script type="module">
-import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT } from './src/config.js';
+import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT, makeLayout } from './src/config.js';
 import {
   normalize, rotateCw, flip, sameShape, orientations, turnOrder, nextTurn,
   nextPlaceableTurn, snapSpot, shapeSize, outlineEdges,
@@ -169,6 +169,55 @@ test('PALETTES は必要な項目をそろえ、既定の組がその中にあ�
 });
 
 // ---- logic：向きの計算 ---------------------------------------------------
+
+group('src/config.js — トレイのスロット（makeLayout, TODO-053）');
+
+for (const portrait of [false, true]) {
+  for (const spec of Object.values(BOARDS)) {
+    const label = `${portrait ? '縦' : '横'}画面・${spec.label}`;
+    const { board, tray } = makeLayout({ portrait, board: spec });
+    const longSide = (cells) => 1 + Math.max(...cells.map(([r]) => r), ...cells.map(([, c]) => c));
+
+    test(`スロットが 12 個あり、どの 2 つも重ならない（${label}）`, () => {
+      assertSame(tray.slots.length, PIECES.length, 'スロットの数');
+      tray.slots.forEach((a, i) => tray.slots.slice(i + 1).forEach((b, k) => {
+        const apart = Math.abs(a.x - b.x) >= (a.size + b.size) / 2
+          || Math.abs(a.y - b.y) >= (a.size + b.size) / 2;
+        assert(apart, `${PIECES[i].name} と ${PIECES[i + 1 + k].name} が重なる`);
+      }));
+    });
+
+    test(`どのスロットもトレイに収まる（${label}）`, () => {
+      tray.slots.forEach((s, i) => {
+        const inside = s.x - s.size / 2 >= tray.x && s.x + s.size / 2 <= tray.x + tray.width
+          && s.y - s.size / 2 >= tray.y && s.y + s.size / 2 <= tray.y + tray.height;
+        assert(inside, `${PIECES[i].name} がトレイからはみ出す`);
+      });
+    });
+
+    test(`どのスロットもピースの長い辺ぶんの一辺がある（${label}）`, () => {
+      tray.slots.forEach((s, i) => {
+        assert(s.size >= longSide(PIECES[i].cells) * tray.cell, `${PIECES[i].name} のスロットが狭い`);
+      });
+    });
+
+    test(`スロットは盤の側の端から詰めてある（${label}）`, () => {
+      // 盤から離れる向き（横画面は右、縦画面は下）に、どこまで広がるか。
+      const near = (sl) => (portrait ? sl.y : sl.x) - sl.size / 2;
+      const far = (sl) => (portrait ? sl.y : sl.x) + sl.size / 2;
+      const start = portrait ? tray.y : tray.x;
+      assertSame(Math.min(...tray.slots.map(near)), start, '盤に一番近いスロットの端');
+      const largest = Math.max(...tray.slots.map((sl) => sl.size));
+      assert(Math.max(...tray.slots.map(far)) - start <= largest * 3, '盤から離れすぎている');
+    });
+
+    test(`盤とトレイが重ならない（${label}）`, () => {
+      const apart = board.x + spec.cols * board.cell <= tray.x
+        || board.y + spec.rows * board.cell <= tray.y;
+      assert(apart, '盤とトレイが重なる');
+    });
+  }
+}
 
 group('src/logic.js — 向きの生成');
 
