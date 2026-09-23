@@ -155,6 +155,12 @@ test('PALETTES は必要な項目をそろえ、既定の組がその中にあ�
     assert(typeof palette.label === 'string' && palette.label !== '', `${key} の label`);
     // 単色なら色を 1 つ、色を分けるなら `null`（`PIECES[].color` を使う）。
     assert(palette.mono === null || Number.isInteger(palette.mono), `${key} の mono`);
+    // ピースごとの色を持つなら、12 種すべてにある（欠けると undefined で塗られる）。
+    if (palette.colors !== null) {
+      for (const piece of PIECES) {
+        assert(Number.isInteger(palette.colors[piece.name]), `${key} の colors.${piece.name}`);
+      }
+    }
     assert(palette.outlineDarken > 0 && palette.outlineDarken <= 1, `${key} の outlineDarken`);
     assert(palette.outlineWidth > 0, `${key} の outlineWidth`);
   }

@@ -14,7 +14,7 @@
  */
 
 import {
-  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, LAYOUTS, PALETTES,
+  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, LAYOUTS, NEON, PALETTES,
   PALETTE_REGISTRY_KEY, PIECES, SCREEN, TEXT_COLORS,
 } from '../config.js';
 import { formatTime } from '../logic.js';
@@ -553,6 +553,8 @@ export default class RecordsScene extends Phaser.Scene {
         let color = COLORS.boardCell;
         if (ch === '#') color = COLORS.hole;
         else if (piece) color = pieceColor(this.palette, piece);
+        // ネオンは本編と同じく地を沈め、外周だけを明るく残す（TODO-039）。
+        if (piece && this.palette.neon) color = darken(color, NEON.fillDarken);
         this.mini.fillStyle(color, 1);
         this.mini.fillRect(originX + col * cell, originY + row * cell, cell, cell);
       }

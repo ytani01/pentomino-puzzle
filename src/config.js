@@ -121,7 +121,10 @@ export const PIECE_SIZE = 5;
  *
  * - `mono` … 単色なら 12 種で共通に使う色、色を分けるなら `null`
  *   （`PIECES[].color` を使う）。テクスチャを 1 枚に減らせるかの判断も兼ねる
+ * - `colors` … 色を分ける組で、`PIECES[].color` の代わりに使うピース名ごとの色。
+ *   `null` なら `PIECES[].color`（TODO-039）
  * - `glass` … マスをガラスふうに焼くか（`boot.js` の `makeTile`）
+ * - `neon` … ネオンふうに焼き、外周を光らせて明滅させるか（`NEON`。TODO-039）
  * - `outlineDarken` / `outlineWidth` … 外周の縁取りの暗さと太さ。
  *   **単色のほうを暗く太くしてある**のは、同じ色どうしが接したときに外周だけが
  *   境目になるため（12 色なら色の違いも境目の手がかりになる）
@@ -131,7 +134,9 @@ export const PALETTES = {
     key: 'glass',
     label: 'ガラス',
     mono: 0x7cc4e8,
+    colors: null,
     glass: true,
+    neon: false,
     outlineDarken: 0.2,
     outlineWidth: 3,
   },
@@ -139,9 +144,29 @@ export const PALETTES = {
     key: 'colorful',
     label: '12 色',
     mono: null,
+    colors: null,
     glass: false,
+    neon: false,
     outlineDarken: 0.3,
     outlineWidth: 2,
+  },
+  // 蛍光色は `PIECES[].color` と同じく色相をほぼ等間隔に取り、並びも揃えてある。
+  // 12 色の組より彩度と明るさを上げたのは、暗く沈めたマスの上で外周だけが
+  // 光って見えるようにするため。`outlineDarken` が 1 なのは、外周が発光の
+  // 芯そのもので、暗くすると光って見えなくなるため。
+  neon: {
+    key: 'neon',
+    label: 'ネオン',
+    mono: null,
+    colors: {
+      F: 0xff3b3b, I: 0xff9a1f, L: 0xfff53d, N: 0xaaff2a,
+      P: 0x39ff14, T: 0x2bffb0, U: 0x1ff2ff, V: 0x3aa0ff,
+      W: 0x6b6bff, X: 0xb44dff, Y: 0xff3df5, Z: 0xff2d95,
+    },
+    glass: false,
+    neon: true,
+    outlineDarken: 1,
+    outlineWidth: 3,
   },
 };
 
@@ -453,6 +478,33 @@ export const GLASS = {
     { from: 0.42, to: 0.72, alpha: 0.16 },
     { from: 0.86, to: 0.98, alpha: 0.1 },
   ],
+};
+
+/**
+ * ネオンふうの見え方（`PALETTES.neon`。TODO-039）。
+ *
+ * マスは自分の色を暗く沈めて塗り（`fillDarken`）、光らせるのは外周だけにする。
+ * マスごとに光らせると 5 マスが 1 個の塊に見えなくなるため（`TILE.edgeDarken`
+ * と同じ理由）。内側の格子は自分の色を薄く引くだけ（`gridAlpha`）。
+ *
+ * `glow` は外周の芯（`PALETTES.neon.outlineWidth`）の内側へ重ねる、太くて薄い線。
+ * 太さは `OUTLINE.width` と同じく盤の 1 マスの座標系での値で、トレイでは縮む。
+ * 芯と同じく内側へ寄せるので、隣のピースにはかぶらない。角で重なった所が
+ * 濃く出るが、光のにじみとしてはそのほうが自然なので揃えていない。
+ *
+ * `blink` は `glow` の明滅。芯は明滅させない（形が読みにくくならないように）。
+ * 12 個を同じ調子で明滅させるのは、ばらばらだと盤全体がちらついて見えるため。
+ */
+export const NEON = {
+  fillDarken: 0.2,
+  gridAlpha: 0.3,
+  // 濃さは明滅の振れ幅でもある。0.16 / 0.32 では暗い時と明るい時の差が
+  // 静止画でほとんど見分けられなかった（TODO-039 の撮影）。
+  glow: [
+    { width: 18, alpha: 0.28 },
+    { width: 10, alpha: 0.5 },
+  ],
+  blink: { minAlpha: 0.2, durationMs: 1200 },
 };
 
 /**

@@ -7,7 +7,7 @@
  */
 
 import {
-  BOARD_REGISTRY_KEY, COLORS, DEFAULT_BOARD_KEY, GLASS, LAYOUTS, PALETTES,
+  BOARD_REGISTRY_KEY, COLORS, DEFAULT_BOARD_KEY, GLASS, LAYOUTS, NEON, PALETTES,
   PALETTE_REGISTRY_KEY, PIECES, TILE,
 } from '../config.js';
 import { loadPalette } from '../storage.js';
@@ -32,7 +32,8 @@ export const TEX = {
 
 /** ピース 1 種を、選んでいる色の組ではどの色で描くか。 */
 export function pieceColor(palette, piece) {
-  return palette.mono === null ? piece.color : palette.mono;
+  if (palette.mono !== null) return palette.mono;
+  return palette.colors === null ? piece.color : palette.colors[piece.name];
 }
 
 /**
@@ -78,6 +79,7 @@ export default class BootScene extends Phaser.Scene {
     for (const piece of PIECES) {
       const key = TEX.piece(palette, piece.name, size);
       if (palette.glass) this.makeGlassTile(key, size, pieceColor(palette, piece));
+      else if (palette.neon) this.makeNeonTile(key, size, pieceColor(palette, piece));
       else this.makeTile(key, size, pieceColor(palette, piece), true);
     }
   }
@@ -137,6 +139,21 @@ export default class BootScene extends Phaser.Scene {
     g.lineStyle(GLASS.innerWidth, TILE.highlight, GLASS.innerAlpha);
     g.strokeRect(inset, inset, size - inset * 2, size - inset * 2);
     g.lineStyle(TILE.border, GLASS.gridColor, GLASS.gridAlpha);
+    g.strokeRect(TILE.border / 2, TILE.border / 2, size - TILE.border, size - TILE.border);
+    g.generateTexture(key, size, size);
+    g.destroy();
+  }
+
+  /**
+   * ネオンふうの 1 マス（TODO-039）。暗く沈めた地に、自分の色の薄い格子だけ。
+   * 光るのは外周（`game.js` の `drawPieceEdges()`）で、マスの側には描かない。
+   */
+  makeNeonTile(key, size, color) {
+    if (this.textures.exists(key)) return;
+    const g = this.make.graphics({ x: 0, y: 0 }, false);
+    g.fillStyle(darken(color, NEON.fillDarken), 1);
+    g.fillRect(0, 0, size, size);
+    g.lineStyle(TILE.border, color, NEON.gridAlpha);
     g.strokeRect(TILE.border / 2, TILE.border / 2, size - TILE.border, size - TILE.border);
     g.generateTexture(key, size, size);
     g.destroy();

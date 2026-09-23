@@ -8,7 +8,7 @@
  */
 
 import {
-  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, INPUT, LAYOUTS,
+  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, INPUT, LAYOUTS, NEON,
   OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, TURN_MARK, VERSION,
 } from '../config.js';
 import {
@@ -192,6 +192,13 @@ export default class GameScene extends Phaser.Scene {
         piece.container.add(tile);
         piece.tiles.push(tile);
       }
+      // ネオンの光のにじみ（TODO-039）。芯（`outline`）の下に敷く。
+      // 他の色の組では作らない（`drawPieceEdges()` は無いものとして扱う）。
+      piece.glow = null;
+      if (this.palette.neon) {
+        piece.glow = this.add.graphics();
+        piece.container.add(piece.glow);
+      }
       piece.outline = this.add.graphics();
       piece.container.add(piece.outline);
       // 次のタップで何が起きるかの印（TODO-025）。ピースの絵に重ねるので、
@@ -202,6 +209,17 @@ export default class GameScene extends Phaser.Scene {
       this.layoutPiece(piece);
       return piece;
     });
+    // にじみの明滅（TODO-039）。シーンの Tween なので、シーンを離れれば止まる。
+    if (this.palette.neon) {
+      this.tweens.add({
+        targets: this.pieces.map((piece) => piece.glow),
+        alpha: NEON.blink.minAlpha,
+        duration: NEON.blink.durationMs,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        repeat: -1,
+      });
+    }
   }
 
   /**
@@ -486,12 +504,53 @@ export default class GameScene extends Phaser.Scene {
    * 縮小は Container の拡大率がそのまま効くので、描き分けが要らない。
    * 縁は線の太さの半分だけ内側へ寄せる。外へはみ出すと隣のピースにかぶり、
    * どちらの輪郭か分からなくなるため。
+   *
+   * ネオンのにじみ（`piece.glow`。TODO-039）も同じ引き方で、太い線を内側へ
+   * 寄せて重ねる。内側へ寄せた線は凹の角で端どうしが届かず、線の太さ
+   * 四方が欠ける。芯の細さでは見えないが、にじみの太さでは見えるので、
+   * にじみだけその正方形を埋める（他の色の組の見た目を変えないため）。
    */
   drawPieceEdges(piece) {
     const cell = this.layout.board.cell;
-    const width = this.palette.outlineWidth;
-    const inset = width / 2;
     const has = new Set(piece.cells.map(([row, col]) => `${row},${col}`));
+    const edges = outlineEdges(piece.cells);
+    // 凹の角 = 格子点を囲む 4 マスのうち 3 つが埋まっている所。空いた 1 マスが
+    // 上下・左右のどちら側かを持っておく。
+    const concaveCorners = [];
+    if (piece.glow) {
+      const size = shapeSize(piece.cells);
+      for (let row = 0; row <= size.rows; row += 1) {
+        for (let col = 0; col <= size.cols; col += 1) {
+          const around = [[-1, -1], [-1, 0], [0, -1], [0, 0]]
+            .filter(([dr, dc]) => !has.has(`${row + dr},${col + dc}`));
+          if (around.length !== 1) continue;
+          const [[dr, dc]] = around;
+          concaveCorners.push([row, col, dr === -1, dc === -1]);
+        }
+      }
+    }
+    const stroke = (graphics, width, color, alpha, fillCorners = false) => {
+      const inset = width / 2;
+      if (fillCorners) {
+        graphics.fillStyle(color, alpha);
+        for (const [row, col, missingUp, missingLeft] of concaveCorners) {
+          // 欠けるのは、空いたマスと対角にあるマスの、角に接した所。
+          graphics.fillRect(col * cell - (missingLeft ? 0 : width),
+                            row * cell - (missingUp ? 0 : width), width, width);
+        }
+      }
+      graphics.lineStyle(width, color, alpha);
+      for (const [r1, c1, r2, c2] of edges) {
+        // 内側がどちら側かは、辺に接するマスが在るほうを見れば決まる。
+        const horizontal = r1 === r2;
+        const dr = horizontal && has.has(`${r1},${c1}`) ? inset : -inset;
+        const dc = !horizontal && has.has(`${r1},${c1}`) ? inset : -inset;
+        const x = horizontal ? 0 : dc;
+        const y = horizontal ? dr : 0;
+        graphics.lineBetween(c1 * cell + x, r1 * cell + y,
+                             c2 * cell + x, r2 * cell + y);
+      }
+    };
 
     piece.shadow.clear();
     piece.shadow.fillStyle(OUTLINE.shadowColor, OUTLINE.shadowAlpha);
@@ -501,16 +560,12 @@ export default class GameScene extends Phaser.Scene {
     }
 
     piece.outline.clear();
-    piece.outline.lineStyle(width, darken(piece.color, this.palette.outlineDarken), 1);
-    for (const [r1, c1, r2, c2] of outlineEdges(piece.cells)) {
-      // 内側がどちら側かは、辺に接するマスが在るほうを見れば決まる。
-      const horizontal = r1 === r2;
-      const dr = horizontal && has.has(`${r1},${c1}`) ? inset : -inset;
-      const dc = !horizontal && has.has(`${r1},${c1}`) ? inset : -inset;
-      const x = horizontal ? 0 : dc;
-      const y = horizontal ? dr : 0;
-      piece.outline.lineBetween(c1 * cell + x, r1 * cell + y,
-                                c2 * cell + x, r2 * cell + y);
+    stroke(piece.outline, this.palette.outlineWidth,
+           darken(piece.color, this.palette.outlineDarken), 1);
+
+    if (piece.glow) {
+      piece.glow.clear();
+      for (const layer of NEON.glow) stroke(piece.glow, layer.width, piece.color, layer.alpha, true);
     }
   }
 
