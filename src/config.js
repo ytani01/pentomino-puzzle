@@ -588,6 +588,28 @@ export const INPUT = {
 };
 
 /**
+ * デモ（TODO-040）の速さ 3 段階。**どの速さでも置く・外すが目で追える**ように
+ * してある。デモは動きを見せるのが目的で、解に至るまで時間がかかってもよい
+ * （利用者と決めたこと）。最初の解までの置くは中央値で 1〜1.5 万（TODO-040 の
+ * 実測）で、1 手には置くと外すの両方が入るので、速いで 1〜2 時間、最速（60fps）
+ * でも 5〜10 分かかる。
+ *
+ * - `intervalMs` … 1 手ごとに空ける時間。0 なら 1 フレームに 1 手
+ * - `animate` … 置く・外すを Tween（`INPUT.returnTweenMs` = 180ms）で滑らせ、
+ *   音も鳴らすか。**間隔を Tween より長くしてある**のは、枝刈りで捨てる手が
+ *   「置いてすぐ外す」になり、短いと滑り切る前に次の Tween に止められるため。
+ *   最速は間隔が 1 フレームしか無いので滑らせない
+ */
+export const DEMO = {
+  speeds: {
+    slow: { intervalMs: 400, animate: true },
+    fast: { intervalMs: 200, animate: true },
+    fastest: { intervalMs: 0, animate: false },
+  },
+  defaultSpeed: 'fast',
+};
+
+/**
  * 解のデータ（`src/data/*.js`）を読み込んだあと、`game.registry` へ置くときの
  * キーの前置き。実際のキーは `solutions.js` の `solutionsRegistryKey()` が作る。
  *

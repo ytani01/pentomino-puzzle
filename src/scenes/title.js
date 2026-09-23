@@ -51,6 +51,12 @@ const STACK_BIAS = SCREEN.portrait ? 0.5 : 0.7;
 const START = { width: 260, height: 58, gap: 20 };
 
 /**
+ * `記録` と `デモ`（TODO-040）の 1 個ぶん。行を足すと横画面の縦が足りない
+ * （`STACK` の説明）ので、`はじめる` の行と同じく 2 個を横に並べる。
+ */
+const SUB = { width: 190, height: 48, gap: 20 };
+
+/**
  * 遊び方。1 行目は盤で変わるので、盤の `label` と `note` から組み立てる。
  *
  * 1 文目を 2 行に割ってあるのは、TODO-026 で文字を大きくすると枠に収まらず、
@@ -166,16 +172,30 @@ export default class TitleScene extends Phaser.Scene {
 
     // 記録の一覧（TODO-008）。盤はあちらでも切り替えられるので、ここで
     // 選んでいる盤に関わらず 1 つのボタンから入れる。
+    const subStep = (SUB.width + SUB.gap) / 2;
     createButton(this, {
-      x: cx,
+      x: cx - subStep,
       y: centerOf('records'),
-      width: 190,
-      height: 48,
+      width: SUB.width,
+      height: SUB.height,
       label: '記録',
       onClick: () => {
         audio.unlock();
         audio.button();
         this.scene.start('Records');
+      },
+    });
+    // デモ（TODO-040）。盤と色の組は本編と同じく registry から読む。
+    createButton(this, {
+      x: cx + subStep,
+      y: centerOf('records'),
+      width: SUB.width,
+      height: SUB.height,
+      label: 'デモ',
+      onClick: () => {
+        audio.unlock();
+        audio.button();
+        this.scene.start('Demo');
       },
     });
 

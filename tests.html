@@ -45,6 +45,7 @@ import {
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
+  solveSteps,
 } from './src/logic.js';
 import {
   autoFrom, buildSolutions, consistentSolutions, hasSolution, placementIn,
@@ -713,6 +714,152 @@ for (const state of boardStates) {
     assert(distinct > 0, '集めた解がすべて同じものだった');
   });
 }
+
+// ---- logic：試行錯誤の探索（solveSteps, TODO-040）------------------------
+
+group('src/logic.js — 試行錯誤の探索（solveSteps, TODO-040）');
+
+/** テスト用の擬似乱数（mulberry32）。シードを固定すれば手順が再現できる。 */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * 最初の解が見つかるまでの手を集めて返す。手数が上限を超えたら探索が
+ * 壊れているとみなして打ち切る（無限ループでテストごと固まらないため）。
+ */
+function firstSolutionSteps(spec, random, limit = 1000000) {
+  const steps = [];
+  for (const step of solveSteps(spec, random)) {
+    steps.push(step);
+    if (step.type === 'solved') return steps;
+    if (steps.length > limit) throw new Error('手数の上限を超えた');
+  }
+  throw new Error('解に至らずに探索が終わった');
+}
+
+// 事前に探して選んだ、最初の解までの手数が少なく済むシード。どちらも
+// 途中で枝刈り（regionsFitPieces が偽になって置き方を捨てる）が起きる
+// もの（8×8 の seed 14 は 107 手のうち 31 回、6×10 の seed 164 は
+// 25 手のうち 5 回）を選んである。
+const FAST_SEED = { '8x8': 14, '6x10': 164 };
+// 手順が違うことを確かめるための、別のシード。
+const OTHER_SEED = { '8x8': 1, '6x10': 1 };
+
+for (const spec of BOARD_LIST) {
+  test(`最初の解までの place/remove を空の盤へ当てはめると完成する（${spec.label}）`, () => {
+    const steps = firstSolutionSteps(spec, mulberry32(FAST_SEED[spec.key]));
+    let board = createBoard(spec);
+    for (const step of steps) {
+      if (step.type === 'place') board = place(board, step.name, step.cells, step.row, step.col);
+      else if (step.type === 'remove') board = remove(board, step.name);
+    }
+    assert(isSolved(board), '完成していない');
+    assertSame(placedNames(board).sort(), NAMES, '12 種すべてが揃っていない');
+  });
+
+  test(`place は常に置ける位置で出て、remove は盤にあるピースだけを外す（${spec.label}）`, () => {
+    const steps = firstSolutionSteps(spec, mulberry32(FAST_SEED[spec.key]));
+    let board = createBoard(spec);
+    for (const step of steps) {
+      if (step.type === 'place') {
+        assert(canPlace(board, step.cells, step.row, step.col).ok,
+          `${step.name} を置けない位置で place が出た`);
+        board = place(board, step.name, step.cells, step.row, step.col);
+      } else if (step.type === 'remove') {
+        assert(placedNames(board).includes(step.name),
+          `${step.name} は盤に無いのに remove が出た`);
+        board = remove(board, step.name);
+      }
+    }
+  });
+
+  test(`枝刈りで捨てた置き方も、直後に同じピースの remove として出る（${spec.label}）`, () => {
+    // place を当てて regionsFitPieces が偽になったら枝刈りの対象。そこで
+    // 打ち切って次の候補へ進むのではなく、いったん置いたものとして扱い
+    // 直後に remove で戻す（試して捨てる様子を見せるため）。ここが place・
+    // remove ごと丸ごと飛ばされていないかを確かめる（枝刈りの分岐そのものは
+    // 通っていても、捕まえられなければ意味が無い）。
+    const steps = firstSolutionSteps(spec, mulberry32(FAST_SEED[spec.key]));
+    let board = createBoard(spec);
+    let pruneCount = 0;
+    for (let i = 0; i < steps.length; i += 1) {
+      const step = steps[i];
+      if (step.type === 'place') {
+        board = place(board, step.name, step.cells, step.row, step.col);
+        if (!regionsFitPieces(board)) {
+          pruneCount += 1;
+          const next = steps[i + 1];
+          assert(next && next.type === 'remove' && next.name === step.name,
+            `${step.name} を置いて枝刈りになったのに、次が同じピースの remove でない`);
+        }
+      } else if (step.type === 'remove') {
+        board = remove(board, step.name);
+      }
+    }
+    assert(pruneCount > 0, '選んだシードで枝刈りが一度も起きなかった（シードを選び直すこと）');
+  });
+
+  test(`place の cells は orientations() のどれかと同じ形（${spec.label}）`, () => {
+    const steps = firstSolutionSteps(spec, mulberry32(FAST_SEED[spec.key]));
+    for (const step of steps) {
+      if (step.type !== 'place') continue;
+      const shapes = orientations(cellsOf(step.name));
+      assert(shapes.some((shape) => sameShape(shape, step.cells)),
+        `${step.name} の cells がどの向きとも一致しない`);
+    }
+  });
+
+  test(`同じシードなら 2 回回しても手順がまったく同じ（${spec.label}）`, () => {
+    const a = firstSolutionSteps(spec, mulberry32(FAST_SEED[spec.key]));
+    const b = firstSolutionSteps(spec, mulberry32(FAST_SEED[spec.key]));
+    assertSame(a, b);
+  });
+
+  test(`違うシードなら最初の解か手順のどちらかが違う（${spec.label}）`, () => {
+    const a = firstSolutionSteps(spec, mulberry32(FAST_SEED[spec.key]));
+    const b = firstSolutionSteps(spec, mulberry32(OTHER_SEED[spec.key]));
+    assert(JSON.stringify(a) !== JSON.stringify(b), '違うシードなのに手順が一致した');
+  });
+
+  test(`solved のあとも next() を続けると、別の盤面の 2 番目の解に至る（${spec.label}）`, () => {
+    const iterator = solveSteps(spec, mulberry32(FAST_SEED[spec.key]));
+    let board = createBoard(spec);
+    let firstSolvedGrid = null;
+    let solvedCount = 0;
+    let taken = 0;
+    let result;
+    while (!(result = iterator.next()).done) {
+      const step = result.value;
+      taken += 1;
+      if (taken > 1000000) throw new Error('手数の上限を超えた');
+      if (step.type === 'place') board = place(board, step.name, step.cells, step.row, step.col);
+      else if (step.type === 'remove') board = remove(board, step.name);
+      else if (step.type === 'solved') {
+        solvedCount += 1;
+        assert(isSolved(board), `${solvedCount} 番目の解で完成していない`);
+        if (solvedCount === 1) firstSolvedGrid = board.grid.slice();
+        if (solvedCount === 2) break;
+      }
+    }
+    assertSame(solvedCount, 2, '2 番目の解に至らなかった');
+    assert(JSON.stringify(board.grid) !== JSON.stringify(firstSolvedGrid), '1 番目と同じ盤面だった');
+  });
+}
+
+test('random に常に 0 を返す関数を渡しても例外にならず解に至る', () => {
+  const zero = () => 0;
+  for (const spec of BOARD_LIST) {
+    const steps = firstSolutionSteps(spec, zero, 5000000);
+    assertSame(steps[steps.length - 1].type, 'solved', `${spec.label} で解に至らなかった`);
+  }
+});
 
 // ---- data：全解のデータ（TODO-022）--------------------------------------
 //

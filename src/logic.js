@@ -6,7 +6,7 @@
  * 正規形で扱う。正規形にしておくと、向きの同一判定が配列の比較だけで済む。
  */
 
-import { HOLE, PIECE_SIZE } from './config.js';
+import { HOLE, PIECES, PIECE_SIZE } from './config.js';
 
 /**
  * 左上を原点へ寄せ、行優先に並べ替える。
@@ -330,6 +330,80 @@ function pushIfEmpty(board, seen, stack, index) {
 /** 空き領域の大きさがすべて 5 の倍数か。`emptyRegionSizes()` の判定部分。 */
 export function regionsFitPieces(board) {
   return emptyRegionSizes(board).every((size) => size % PIECE_SIZE === 0);
+}
+
+/** Fisher–Yates で並びを入れ替える（渡した配列をそのまま入れ替えて返す）。 */
+function shuffle(items, random) {
+  for (let i = items.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items;
+}
+
+/**
+ * 空の盤から深さ優先で解を探し、1 手ずつ返す（デモ用。TODO-040）。
+ *
+ * 画面を止めずに探す様子を見せるため、探索を generator にして呼ぶ側が
+ * フレームごとに好きな手数だけ `next()` する。探し方は `tools/enumerate.mjs` と
+ * 同じ（一番若い空きマスを埋める、5 の倍数でない空き領域が出たら捨てる）で、
+ * 違うのは始める前に 1 回だけピースの並びと各ピースの向きの並びを `random` で
+ * 入れ替えることだけ。毎回違う試し方と解を見せるため。`random` を外から
+ * 受けるのは、テストでシード付きの乱数を渡して手順を固定するため。
+ *
+ * 返すのは `{ type: 'place', name, cells, row, col }`・`{ type: 'remove', name }`・
+ * `{ type: 'solved' }`。枝刈りで捨てる置き方も place と remove の 2 手として
+ * 返す（試して戻す様子を見せるため）。solved のあとも `next()` すれば次の解を
+ * 探し、全部探し終えたら終わる。
+ *
+ * `place` の `cells` は探索が持っている向きの配列そのもの（写しを作らない）。
+ * 受け取った側で書き換えると以降の探索が狂うので、読むだけにする。
+ *
+ * 探索の盤はここに閉じた作業用の配列で、**その場で書き換える**。1 万手で
+ * 50ms ほどの速さを保つため（毎手作り直すと割に合わない）。外へ渡すのは上の
+ * 記述だけで、本編の盤面（Undo の履歴が参照するもの）とは別物なので、
+ * 「盤面は書き換えず作り直す」の決まりとはぶつからない。
+ */
+export function* solveSteps(spec, random) {
+  const board = createBoard(spec);
+  const { cols, grid } = board;
+  const unused = shuffle(PIECES.map((piece) => piece.name), random);
+  const shapes = new Map(PIECES.map(
+    (piece) => [piece.name, shuffle(orientations(piece.cells), random)],
+  ));
+
+  function* search() {
+    const target = grid.indexOf(null);
+    if (target < 0) {
+      yield { type: 'solved' };
+      return;
+    }
+    const targetRow = Math.floor(target / cols);
+    const targetCol = target % cols;
+    for (let pick = 0; pick < unused.length; pick += 1) {
+      const name = unused[pick];
+      for (const shape of shapes.get(name)) {
+        // 正規形は行優先なので、目標のマスを覆えるのは先頭のセルだけ（enumerate.mjs と同じ）。
+        const row = targetRow - shape[0][0];
+        const col = targetCol - shape[0][1];
+        if (!canPlace(board, shape, row, col).ok) continue;
+
+        for (const [dr, dc] of shape) grid[(row + dr) * cols + (col + dc)] = name;
+        unused.splice(pick, 1);
+        yield {
+          type: 'place', name, cells: shape, row, col,
+        };
+
+        if (regionsFitPieces(board)) yield* search();
+
+        unused.splice(pick, 0, name);
+        for (const [dr, dc] of shape) grid[(row + dr) * cols + (col + dc)] = null;
+        yield { type: 'remove', name };
+      }
+    }
+  }
+
+  yield* search();
 }
 
 /**

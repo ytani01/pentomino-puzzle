@@ -14,6 +14,7 @@ import TitleScene from './scenes/title.js';
 import GameScene from './scenes/game.js';
 import ClearScene from './scenes/clear.js';
 import RecordsScene from './scenes/records.js';
+import DemoScene from './scenes/demo.js';
 
 window.game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -25,7 +26,7 @@ window.game = new Phaser.Game({
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [BootScene, TitleScene, GameScene, ClearScene, RecordsScene],
+  scene: [BootScene, TitleScene, GameScene, ClearScene, RecordsScene, DemoScene],
 });
 
 // ここまで来たら起動できている。`index.html` の案内を引っ込める。

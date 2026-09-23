@@ -28,13 +28,14 @@ import { darken, pieceColor, TEX } from './boot.js';
 
 /** 重なりの順。盤の上にピース、トレイの当たり判定はその上、ドラッグ中の
  *  ピースはさらに上、確認ダイアログが最前面。 */
-const DEPTH = {
+export const DEPTH = {
   board: 0, ghost: 5, piece: 10, traySlot: 15, dragging: 20, hud: 30, confirm: 40,
 };
 
 export default class GameScene extends Phaser.Scene {
-  constructor() {
-    super('Game');
+  /** キーを受け取るのは、デモ（`DemoScene`。TODO-040）が描画を使い回すため。 */
+  constructor(key = 'Game') {
+    super(key);
   }
 
   /**
@@ -290,11 +291,25 @@ export default class GameScene extends Phaser.Scene {
       () => this.toggleMute(),
       () => this.confirmToTitle(),
     ];
+    this.buttons = this.createHudButtons(labels, actions);
+    this.undoButton = this.buttons[0];
+    this.autoButton = this.buttons[1];
+    this.hintButton = this.buttons[2];
+    this.muteButton = this.buttons[4];
+  }
+
+  /**
+   * HUD のボタンを並べる。デモ（TODO-040）も同じ並びでボタンを置くので、
+   * 位置の決め方をここに分けてある。
+   */
+  createHudButtons(labels, actions) {
+    const hud = this.layout.hud;
+    const rowY = (row) => hud.y + hud.rowHeight * (row + 0.5);
     // ボタンだけの段は中央へ寄せる。時間の表示と段を分け合うなら右へ寄せるが、
     // 今は必ず段が分かれる（`config.js` の `firstButtonRow`）ので中央だけを通る。
     const perRow = hud.buttonsPerRow;
     const centered = hud.firstButtonRow > 0;
-    this.buttons = labels.map((label, index) => {
+    return labels.map((label, index) => {
       const row = Math.floor(index / perRow);
       const count = Math.min(perRow, labels.length - row * perRow);
       const total = count * hud.buttonWidth + (count - 1) * hud.gap;
@@ -311,10 +326,6 @@ export default class GameScene extends Phaser.Scene {
         onClick: actions[index],
       }).setDepth(DEPTH.hud);
     });
-    this.undoButton = this.buttons[0];
-    this.autoButton = this.buttons[1];
-    this.hintButton = this.buttons[2];
-    this.muteButton = this.buttons[4];
   }
 
   createVersionText() {
