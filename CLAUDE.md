@@ -76,7 +76,7 @@ Chromium を動かして撮る。TODO-034）。
 | `tools/gen-solutions.mjs` | `src/data/*.js` を作る／突き合わせる（開発時のみ） |
 | `tools/window-shim.mjs` | Node から `src/` を読むためのダミーの `window`（開発時のみ） |
 | `tests.html` | 計算のテスト（ブラウザで開くだけ） |
-| `docs/developer.md` | 画面の用語、全解のデータ、GitHub 上の設定 |
+| `docs/developer.md` | ファイル構成、画面の用語、全解のデータ、GitHub 上の設定 |
 | `.claude/skills/screenshot/SKILL.md` | Playwright MCP で画面を撮って確かめる手順 |
 | `.claude/agents/*.md` | 使い回すサブエージェントの定義（[docs/developer.md](docs/developer.md#サブエージェントの定義)） |
 | `.github/workflows/pages.yml` | タグを押したときに GitHub Pages へ公開する |

@@ -2,10 +2,48 @@
 
 コードを読んだだけでは分かりにくいものをまとめる。
 
+- [ファイル構成](#ファイル構成) — リポジトリのファイルの役割
 - [画面の用語](#画面の用語) — ソースとやり取りで使う呼び名
 - [全解のデータ](#全解のデータ) — `src/data/*.js` の作り方と、作り直すとき
 - [サブエージェントの定義](#サブエージェントの定義) — `.claude/agents/*.md` の役割と受け持ち
 - [GitHub 上の設定](#github-上の設定) — 利用者が手動で設定する必要があるもの
+
+---
+
+## ファイル構成
+
+```
+index.html            HTML / CSS と Phaser の読み込み
+src/
+  main.js             Phaser の起動
+  config.js           盤面・ピース・色・レイアウトの定数
+  logic.js            Phaser に依存しない計算（tests.html の対象）
+  solutions.js        全解のデータの読み込みと照合（tests.html の対象）
+  data/
+    8x8.js            8×8 の全解（65 件）。tools/gen-solutions.mjs が作る
+    6x10.js           6×10 の全解（2339 件）。同上
+  audio.js            Web Audio API による効果音
+  storage.js          クリア記録と遊びかけの保存
+  ui.js               ボタンと枠（5 つのシーンで共通）
+  icons.js            HUD のボタンのアイコンと、タイトルの盤・色の選択肢の図
+  scenes/
+    boot.js           マス目テクスチャの生成
+    title.js          タイトル
+    game.js           本編
+    clear.js          クリア表示
+    records.js        クリア記録の一覧
+    demo.js           コンピューターが解を探す様子を見せるデモ
+tools/                開発時にだけ使う（公開しない）
+  enumerate.mjs       全解の数え上げ
+  gen-solutions.mjs   src/data/*.js を作る／突き合わせる
+  window-shim.mjs     Node から src/ を読むためのダミーの window
+tests.html            計算のテスト
+docs/developer.md     ファイル構成、画面の用語、全解のデータ、GitHub 上の設定
+TODO.md               進行中の項目（決着したものは archives/todo/、一覧は archives/index.md）
+```
+
+`src/data/*.js` は**手で書き換えない**。作り直し方と、いつ作り直すのかは
+[全解のデータ](#全解のデータ)にある。
 
 ---
 
