@@ -192,6 +192,7 @@ export const COLORS = {
   hole: 0x101219,
   ghost: 0xffffff,
   danger: 0xff5555,
+  success: 0x3fbf6e,
   text: 0xe8ecf4,
   textDim: 0x8d97b0,
   accent: 0x6fd3f2,
@@ -247,7 +248,6 @@ const HUD_BUTTON_MAX = 130; // ボタン 1 個の幅。場所が足りなけれ�
 const HUD_BUTTON_HEIGHT = 44;
 const HUD_REMAIN_X = 140;  // 段の中身の左端から見た「残り n」の位置
 const HUD_STATUS_X = 250;  // 同じく、解の有無（TODO-013）の位置
-const HUD_STATUS_W = 130;  // その文字が使う幅。「もう解けない」6 文字ぶん（`FONT.small`）
 const MESSAGE_BAND = 40;   // 画面の下端に空ける、メッセージ 1 行ぶんの帯
 const TRAY_SPAN = 5;       // ペントミノは縦横どちらにも最大 5 マス（`I` の向き次第）
 const TRAY_SLOT_PAD = 12;  // トレイの 1 スロットで、ピースの周りに空ける分
@@ -615,6 +615,18 @@ export const TOOLTIP = {
   padX: 10,
   padY: 6,
   gap: 6,
+};
+
+/**
+ * ヒント表示の「解ける／解なし」の札（`createHintBadge()`。TODO-045）の寸法。
+ *
+ * 幅は文字（`FONT.hud`）に合わせて実行時に決めるので、ここに置くのは
+ * 固定の高さと余白だけ。`height` は HUD 1 段（`HUD_ROW` = 56）に収まる値。
+ */
+export const HINT_BADGE = {
+  height: 40,
+  padX: 16,
+  radius: 8,
 };
 
 /**

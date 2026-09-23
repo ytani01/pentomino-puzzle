@@ -23,7 +23,7 @@ import {
 import { createBoard, solveSteps } from '../logic.js';
 import { ensureSolutions, hasSolution } from '../solutions.js';
 import * as audio from '../audio.js';
-import { createPanel, createVersionText } from '../ui.js';
+import { createHintBadge, createPanel, createVersionText } from '../ui.js';
 import { ICONS } from '../icons.js';
 import GameScene, { DEPTH } from './game.js';
 
@@ -162,13 +162,11 @@ export default class DemoScene extends GameScene {
       fontSize: `${FONT.hud}px`,
       color: TEXT_COLORS.normal,
     }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
-    // 本編のヒント表示と同じ文字と色。本編の位置（`statusX`）には試した手が
-    // かかるので、1 段目の右端に寄せる。
-    this.hintText = this.add.text(hud.x + hud.width - hud.padding, hud.y + hud.rowHeight / 2, '', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.small}px`,
-      color: TEXT_COLORS.dim,
-    }).setOrigin(1, 0.5).setDepth(DEPTH.hud);
+    // 本編のヒント表示と同じ札（TODO-045）。本編の位置（`statusX`）には
+    // 試した手がかかるので、1 段目の右端に寄せる。
+    this.hintBadge = createHintBadge(
+      this, hud.x + hud.width - hud.padding, hud.y + hud.rowHeight / 2, 1,
+    ).setDepth(DEPTH.hud);
 
     const speedTips = { slow: 'ゆっくり', fast: '速い', fastest: '最速' };
     this.buttons = this.createHudButtons([
@@ -196,10 +194,7 @@ export default class DemoScene extends GameScene {
     this.statusText.setText(
       `試した手 ${this.tried.toLocaleString('en-US')}　見つけた解 ${this.solvedCount}`,
     );
-    const text = { ok: '解ける', dead: '解なし' };
-    const color = { ok: TEXT_COLORS.dim, dead: TEXT_COLORS.danger };
-    if (this.hintState) this.hintText.setText(text[this.hintState]).setColor(color[this.hintState]);
-    else this.hintText.setText('');
+    this.hintBadge.setState(this.hintState);
   }
 
   // ---- ボタンの働き ---------------------------------------------------

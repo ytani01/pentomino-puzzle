@@ -24,7 +24,7 @@ import {
 } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  createButton, createPanel, createTooltip, createVersionText,
+  createButton, createHintBadge, createPanel, createTooltip, createVersionText,
 } from '../ui.js';
 import { ICONS } from '../icons.js';
 import { darken, pieceColor, TEX } from './boot.js';
@@ -273,13 +273,10 @@ export default class GameScene extends Phaser.Scene {
       color: TEXT_COLORS.dim,
     }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
 
-    // 解の有無（TODO-013）。切のうちは空にしておくので、モードを使わなければ
-    // 今までどおりの見た目のまま。横画面では同じ段にボタンが続くので小さめ。
-    this.hintText = this.add.text(hud.x + hud.padding + hud.statusX, rowY(0), '', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.small}px`,
-      color: TEXT_COLORS.dim,
-    }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
+    // 解の有無（TODO-013）。切のうちは隠しておくので、モードを使わなければ
+    // 今までどおりの見た目のまま。色付きの札で目立たせる（TODO-045）。
+    this.hintBadge = createHintBadge(this, hud.x + hud.padding + hud.statusX, rowY(0), 0)
+      .setDepth(DEPTH.hud);
 
     // 前半 3 つが「解くのを助けるもの」、後半 3 つが「遊び方を変えるもの」。
     // 縦画面ではこの 3 つずつがそのまま 1 段になる。
@@ -1050,7 +1047,7 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
     this.hintState = null;
-    this.hintText.setText('');
+    this.hintBadge.setState(null);
   }
 
   /**
@@ -1067,7 +1064,7 @@ export default class GameScene extends Phaser.Scene {
     const left = this.pieces.filter((piece) => piece.location === 'tray').length;
     if (left === 0 || !this.solutions) {
       this.hintState = null;
-      this.hintText.setText('');
+      this.hintBadge.setState(null);
       return;
     }
     const state = hasSolution(this.solutions, this.board) ? 'ok' : 'dead';
@@ -1075,10 +1072,7 @@ export default class GameScene extends Phaser.Scene {
     // 音は詰みに変わった瞬間だけ。毎回鳴らすと置くたびに鳴って邪魔になる。
     if (state === 'dead' && this.hintState !== 'dead') audio.invalid();
     this.hintState = state;
-
-    const text = { ok: '解ける', dead: '解なし' };
-    const color = { ok: TEXT_COLORS.dim, dead: TEXT_COLORS.danger };
-    this.hintText.setText(text[state]).setColor(color[state]);
+    this.hintBadge.setState(state);
   }
 
   /**

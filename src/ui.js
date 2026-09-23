@@ -7,7 +7,7 @@
  */
 
 import {
-  COLORS, FONT, SCREEN, TEXT_COLORS, TOOLTIP, VERSION,
+  COLORS, FONT, HINT_BADGE, SCREEN, TEXT_COLORS, TOOLTIP, VERSION,
 } from './config.js';
 
 /**
@@ -53,6 +53,53 @@ export function createPanel(scene, x, y, width, height, radius = 10) {
   g.lineStyle(2, COLORS.panelEdge, 1);
   g.strokeRoundedRect(x, y, width, height, radius);
   return g;
+}
+
+/**
+ * ヒント表示の「解ける／解なし」の札（TODO-045）。本編とデモの両方が使うので
+ * ここに 1 つだけ置き、文言（`ok`→解ける、`dead`→解なし）の対応もここにだけ持つ。
+ *
+ * 角丸の帯 + 文字で、色は `ok` が緑（`COLORS.success`）、`dead` が赤
+ * （`COLORS.danger`）。幅は文字に合わせて `setState()` のたびに測り直す
+ * （「解ける」「解なし」は同じ文字数だが、フォントの実測に委ねたほうが確実）。
+ *
+ * `originX` は 0 で `x` を左端、1 で右端に固定する（本編は左寄せ、デモは
+ * 右寄せで置くため）。`state` に `null` を渡すと帯ごと隠す。
+ */
+export function createHintBadge(scene, x, y, originX = 0) {
+  const face = scene.add.graphics();
+  const label = scene.add.text(0, y, '', {
+    fontFamily: FONT.family,
+    fontSize: `${FONT.hud}px`,
+    color: TEXT_COLORS.normal,
+  }).setOrigin(0.5, 0.5);
+
+  const TEXT = { ok: '解ける', dead: '解なし' };
+  const FILL = { ok: COLORS.success, dead: COLORS.danger };
+
+  const badge = {};
+  badge.setState = (state) => {
+    face.clear();
+    if (!state) {
+      label.setText('');
+      return badge;
+    }
+    label.setText(TEXT[state]);
+    const width = label.width + HINT_BADGE.padX * 2;
+    const left = originX === 0 ? x : x - width;
+    label.setPosition(left + width / 2, y);
+    face.fillStyle(FILL[state], 1);
+    face.fillRoundedRect(left, y - HINT_BADGE.height / 2, width, HINT_BADGE.height, HINT_BADGE.radius);
+    return badge;
+  };
+  badge.setDepth = (depth) => {
+    face.setDepth(depth);
+    label.setDepth(depth);
+    return badge;
+  };
+
+  badge.setState(null);
+  return badge;
 }
 
 /**
