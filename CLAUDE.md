@@ -100,10 +100,15 @@ GitHub 上での設定・公開手順は
   行を丸ごと文字列一致で探す。**この行の書き方を変えたら
   `.github/workflows/pages.yml` も直す**（見つからなければジョブが失敗して
   気づけるようにしてある。`dev` のまま静かに公開されることはない）
-- **タグ付けまでは Claude が行い、push は利用者が行う。** `git tag vX.Y.Z -m "..."`
-  で作るところまでで止め、`git push origin vX.Y.Z` は実行せずコマンドを
-  提示する（push は GitHub Pages の公開ワークフローを実際に動かす、
-  取り消しにくい操作のため）
+- **TODO 項目を決着させたら、Claude がコミット・タグ付け・push まで行う**
+  （このプロジェクトだけの決まり。ユーザー全体の `CLAUDE.md` の
+  「push は利用者が行う」より優先する。2026-09-23 に利用者が決めた）。
+  決着のコミットのあと `git tag vX.Y.Z -m "<決着のコミットと同じ本文>"` で
+  タグを作り、`git push origin develop vX.Y.Z` で送る
+  - バージョンは変更の型で決める。`feat` は minor、`fix` / `refactor` は patch
+  - 公開するものが変わらない項目（対応しない、文書だけ、`tools/` だけ）は
+    タグを付けず、`git push origin develop` だけにする
+  - push で GitHub Pages の公開ワークフローが動く。失敗したら利用者に伝える
 
 ## 作業の進め方
 
