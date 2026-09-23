@@ -13,8 +13,11 @@
  * （幅優先）の generator で、`update()` が速さに
  * 応じた間隔で 1 手ずつ進める。1 フレームに 1 手までなので画面は止まらない。
  * 置いたら全解のデータで「解ける／解なし」を調べ、解なしならすぐ外す。
- * 解を見つけたら `DEMO.pauseMs` だけ止まって次の解へ、出し切ったら同じだけ
- * 止まって空の盤から探し直す。タイトルへ戻るまで止まらない（TODO-052）。
+ * 解を見つけたら `DEMO.pauseMs` だけ止まって次へ進む。タイトルへ戻るまで
+ * 止まらない（TODO-052）。深さ優先は盤を片づけて空の盤から探し直し、置いては
+ * 外す様子を毎回はじめから見せる（TODO-054）。幅優先は続きから探す。幅優先は
+ * 空の盤から最初の解まで 8×8 でも約 10 万手あり、探し直すと次の解が遠いため。
+ * どちらも出し切ったあとは、同じだけ止まって空の盤から探し直す。
  * ヒント表示を入にして解く人と同じ動きで、HUD にも本編のヒント表示と同じ
  * 文字を出す（TODO-043）。解につながる手だけを選んで置かないのは、それだと
  * 試行錯誤に見えなくなるため。全解のデータが届くまでは探索を始めない。
@@ -34,10 +37,15 @@ import GameScene, { DEPTH } from './game.js';
 /** 速さの並び。HUD のボタンの前半 3 つと同じ順。 */
 const SPEEDS = ['slow', 'fast', 'fastest'];
 
-/** 探し方ごとの generator とボタンの見た目。ボタンは今の探し方を見せる（音のボタンと同じ）。 */
+/**
+ * 探し方ごとの generator とボタンの見た目。ボタンは今の探し方を見せる（音のボタンと同じ）。
+ * `restart` は解を見つけたあと空の盤から探し直すか（TODO-054）。
+ */
 const STRATEGIES = {
-  depth: { solve: solveSteps, icon: ICONS.depthFirst, tooltip: '探し方: 深さ優先' },
-  breadth: { solve: solveStepsBreadth, icon: ICONS.breadthFirst, tooltip: '探し方: 幅優先' },
+  depth: { solve: solveSteps, restart: true, icon: ICONS.depthFirst, tooltip: '探し方: 深さ優先' },
+  breadth: {
+    solve: solveStepsBreadth, restart: false, icon: ICONS.breadthFirst, tooltip: '探し方: 幅優先',
+  },
 };
 
 export default class DemoScene extends GameScene {
@@ -95,7 +103,7 @@ export default class DemoScene extends GameScene {
     if (this.state === 'loading') return;
     this.waited += delta;
     if (this.state !== 'running') {
-      if (this.waited >= DEMO.pauseMs) this.resume();
+      if (this.waited >= DEMO.pauseMs) this.searchAgain();
       return;
     }
     // 追いつくために何手もまとめて進めない。1 手ずつ見せるのが目的なので。
@@ -237,12 +245,15 @@ export default class DemoScene extends GameScene {
     this.strategy = this.strategy === 'depth' ? 'breadth' : 'depth';
     const face = STRATEGIES[this.strategy];
     this.strategyButton.setIcon(face.icon).setTooltip(face.tooltip);
+    // 見つけた解の数は探し方ごとに数え直す。
+    this.solvedCount = 0;
     if (this.solutions) this.startSearch();
   }
 
   /**
    * 探し直すときは、盤のピースを滑らせずにトレイへ戻す。何枚も同時に滑らせると
    * 探索の 1 手と見分けがつかず、次の探索の最初の手とも重なるため。
+   * 見つけた解の数は戻さない。深さ優先は解のたびに探し直すので、戻すと 0 か 1 にしかならない。
    */
   startSearch() {
     for (const piece of this.pieces) {
@@ -257,7 +268,6 @@ export default class DemoScene extends GameScene {
     );
     this.state = 'running';
     this.tried = 0;
-    this.solvedCount = 0;
     this.hintState = 'ok';
     this.waited = 0;
     this.messageText.setText('');
@@ -267,15 +277,12 @@ export default class DemoScene extends GameScene {
   searchNext() {
     if (this.state !== 'solved') return;
     audio.button();
-    this.resume();
+    this.searchAgain();
   }
 
-  /**
-   * 止まっていたところから進める。出し切ったあとは generator に続きが
-   * 無いので、空の盤から探し直してタイトルへ戻るまで止めない（TODO-052）。
-   */
-  resume() {
-    if (this.state === 'done') {
+  /** 止まっていたあとに次の解へ進む。出し切ったあとは続きが無いので探し直す。 */
+  searchAgain() {
+    if (this.state === 'done' || STRATEGIES[this.strategy].restart) {
       this.startSearch();
       return;
     }
