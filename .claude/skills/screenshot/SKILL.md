@@ -34,8 +34,9 @@ JSON にするので、`scene.start()` の戻り（Phaser の ScenePlugin）を�
 - `browser_take_screenshot` の `filename` に**相対名を渡すと、`--output-dir`
   ではなくカレント（＝リポジトリ）へ落ちる**。省略する（`--output-dir` に
   既定の名前で入る）か、絶対パスで渡す
-- コンソールは `browser_console_messages`、操作は `browser_click` や
-  `browser_drag` で試せる
+- コンソールは `browser_console_messages` で見る。クリックやドラッグは
+  `browser_run_code_unsafe` の中で、時間の上限を付けて行う（`browser_click` などは
+  返らなくなると待ち続ける。書き方は `.claude/agents/screens.md` の「手順」）
 - Claude のブラウザ拡張（claude-in-chrome）は、この環境では未接続で使えない
 
 **スマホ扱い**（画面の大きさだけでなく、タッチ機器として振る舞わせる）は、

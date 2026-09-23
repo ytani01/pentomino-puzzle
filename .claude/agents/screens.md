@@ -1,9 +1,9 @@
 ---
 name: screens
-description: Pentomino Puzzle の画面を Playwright MCP で撮って、はみ出し・重なり・読めない文字が無いかを確かめる。撮った画像は `~/tmp/claude-img/` に置き、パスを報告する。
+description: Pentomino Puzzle の画面を Playwright MCP で撮って、はみ出し・重なり・読めない文字が無いかを確かめる。撮った画像は `~/tmp/playwright-mcp/` に置き、パスを報告する。
 model: sonnet
 effort: low
-tools: Read, Grep, Glob, Bash, Skill, mcp__playwright__browser_navigate, mcp__playwright__browser_resize, mcp__playwright__browser_evaluate, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_console_messages, mcp__playwright__browser_run_code_unsafe
+tools: Read, Grep, Glob, Bash, Skill, mcp__playwright__browser_close, mcp__playwright__browser_navigate, mcp__playwright__browser_resize, mcp__playwright__browser_evaluate, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_console_messages, mcp__playwright__browser_run_code_unsafe
 ---
 
 見た目の確認だけを受け持つ。**直さない。** 気づいたことは報告に書き、
@@ -34,6 +34,31 @@ tools: Read, Grep, Glob, Bash, Skill, mcp__playwright__browser_navigate, mcp__pl
 python3 -m http.server 8765     # 立っていなければ、バックグラウンドで
 ```
 
+- **始める前にタブを開き直す。** `browser_close` のあと `browser_navigate` で
+  開く。前の担当が使ったタブでは、`mouse.click` が返らなくなっていたことがある
+  （クリックはページに届くのに、Playwright に返事が戻らない。TODO-046）
+- **クリック・ドラッグ・マウス移動は `browser_run_code_unsafe` の中で、時間の
+  上限を付けて行う。** 上限を付けないと、固まったまま待ち続ける
+  ```js
+  const race = (p, ms, label) =>
+    Promise.race([p.then(() => 'ok'), page.waitForTimeout(ms).then(() => label)]);
+  await race(page.mouse.click(x, y), 3000, 'click timeout');
+  ```
+  ボタンの `x`・`y` はゲームの内部座標なので、画面の座標に直してから押す
+  ```js
+  const { x, y } = await page.evaluate(() => {
+    const b = window.game.scene.getScene('Title').boardButtons[1];
+    const r = window.game.canvas.getBoundingClientRect();
+    const k = r.width / window.game.scale.width;
+    return { x: r.left + b.x * k, y: r.top + b.y * k };
+  });
+  ```
+  **同じ操作が 2 回続けて返らなければ、やり直さずに止めて報告する**
+  （撮れたぶんのパスと、どこで止まったかを書く）
+- マウスを載せて説明（ツールチップ）を出すときは、`page.mouse.move` に
+  `{ steps: 3 }` を付けて少しずつ動かす。一度で飛ばすと載せたと見なされない
+  ことがある
+
 - **一番厳しいのは横 568x320**（iPhone SE 初代）。縦は `375x667` か `390x844`。
   呼ぶ側が大きさを指定しなければ、この 2 つは必ず撮る
 - 盤を変える指示があれば 8×8 と 6×10 の両方（既定は 8×8）
@@ -43,6 +68,10 @@ python3 -m http.server 8765     # 立っていなければ、バックグラウ�
   （例: `game-568x320-6x10.png`、`records-390x844-confirm.png`）
 
 ## 見るところ
+
+同じコードを通る操作（同じ関数で作ったボタンを押す、説明を出す、など）は、
+代表 1 つだけ試す。全部を 1 つずつ試さない（ユーザー全体の `CLAUDE.md` の
+「サブエージェントへの依頼」）。
 
 - 枠から文字や部品がはみ出していないか（特に一番狭い横画面）
 - 部品どうしが重なっていないか。行がそろっているか
