@@ -10,6 +10,10 @@
  *
  * 探索は `logic.js` の `solveSteps()`（generator）で、`update()` が速さに
  * 応じた間隔で 1 手ずつ進める。1 フレームに 1 手までなので画面は止まらない。
+ * 置いたら全解のデータで「解ける／解なし」を調べ、解なしならすぐ外す。
+ * ヒント表示を入にして解く人と同じ動きで、HUD にも本編のヒント表示と同じ
+ * 文字を出す（TODO-043）。解につながる手だけを選んで置かないのは、それだと
+ * 試行錯誤に見えなくなるため。全解のデータが届くまでは探索を始めない。
  */
 
 import {
@@ -17,6 +21,7 @@ import {
   PALETTE_REGISTRY_KEY, TEXT_COLORS,
 } from '../config.js';
 import { createBoard, solveSteps } from '../logic.js';
+import { ensureSolutions, hasSolution } from '../solutions.js';
 import * as audio from '../audio.js';
 import { createPanel, createVersionText } from '../ui.js';
 import { ICONS } from '../icons.js';
@@ -40,9 +45,12 @@ export default class DemoScene extends GameScene {
     // `drawBoard()` が穴の位置を見るためだけに持つ。探索の盤は generator の中にある。
     this.board = createBoard(this.spec);
 
-    this.steps = solveSteps(this.spec, Math.random);
-    // 'running'（探している）・'solved'（解を見つけて止まっている）・'done'（出し切った）
-    this.state = 'running';
+    // 'loading'（全解のデータを待っている）・'running'（探している）・
+    // 'solved'（解を見つけて止まっている）・'done'（出し切った）
+    this.state = 'loading';
+    this.steps = null;
+    // 直前に置いた手が解につながるか。null は表示を空にする（解けたとき）。
+    this.hintState = 'ok';
     this.speed = DEMO.defaultSpeed;
     this.tried = 0;
     this.solvedCount = 0;
@@ -58,6 +66,16 @@ export default class DemoScene extends GameScene {
     this.createMessage();
     createVersionText(this);
     this.refreshHud();
+
+    // シーンを離れたあとに届くことがあるので、生きているかを確かめてから使う。
+    // Phaser はシーンを使い回すので、入り直したあとに前回の分が遅れて届くことも
+    // ある。探索を始めたあと・別の盤の表なら捨てる（盤のピースと食い違うため）。
+    ensureSolutions(this.registry, this.spec).then((solutions) => {
+      if (!this.scene.isActive() || this.state !== 'loading') return;
+      if (solutions.spec.key !== this.spec.key) return;
+      this.steps = solveSteps(this.spec, Math.random, (board) => hasSolution(solutions, board));
+      this.state = 'running';
+    });
   }
 
   update(_time, delta) {
@@ -92,10 +110,18 @@ export default class DemoScene extends GameScene {
       piece.row = value.row;
       piece.col = value.col;
       if (animate) audio.drop();
+      const hintState = value.ok ? 'ok' : 'dead';
+      // 本編と同じく、解なしに変わった瞬間に鳴らす。解なしの手はすぐ外して
+      // 「解ける」に戻るので、解なしの手を置くたびに鳴る（本編でヒント表示を
+      // 入にして解なしの手を置いたときと同じ）。
+      if (animate && hintState === 'dead' && this.hintState !== 'dead') audio.invalid();
+      this.hintState = hintState;
     } else {
       // 向きは最後に試したまま、自分のスロットへ戻す。
       piece.location = 'tray';
       if (animate) audio.lift();
+      // 外した先は、探索が「解ける」と見て潜った盤面（空の盤も解ける）。
+      this.hintState = 'ok';
     }
     this.refreshPiece(piece);
     this.settlePiece(piece, animate);
@@ -107,6 +133,8 @@ export default class DemoScene extends GameScene {
   onSolved() {
     this.state = 'solved';
     this.solvedCount += 1;
+    // 本編がトレイの残り 0 で消すのに合わせる。
+    this.hintState = null;
     audio.fanfare();
     // `showMessage()` は時間が経つと消えるので使わず、同じ文字を直接書く。
     // 止まっている間は出したままにする。
@@ -134,6 +162,13 @@ export default class DemoScene extends GameScene {
       fontSize: `${FONT.hud}px`,
       color: TEXT_COLORS.normal,
     }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
+    // 本編のヒント表示と同じ文字と色。本編の位置（`statusX`）には試した手が
+    // かかるので、1 段目の右端に寄せる。
+    this.hintText = this.add.text(hud.x + hud.width - hud.padding, hud.y + hud.rowHeight / 2, '', {
+      fontFamily: FONT.family,
+      fontSize: `${FONT.small}px`,
+      color: TEXT_COLORS.dim,
+    }).setOrigin(1, 0.5).setDepth(DEPTH.hud);
 
     const speedTips = { slow: 'ゆっくり', fast: '速い', fastest: '最速' };
     this.buttons = this.createHudButtons([
@@ -161,6 +196,10 @@ export default class DemoScene extends GameScene {
     this.statusText.setText(
       `試した手 ${this.tried.toLocaleString('en-US')}　見つけた解 ${this.solvedCount}`,
     );
+    const text = { ok: '解ける', dead: '解なし' };
+    const color = { ok: TEXT_COLORS.dim, dead: TEXT_COLORS.danger };
+    if (this.hintState) this.hintText.setText(text[this.hintState]).setColor(color[this.hintState]);
+    else this.hintText.setText('');
   }
 
   // ---- ボタンの働き ---------------------------------------------------

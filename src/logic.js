@@ -345,16 +345,21 @@ function shuffle(items, random) {
  * 空の盤から深さ優先で解を探し、1 手ずつ返す（デモ用。TODO-040）。
  *
  * 画面を止めずに探す様子を見せるため、探索を generator にして呼ぶ側が
- * フレームごとに好きな手数だけ `next()` する。探し方は `tools/enumerate.mjs` と
- * 同じ（一番若い空きマスを埋める、5 の倍数でない空き領域が出たら捨てる）で、
+ * フレームごとに好きな手数だけ `next()` する。探し方は一番若い空きマスを埋め、
+ * 置いたら `canContinue(board)` で先へ進むかを決める。既定の `regionsFitPieces`
+ * （5 の倍数でない空き領域が出たら捨てる）なら `tools/enumerate.mjs` と同じで、
  * 違うのは始める前に 1 回だけピースの並びと各ピースの向きの並びを `random` で
  * 入れ替えることだけ。毎回違う試し方と解を見せるため。`random` を外から
  * 受けるのは、テストでシード付きの乱数を渡して手順を固定するため。
+ * `canContinue` を外から受けるのは、デモが全解のデータで「解ける／解なし」を
+ * 調べ、ヒント表示を入にして解く人と同じ動きにするため（TODO-043。
+ * `logic.js` は全解のデータを持たないので、判定ごと渡してもらう）。
  *
- * 返すのは `{ type: 'place', name, cells, row, col }`・`{ type: 'remove', name }`・
- * `{ type: 'solved' }`。枝刈りで捨てる置き方も place と remove の 2 手として
- * 返す（試して戻す様子を見せるため）。solved のあとも `next()` すれば次の解を
- * 探し、全部探し終えたら終わる。
+ * 返すのは `{ type: 'place', name, cells, row, col, ok }`・`{ type: 'remove', name }`・
+ * `{ type: 'solved' }`。`ok` は置いたあとの `canContinue` の結果で、デモが HUD に
+ * 出す。判定を yield の前にしてあるのはそのためで、探索の順と手は変わらない。
+ * 捨てる置き方も place と remove の 2 手として返す（試して戻す様子を見せるため）。
+ * solved のあとも `next()` すれば次の解を探し、全部探し終えたら終わる。
  *
  * `place` の `cells` は探索が持っている向きの配列そのもの（写しを作らない）。
  * 受け取った側で書き換えると以降の探索が狂うので、読むだけにする。
@@ -364,7 +369,7 @@ function shuffle(items, random) {
  * 記述だけで、本編の盤面（Undo の履歴が参照するもの）とは別物なので、
  * 「盤面は書き換えず作り直す」の決まりとはぶつからない。
  */
-export function* solveSteps(spec, random) {
+export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
   const board = createBoard(spec);
   const { cols, grid } = board;
   const unused = shuffle(PIECES.map((piece) => piece.name), random);
@@ -390,11 +395,12 @@ export function* solveSteps(spec, random) {
 
         for (const [dr, dc] of shape) grid[(row + dr) * cols + (col + dc)] = name;
         unused.splice(pick, 1);
+        const ok = canContinue(board);
         yield {
-          type: 'place', name, cells: shape, row, col,
+          type: 'place', name, cells: shape, row, col, ok,
         };
 
-        if (regionsFitPieces(board)) yield* search();
+        if (ok) yield* search();
 
         unused.splice(pick, 0, name);
         for (const [dr, dc] of shape) grid[(row + dr) * cols + (col + dc)] = null;

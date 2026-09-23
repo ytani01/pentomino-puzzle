@@ -861,6 +861,92 @@ test('random に常に 0 を返す関数を渡しても例外にならず解に�
   }
 });
 
+// ---- logic：solveSteps に渡す canContinue（TODO-043）----------------------
+//
+// デモがヒント表示と同じ動きをするため、solveSteps は「置いたあと先へ進む
+// かどうか」を第 3 引数の canContinue で外から受ける（既定は regionsFitPieces）。
+// 判定の結果は place の手に ok として載る。firstSolutionSteps を canContinue
+// も渡せるように拡張して使い回す。
+
+/** firstSolutionSteps に canContinue も渡せるようにしたもの。 */
+function firstSolutionStepsWith(spec, random, canContinue, limit = 1000000) {
+  const steps = [];
+  for (const step of solveSteps(spec, random, canContinue)) {
+    steps.push(step);
+    if (step.type === 'solved') return steps;
+    if (steps.length > limit) throw new Error('手数の上限を超えた');
+  }
+  throw new Error('解に至らずに探索が終わった');
+}
+
+for (const spec of BOARD_LIST) {
+  test(`canContinue を渡さないと、place の ok は regionsFitPieces と一致する（${spec.label}）`, () => {
+    const steps = firstSolutionSteps(spec, mulberry32(FAST_SEED[spec.key]));
+    let board = createBoard(spec);
+    for (const step of steps) {
+      if (step.type === 'place') {
+        board = place(board, step.name, step.cells, step.row, step.col);
+        assertSame(step.ok, regionsFitPieces(board), `${step.name} で ok が食い違う`);
+      } else if (step.type === 'remove') {
+        board = remove(board, step.name);
+      }
+    }
+  });
+}
+
+for (const state of boardStates) {
+  const { spec, solutions } = state;
+  const canContinue = (board) => hasSolution(solutions, board);
+
+  test(`hasSolution を渡すと、最初の解までの手を空の盤へ当てはめると完成し、ok は hasSolution と一致する（${spec.label}）`, () => {
+    // ok:true のあとの盤が必ず解けるかも、この一致で足りる（ok と
+    // hasSolution(board) が毎回一致するなら ok:true は常に「解ける」を指す）。
+    const steps = firstSolutionStepsWith(spec, mulberry32(FAST_SEED[spec.key]), canContinue);
+    let board = createBoard(spec);
+    let falseCount = 0;
+    for (let i = 0; i < steps.length; i += 1) {
+      const step = steps[i];
+      if (step.type === 'place') {
+        board = place(board, step.name, step.cells, step.row, step.col);
+        assertSame(step.ok, hasSolution(solutions, board), `${step.name} で ok が食い違う`);
+        if (!step.ok) {
+          falseCount += 1;
+          const next = steps[i + 1];
+          assert(next && next.type === 'remove' && next.name === step.name,
+            `${step.name} を置いて解なしになったのに、次が同じピースの remove でない`);
+        }
+      } else if (step.type === 'remove') {
+        board = remove(board, step.name);
+      }
+    }
+    assert(isSolved(board), '完成していない');
+    assertSame(placedNames(board).sort(), NAMES, '12 種すべてが揃っていない');
+    assert(falseCount > 0, '選んだシードで ok:false が一度も起きなかった（シードを選び直すこと）');
+  });
+}
+
+for (const spec of BOARD_LIST) {
+  test(`渡した判定が使われている: 常に偽を返す判定だと、最初の place の直後が remove になり、solved に至らず手を尽くす（${spec.label}）`, () => {
+    // 渡した判定が本当に効いていれば、1 マス目の候補を試すだけで終わる
+    // （どれも ok:false で深く進まない）。無視されて regionsFitPieces の
+    // ままだと全解を辿ることになり手数が跳ね上がるので、上限を低く決めて
+    // すぐに違いが見えるようにする。
+    const steps = [];
+    let taken = 0;
+    for (const step of solveSteps(spec, mulberry32(FAST_SEED[spec.key]), () => false)) {
+      steps.push(step);
+      taken += 1;
+      if (step.type === 'solved') break;
+      if (taken > 1000) throw new Error('渡した判定が使われていない（手数が多すぎる）');
+    }
+    assert(!steps.some((step) => step.type === 'solved'), 'solved に至ってしまった');
+    assertSame(steps[0].type, 'place', '最初の手が place でない');
+    assertSame(steps[0].ok, false, '最初の place の ok が false でない');
+    assertSame(steps[1].type, 'remove', '最初の place の直後が remove でない');
+    assertSame(steps[1].name, steps[0].name, '同じピースの remove でない');
+  });
+}
+
 // ---- data：全解のデータ（TODO-022）--------------------------------------
 //
 // `src/data/*.js` は `tools/gen-solutions.mjs` が作る。**作り直して突き合わせる
