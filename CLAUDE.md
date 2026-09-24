@@ -8,7 +8,9 @@
 
 - **新しいライブラリを追加しない。** 依存は Phaser 3.90.0（CDN、バージョン固定）だけ
 - **画像・音声アセットを追加しない。** 絵は Graphics API で実行時に生成し（`src/scenes/boot.js`）、
-  効果音は Web Audio API で合成する（`src/audio.js`）
+  効果音は Web Audio API で合成する（`src/audio.js`）。
+  例外は文書に載せるキャプチャ（`docs/images/`。ゲームからは読まない）で、
+  `tools/capture.mjs` で撮り直す（TODO-056）
 - 自動テストは `tests.html` の 1 層だけ（依存なし）。リンタ・型チェックは入れていない
 - Phaser は CDN からグローバルとして読み込む。自前のコードだけを ES Modules で分割する。
   そのため **`file://` では動かない**（確認は必ずローカルサーバ経由で）
@@ -74,10 +76,12 @@ Chromium を動かして撮る。TODO-034）。
 | `src/scenes/demo.js` | コンピューターが探索して解を見つける様子を見せるデモ。`GameScene` を継承し盤・トレイの描画を使い回す。記録・遊びかけ・見つけた解には何も残さない（TODO-040）。探し方を深さ優先・幅優先から選べる（TODO-050） |
 | `tools/enumerate.mjs` | 全解の数え上げ（開発時のみ。元は `src/solver.js`） |
 | `tools/gen-solutions.mjs` | `src/data/*.js` を作る／突き合わせる（開発時のみ） |
+| `tools/capture.mjs` | `docs/images/` のキャプチャを撮り直す。Playwright は依存に足さず、npx の置き場から借りる（開発時のみ。TODO-056） |
 | `tools/window-shim.mjs` | Node から `src/` を読むためのダミーの `window`（開発時のみ） |
 | `tests.html` | 計算のテスト（ブラウザで開くだけ） |
 | `docs/UsersGuide.md` | 遊び方の詳細（操作、HUD のボタン、記録、つづきから、デモ） |
 | `docs/developer.md` | ファイル構成、構成（3 層の分け方・シーンの移り方・registry のキー）、画面の用語、テスト、記録の保存、全解のデータ、GitHub 上の設定 |
+| `docs/images/` | 文書に載せるキャプチャ。**手で描き足さない**（`tools/capture.mjs` で撮り直す） |
 | `.claude/skills/screenshot/SKILL.md` | Playwright MCP で画面を撮って確かめる手順 |
 | `.claude/agents/*.md` | 使い回すサブエージェントの定義（[docs/developer.md](docs/developer.md#サブエージェントの定義)） |
 | `.github/workflows/pages.yml` | タグを押したときに GitHub Pages へ公開する |

@@ -42,15 +42,31 @@ tools/                開発時にだけ使う（公開しない）
   enumerate.mjs       全解の数え上げ
   gen-solutions.mjs   src/data/*.js を作る／突き合わせる
   window-shim.mjs     Node から src/ を読むためのダミーの window
+  capture.mjs         docs/images/ のキャプチャを撮り直す
 tests.html            計算のテスト
 docs/
   UsersGuide.md       遊び方の詳細（操作、HUD、記録、デモ）
   developer.md        ファイル構成、構成、画面の用語、テスト、記録の保存、全解のデータ、GitHub 上の設定
+  images/             文書に載せるキャプチャ（ゲームからは読まない）
 TODO.md               進行中の項目（決着したものは archives/todo/、一覧は archives/index.md）
 ```
 
 `src/data/*.js` は**手で書き換えない**。作り直し方と、いつ作り直すのかは
 [全解のデータ](#全解のデータ)にある。
+
+`docs/images/` も**手で描き足さない**。画面を変えて図が古くなったら、
+`tools/capture.mjs` で全部撮り直す。番号付きの丸と吹き出しは、撮る直前に
+Canvas の上へ HTML で重ねているので、部品の位置が変わっても追いかける。
+Playwright は依存に足さず、Playwright MCP が npx で持ってきたものをパスで渡す
+（版は 1.63.0 に絞る。版ごとに使う Chromium が違い、手元にある版でないと起動できないため）。
+GIF は `ffmpeg` で作る。
+
+```bash
+python3 -m http.server 8765 &
+PLAYWRIGHT=$(dirname "$(rg -l '"version": "1\.63\.0"' \
+  ~/.npm/_npx/*/node_modules/playwright/package.json | head -1)")/index.mjs \
+  node tools/capture.mjs
+```
 
 ---
 
@@ -65,6 +81,41 @@ TODO.md               進行中の項目（決着したものは archives/todo/�
   数え上げて持つ（詳しくは[全解のデータ](#全解のデータ)）
 - **シーン** — `src/scenes/*.js`。Phaser とのつなぎに徹し、判定は上の 2 つに任せる
 
+矢印は import の向き。Phaser を読むのはシーンだけで（import ではなく、
+CDN から入れたグローバルの `Phaser` を使う）、`tests.html` はシーンを
+通らずに計算と保存を直接読む。どのファイルも読む `src/config.js` は図から省いた。
+
+```mermaid
+flowchart LR
+  Phaser[["Phaser 3.90.0<br>（CDN）"]]
+  subgraph scenes["シーン"]
+    Scenes["src/scenes/*.js"]
+    UI["src/ui.js<br>src/icons.js<br>src/audio.js"]
+  end
+  subgraph calc["Phaser に依存しない計算"]
+    Logic["src/logic.js"]
+    Sol["src/solutions.js"]
+  end
+  Storage["src/storage.js"]
+  Data[("src/data/8x8.js<br>src/data/6x10.js")]
+  Tests["tests.html"]
+
+  Scenes -. "グローバル" .-> Phaser
+  Scenes --> UI
+  Scenes --> Logic
+  Scenes --> Sol
+  Scenes --> Storage
+  UI --> Logic
+  Storage --> Logic
+  Storage --> Sol
+  Sol --> Logic
+  Sol -. "動的 import" .-> Data
+  Tests --> Logic
+  Tests --> Sol
+  Tests --> Storage
+  Tests --> Data
+```
+
 各ファイルの役割は[ファイル構成](#ファイル構成)の表にまとめてある。
 
 ### シーンの移り方
@@ -72,11 +123,20 @@ TODO.md               進行中の項目（決着したものは archives/todo/�
 `src/main.js` が登録するシーンは Boot・Title・Game・Clear・Records・Demo の
 6 つ（`scene.start()` で遷移する）。
 
-```
-[Boot] → [Title] ─┬─→ [Game]（はじめる／つづきから）─┬─→ [Title]（確認あり）
-                   │                                  └─→ [Clear] ─┬─→ [Game]（もう一度）
-                   ├─→ [Records] → [Title]                          ├─→ [Records]
-                   └─→ [Demo] → [Title]                              └─→ [Title]
+```mermaid
+stateDiagram-v2
+  [*] --> Boot
+  Boot --> Title
+  Title --> Game: はじめる／つづきから
+  Title --> Records: 記録
+  Title --> Demo: デモ
+  Game --> Title: タイトルへ（確認あり）
+  Game --> Clear: 完成
+  Clear --> Game: もう一度
+  Clear --> Records: 記録
+  Clear --> Title: タイトルへ
+  Records --> Title: タイトルへ
+  Demo --> Title: タイトルへ
 ```
 
 Boot はマス目テクスチャを作ったら Title へ進む。Game からタイトルへ戻るときは
@@ -316,6 +376,28 @@ localStorage に一切触らない純関数で、localStorage を触るのは `l
 | クリアしたとき | `saveBest()`（自力のときだけ）・`addHistory()`・`addFound()` |
 | 解き切ったとき・やり直したとき | `clearProgress()` |
 | 記録を 1 件消したとき | `removeHistory()` + `removeFound()` + `removeAuto()` |
+| 記録を全部消したとき | `clearHistory()` + `clearFound()` + `clearAuto()` |
+
+記録と遊びかけを書き込むのは Game・Clear・Records の 3 つのシーンだけ
+（Demo は何も残さない。Title が書くのは色の組 `savePalette()` だけ）。
+
+```mermaid
+flowchart LR
+  subgraph Game
+    G1["置く・外す・<br>シーンを離れる"] --> P["saveProgress()<br>（空なら clearProgress()）"]
+    G2["おまかせ"] --> A["addAuto()"]
+    G3["やり直し・完成"] --> C["clearProgress()"]
+  end
+  subgraph Clear
+    K["クリアの表示"] --> B["saveBest()<br>（自力のときだけ）"]
+    K --> H["addHistory()<br>addFound()"]
+  end
+  subgraph Records
+    R1["この回を消す"] --> RM["removeHistory()<br>removeFound()<br>removeAuto()"]
+    R2["全部消す"] --> CL["clearHistory()<br>clearFound()<br>clearAuto()"]
+  end
+  G3 -- "完成" --> K
+```
 
 履歴を 1 件消すときは、`found` と `auto` からも同じ番号を外す。そうしないと
 一覧からは消えたのに達成度には残る、という辻褄の合わない状態ができる。
