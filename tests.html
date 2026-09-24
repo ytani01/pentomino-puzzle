@@ -38,13 +38,13 @@
 <div id="results"></div>
 
 <script type="module">
-import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT, makeLayout } from './src/config.js';
+import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, DEMO, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT, makeLayout } from './src/config.js';
 import {
   normalize, rotateCw, flip, sameShape, orientations, turnOrder, nextTurn,
   nextPlaceableTurn, snapSpot, shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
-  forcedPlacements, touchingEdges,
+  forcedPlacements, touchingEdges, moveDistance,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
   solveSteps, solveStepsRandom,
 } from './src/logic.js';
@@ -1397,9 +1397,10 @@ for (const spec of BOARD_LIST) {
       failedOf(boardKey(board)).add(popped.sig);
       if (step.ok && placedNames(board).length > 0
         && hasUnfailedMove(board, failedOf(boardKey(board)))) {
-        checkedRunEnds += 1;
         const next = steps[i + 1];
-        assert(next && next.type === 'place',
+        if (!next) break; // limit で打ち切った末尾。次の手は分からない
+        checkedRunEnds += 1;
+        assert(next.type === 'place',
           `${step.name} の remove で ok:true になり、まだ置ける手が残っているのに次が place でない`);
       }
     }
@@ -1636,6 +1637,100 @@ for (const spec of BOARD_LIST) {
     }
     assert(chosenSum / SEEDS > uniformSum / SEEDS,
       '最初の place の touchingEdges の平均が、一様平均より大きくなっていない');
+  });
+}
+
+// ---- logic：moveDistance（TODO-062）---------------------------------------
+
+group('src/logic.js — moveDistance（TODO-062）');
+
+test('隣り合う 2 手は距離 1', () => {
+  const a = { shape: [[0, 0]], row: 0, col: 0 };
+  const b = { shape: [[0, 0]], row: 0, col: 1 };
+  assertSame(moveDistance(a, b), 1);
+});
+
+test('同じマスを含む 2 手は距離 0', () => {
+  const a = { shape: cellsOf('I'), row: 0, col: 0 };
+  const b = { shape: [[0, 0]], row: 2, col: 0 }; // I の 3 マス目 (2,0) と重なる
+  assertSame(moveDistance(a, b), 0);
+});
+
+test('離れた 2 手は手で数えた最短のマンハッタン距離になる', () => {
+  const a = { shape: [[0, 0]], row: 0, col: 0 };
+  const b = { shape: [[0, 0]], row: 3, col: 4 };
+  assertSame(moveDistance(a, b), 7); // |0-3| + |0-4|
+
+  const c = { shape: cellsOf('I'), row: 0, col: 0 }; // 縦棒、(0,0)〜(4,0)
+  const d = { shape: [[0, 0]], row: 0, col: 3 };
+  assertSame(moveDistance(c, d), 3); // 一番近いマスは (0,0) と (0,3)
+});
+
+// ---- logic：solveStepsRandom の近さの重み（TODO-062）----------------------
+
+/**
+ * `solveStepsRandom()` の抽選で選ばれた place（forced を除く）の、直前に
+ * 置いた手（stack の最後）からの距離の合計と件数。`DEMO.randomNearPower` は
+ * 呼び出し側で一時的に書き換えて渡す。1 つのシードだけだと偏ることがあるので
+ * 呼び出し側で複数シード分を積み上げて平均する。
+ */
+function sumMoveDistanceFromLast(spec, seed, limit) {
+  let board = createBoard(spec);
+  const stack = [];
+  let sum = 0;
+  let count = 0;
+  let taken = 0;
+  for (const step of solveStepsRandom(spec, mulberry32(seed), regionsFitPieces)) {
+    taken += 1;
+    if (taken > limit) break;
+    if (step.type === 'place') {
+      const move = { shape: step.cells, row: step.row, col: step.col };
+      const last = stack[stack.length - 1];
+      if (last && !isForcedFillStep(board, step)) {
+        sum += moveDistance(move, last);
+        count += 1;
+      }
+      board = place(board, step.name, step.cells, step.row, step.col);
+      stack.push(move);
+    } else {
+      board = remove(board, step.name);
+      stack.pop();
+    }
+  }
+  return { sum, count };
+}
+
+for (const spec of BOARD_LIST) {
+  test(`直前の手に近い置き方ほど選ばれやすい（randomNearPower を 0 にしたときより平均距離が小さい、${spec.label}）`, () => {
+    // 1 つのシードだけだとたまたまの偏りが出ることがある一方、既定の
+    // randomNearPower（2）では差が小さく、逆転を避けるにはシードや手数を
+    // 増やすしかなく重くなる。そこでテストの中でだけ大きい値（8）に上げて
+    // 差をはっきりさせ、軽いシード数・手数で比べる。
+    const SEEDS = 5;
+    const savedPower = DEMO.randomNearPower;
+    let withNear = { sum: 0, count: 0 };
+    let withoutNear = { sum: 0, count: 0 };
+    try {
+      for (let seed = 1; seed <= SEEDS; seed += 1) {
+        DEMO.randomNearPower = 8;
+        const a = sumMoveDistanceFromLast(spec, seed, 300);
+        withNear.sum += a.sum;
+        withNear.count += a.count;
+        DEMO.randomNearPower = 0;
+        const b = sumMoveDistanceFromLast(spec, seed, 300);
+        withoutNear.sum += b.sum;
+        withoutNear.count += b.count;
+      }
+    } finally {
+      DEMO.randomNearPower = savedPower;
+    }
+    assert(withNear.count > 0 && withoutNear.count > 0,
+      '選んだシード・手数で、比べられる place（forced を除く）が一度も無かった');
+    const withNearAvg = withNear.sum / withNear.count;
+    const withoutNearAvg = withoutNear.sum / withoutNear.count;
+    assert(withNearAvg < withoutNearAvg,
+      `randomNearPower を効かせたときの平均距離（${withNearAvg}）が、`
+      + `効かせないとき（${withoutNearAvg}）より小さくなっていない`);
   });
 }
 

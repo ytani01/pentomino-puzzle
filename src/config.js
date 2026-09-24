@@ -750,6 +750,11 @@ export const HINT_BADGE = {
  *   人の試行錯誤に見えるため、揺らぎとは別に長めにする。ただし、外す手が
  *   連なるとき（次も外す手のとき）は待たずに続けて動かすので掛からない
  *   （`demo.js` の `advance()`。TODO-060）
+ * - `randomNearPower` … ランダムで置き方を抽選するとき、直前に置いた手からの
+ *   距離（`logic.js` の `moveDistance()`）で重みを弱める強さ（TODO-062）。
+ *   重みに `1 / (1 + distance) ** randomNearPower` を掛け、近いほど選ばれやすく
+ *   する（人は盤の上を飛び回らず近くから順に埋めるため）。値は仮で、
+ *   画面で見て決める
  */
 export const DEMO = {
   speeds: {
@@ -761,6 +766,7 @@ export const DEMO = {
   pauseMs: 10000,
   randomJitter: 0.5,
   randomRemoveMultiplier: 2,
+  randomNearPower: 2,
 };
 
 /**

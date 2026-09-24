@@ -6,7 +6,7 @@
  * 正規形で扱う。正規形にしておくと、向きの同一判定が配列の比較だけで済む。
  */
 
-import { HOLE, PIECES, PIECE_SIZE } from './config.js';
+import { DEMO, HOLE, PIECES, PIECE_SIZE } from './config.js';
 
 /**
  * 左上を原点へ寄せ、行優先に並べ替える。
@@ -397,6 +397,23 @@ function touchWeight(count) {
   return (count + 1) ** 2;
 }
 
+/**
+ * 2 つの手のマスどうしの最短のマンハッタン距離（隣り合えば 1）。デモの
+ * ランダムで、直前に置いた手からの近さを抽選の重みに掛けるため（TODO-062）。
+ */
+export function moveDistance(a, b) {
+  let min = Infinity;
+  for (const [adr, adc] of a.shape) {
+    const ar = a.row + adr;
+    const ac = a.col + adc;
+    for (const [bdr, bdc] of b.shape) {
+      const distance = Math.abs(ar - (b.row + bdr)) + Math.abs(ac - (b.col + bdc));
+      if (distance < min) min = distance;
+    }
+  }
+  return min;
+}
+
 /** 重み付き抽選。`weights` は `items` と同じ長さ・並びで、`random` だけで決める。 */
 function pickWeighted(items, weights, random) {
   const total = weights.reduce((sum, weight) => sum + weight, 0);
@@ -497,6 +514,10 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  * 置き方は一様に選ばない。`touchingEdges()` で数えた「盤の外・穴・置き済みの
  * マスに接する辺の数」を `touchWeight()` で重みにして抽選する（隅や、置いた
  * ピースの隣に置きやすくなる。人はまず端や既に置いたものへ寄せて置くため）。
+ * さらに直前に置いた手（`stack` の最後）からの `moveDistance()` が近いほど
+ * 重みを大きくする（TODO-062。人は盤の上を飛び回らず近くから順に埋めるため）。
+ * 近さを掛けるのはピースを選んだあとの置き方だけで、ピースの選び方には
+ * 掛けない（選び方は TODO-061 で扱う。利用者が決めた）。
  *
  * 置いた直後に `canContinue(board)` が偽（そこから先は解が無い盤面）でも
  * **その場では外さない**（置ける手が尽きたら、`canContinue(board)` が真になるまで
@@ -604,7 +625,14 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     } else {
       const movesForName = pickOne(choices);
       // 重みは選んだピースの置き方の分だけ数える（全ピース分は要らない）。
-      const weights = movesForName.map((m) => touchWeight(touchingEdges(board, m.shape, m.row, m.col)));
+      // 直前に置いた手（stack の最後）からの近さも掛け、盤の上を飛び回らず
+      // 近くから順に埋めていくようにする（TODO-062）。スタックが空（盤が
+      // まっさらな最初の手）なら距離の項は掛けない。
+      const last = stack[stack.length - 1];
+      const weights = movesForName.map((m) => {
+        const touch = touchWeight(touchingEdges(board, m.shape, m.row, m.col));
+        return last ? touch / (1 + moveDistance(m, last)) ** DEMO.randomNearPower : touch;
+      });
       move = pickWeighted(movesForName, weights, random);
     }
     fill(move, move.name);
