@@ -766,6 +766,11 @@ export const HINT_BADGE = {
  *   「やり直そう」と大きく崩すため。値は仮で、画面で見て決める
  * - `randomCollapseMoves` … まとめて崩すとき、何手まで外すか（スタックにある分
  *   まで。TODO-063）。値は仮で、画面で見て決める
+ * - `randomTurnStepMs` … ランダムで置く前に、トレイでの今の向きから置く向きまで
+ *   1 段（90° 回転かその場の裏返し）ごとに空ける時間（`logic.js` の
+ *   `orientationSteps()`。TODO-065）。人は手に取ってから向きを合わせて置くので、
+ *   その動きを見せる。最速（`animate: false`）では回さない。値は仮で、
+ *   画面で見て決める
  */
 export const DEMO = {
   speeds: {
@@ -781,6 +786,7 @@ export const DEMO = {
   randomTightWeight: 4,
   randomCollapseAfter: 5,
   randomCollapseMoves: 3,
+  randomTurnStepMs: 150,
 };
 
 /**

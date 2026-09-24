@@ -40,8 +40,8 @@
 <script type="module">
 import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, DEMO, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT, makeLayout } from './src/config.js';
 import {
-  normalize, rotateCw, flip, sameShape, orientations, turnOrder, nextTurn,
-  nextPlaceableTurn, snapSpot, shapeSize, outlineEdges,
+  normalize, rotateCw, rotateCcw, flip, sameShape, orientations, turnOrder, nextTurn,
+  orientationSteps, nextPlaceableTurn, snapSpot, shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
   forcedPlacements, touchingEdges, moveDistance, countCellMoves,
@@ -354,6 +354,102 @@ test('nextTurn を向きの数だけ繰り返すと元へ戻り、途中で全�
 test('X は nextTurn でも向きが変わらない', () => {
   const start = normalize(cellsOf('X'));
   assert(sameShape(nextTurn(start), start), 'X の向きが変わった');
+});
+
+test('orientationSteps は同じ向きなら空を返す（TODO-065）', () => {
+  const start = normalize(cellsOf('F'));
+  assertSame(orientationSteps(start, start), []);
+});
+
+test('orientationSteps は 1 回転だけの道を返す（TODO-065）', () => {
+  const start = normalize(cellsOf('F'));
+  const target = rotateCw(start);
+  const steps = orientationSteps(start, target);
+  assertSame(steps.length, 1, '段数');
+  assertSame(steps[0].kind, 'rotate');
+  assert(sameShape(steps[0].cells, target), '最後の形');
+});
+
+test('orientationSteps は裏返しだけの道を返す（TODO-065）', () => {
+  const start = normalize(cellsOf('F'));
+  const target = flip(start);
+  const steps = orientationSteps(start, target);
+  assertSame(steps.length, 1, '段数');
+  assertSame(steps[0].kind, 'flip');
+  assert(sameShape(steps[0].cells, target), '最後の形');
+});
+
+test('orientationSteps は裏返し＋回転 2 回の道を返す（TODO-065）', () => {
+  const start = normalize(cellsOf('F'));
+  const target = rotateCw(rotateCw(flip(start)));
+  const steps = orientationSteps(start, target);
+  assertSame(steps.length, 3, '段数');
+  assertSame(steps.filter((step) => step.kind === 'flip').length, 1, '裏返しの回数');
+  assertSame(steps.filter((step) => step.kind === 'rotate').length, 2, '回転の回数');
+  assert(sameShape(steps[steps.length - 1].cells, target), '最後の形');
+});
+
+test('orientationSteps は X なら常に空を返す（TODO-065）', () => {
+  const start = normalize(cellsOf('X'));
+  assertSame(orientationSteps(start, start), []);
+  assertSame(orientationSteps(start, rotateCw(start)), []);
+  assertSame(orientationSteps(start, flip(start)), []);
+});
+
+test('orientationSteps は回転してから裏返す 2 段の道も返す（TODO-065）', () => {
+  const start = normalize(cellsOf('F'));
+  const target = flip(rotateCw(start));
+  const steps = orientationSteps(start, target);
+  assertSame(steps.length, 2, '段数');
+  assert(sameShape(steps[steps.length - 1].cells, target), '最後の形');
+});
+
+/**
+ * `orientationSteps()` とは別の道筋で最短段数を数える（レビューの要修正 2）。
+ * 深さごとに届く形を総当たりで広げるだけで、`orientationSteps()` の幅優先探索
+ * （キュー・訪問済みの管理）を一切共有しないので、あちら側の実装に潜むバグ
+ * （深さ優先に化ける、右回りだけで探す、など）を捕まえられる。
+ */
+function orientationDistance(from, to) {
+  const start = normalize(from);
+  const target = normalize(to);
+  if (sameShape(start, target)) return 0;
+  let frontier = [start];
+  for (let depth = 1; depth <= 3; depth += 1) {
+    const next = [];
+    for (const cells of frontier) {
+      for (const g of [rotateCw, rotateCcw, flip]) {
+        const shape = g(cells);
+        if (sameShape(shape, target)) return depth;
+        next.push(shape);
+      }
+    }
+    frontier = next;
+  }
+  return -1; // 3 段以内で届かなかった（利用者と決めた上限を超える。起きないはず）。
+}
+
+test('orientationSteps は全ピース・全向きの組で最短になる（TODO-065）', () => {
+  for (const piece of PIECES) {
+    const shapes = orientations(piece.cells);
+    for (const from of shapes) {
+      for (const to of shapes) {
+        const steps = orientationSteps(from, to);
+        const distance = orientationDistance(from, to);
+        assertSame(steps.length, distance, `${piece.name} の段数が最短でない`);
+        assert(steps.length <= 3, `${piece.name} が裏返し 1 回＋回転 2 回を超えた`);
+        let prev = normalize(from);
+        steps.forEach((step, i) => {
+          const byRotate = step.kind === 'rotate'
+            && (sameShape(step.cells, rotateCw(prev)) || sameShape(step.cells, rotateCcw(prev)));
+          const byFlip = step.kind === 'flip' && sameShape(step.cells, flip(prev));
+          assert(byRotate || byFlip, `${piece.name} の ${i} 段目が前の段から移れない`);
+          prev = step.cells;
+        });
+        assert(sameShape(prev, normalize(to)), `${piece.name} の最後が目標でない`);
+      }
+    }
+  }
 });
 
 test('nextPlaceableTurn が返す向きは、その場に置けるか元のまま（TODO-023）', () => {

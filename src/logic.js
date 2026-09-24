@@ -32,6 +32,16 @@ export function rotateCw(cells) {
   return normalize(cells.map(([row, col]) => [col, -row]));
 }
 
+/**
+ * 左 90° 回転（`rotateCw` の逆）。`(行, 列) → (-列, 行)`。
+ * タップで巡る向き（`turnOrder()`・`nextTurn()`）は右回りだけで足りるので
+ * 使わないが、デモで置く前に向きを合わせて見せるときは、右へ 3 回まわすより
+ * 左へ 1 回まわすほうが短い場合があるので使う（`orientationSteps()`。TODO-065）。
+ */
+export function rotateCcw(cells) {
+  return normalize(cells.map(([row, col]) => [-col, row]));
+}
+
 /** 左右の反転。上下の反転は回転 2 回と組み合わせれば同じものが得られる。 */
 export function flip(cells) {
   return normalize(cells.map(([row, col]) => [row, -col]));
@@ -121,6 +131,43 @@ export function nextTurn(cells, origin = null) {
   const shape = normalize(cells);
   const index = order.findIndex((known) => sameShape(known, shape));
   return order[(index + 1) % order.length];
+}
+
+/**
+ * `from` から `to`（どちらも正規形）まで、`rotateCw()`・`rotateCcw()`・`flip()` を
+ * 使う最短の道を返す（デモで、置く前にトレイで向きを合わせて見せるため。TODO-065）。
+ * 右だけでは足りないのは、右 3 回で着く向きが左 1 回で着くことがあるため
+ * （`turnPiece()` のタップは右回りだけで巡るが、あちらは「次はどれか」を
+ * 一意に決める並びが要るのに対し、ここは見た目の短さだけが要る）。
+ *
+ * `from` は含まず `to` を含む。各段は `{ cells, kind }`（`kind` は `'rotate'` か
+ * `'flip'`。左右どちらの回転も `'rotate'` で、音は同じため区別しない）。
+ * 同じ向きなら空を返す。
+ *
+ * 向きの全体は「回転 4 通り × 反転の要否」で高々 8 通りしかないので、
+ * 幅優先探索で足りる（先に見つかった道が最短になる）。利用者と決めた
+ * 「最大で裏返し 1 回＋回転 2 回」も、この 8 通りの中で確かめてある。
+ */
+export function orientationSteps(from, to) {
+  const start = normalize(from);
+  const target = normalize(to);
+  if (sameShape(start, target)) return [];
+  const visited = [start];
+  const queue = [{ cells: start, path: [] }];
+  while (queue.length > 0) {
+    const { cells, path } = queue.shift();
+    for (const [kind, transform] of [
+      ['rotate', rotateCw], ['rotate', rotateCcw], ['flip', flip],
+    ]) {
+      const next = transform(cells);
+      if (visited.some((known) => sameShape(known, next))) continue;
+      const nextPath = [...path, { cells: next, kind }];
+      if (sameShape(next, target)) return nextPath;
+      visited.push(next);
+      queue.push({ cells: next, path: nextPath });
+    }
+  }
+  return []; // 到達できない形を渡したとき（呼ぶ側は同じピースの向きだけを渡す想定）。
 }
 
 /** 正規形から、その向きの外接矩形の大きさを返す。トレイでの中央寄せに使う。 */

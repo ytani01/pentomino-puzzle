@@ -26,13 +26,20 @@
  * ヒント表示を入にして解く人と同じ動きで、HUD にも本編のヒント表示と同じ
  * 文字を出す（TODO-043）。解につながる手だけを選んで置かないのは、それだと
  * 試行錯誤に見えなくなるため。全解のデータが届くまでは探索を始めない。
+ *
+ * ランダム・`animate` の速さで置くときは、盤へ滑らせる前にトレイでの今の
+ * 向きから置く向きまで、最短の回転・裏返しで回して見せる（`playTurns()`。
+ * TODO-065）。人は手に取って向きを合わせてから置くため。最速と深さ優先は
+ * 回さない。
  */
 
 import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, DEMO, DEMO_LAYOUTS, FONT, PALETTES,
   PALETTE_REGISTRY_KEY, TEXT_COLORS,
 } from '../config.js';
-import { createBoard, solveSteps, solveStepsRandom } from '../logic.js';
+import {
+  createBoard, orientationSteps, solveSteps, solveStepsRandom,
+} from '../logic.js';
 import { ensureSolutions, hasSolution } from '../solutions.js';
 import * as audio from '../audio.js';
 import { createHintBadge, createPanel, createVersionText } from '../ui.js';
@@ -81,6 +88,12 @@ export default class DemoScene extends GameScene {
     // 1 手先読みした generator の結果（TODO-060）。外す手が連なるときだけ
     // 待たせないため、置いた／外した直後に先読みして持っておく。
     this.peeked = null;
+    // ランダムで置く前に向きを回して見せている間の予約（TODO-065）。
+    // `turning` は今仕上げるべき手（`{ piece, value, animate }`）、`turnTimer` は
+    // 次の段まで待つ delayedCall。速さ・探し方の切り替え、次の解へ、で
+    // 押されたときに `cancelTurn()` から使う。
+    this.turning = null;
+    this.turnTimer = null;
 
     this.drawBoard();
     this.drawTray();
@@ -106,6 +119,12 @@ export default class DemoScene extends GameScene {
 
   update(_time, delta) {
     if (this.state === 'loading') return;
+    // 回している間（`this.turning`）は `playTurns()` の delayedCall が段を
+    // 進めるので、ここでは待ちを数えない（TODO-065）。数えたままだと、回す時間
+    // （1〜3 段）が前の手の待ち時間を超えたときに、回し終わる前に次の
+    // `advance()` が走ってしまう（レビューの要修正 1）。回し終えて
+    // `finishStep()` してから数え始めれば、回した時間は自然に次の待ちへ足される。
+    if (this.turning) return;
     this.waited += delta;
     if (this.state !== 'running') {
       // 解のあとは空の盤から探し直す（TODO-054）。
@@ -137,11 +156,14 @@ export default class DemoScene extends GameScene {
 
   /**
    * generator を 1 手進め、動いたピースを今の位置へ移す。解を見つけたら
-   * そこで止める。滑らせて音を鳴らすのは `animate` の速さだけ。
-   * generator が尽きたら黙って空の盤から探し直す（どちらの探し方もデモでは
-   * 解のたびに作り直すので、尽きるところまで来ない。万一の備え）。
+   * そこで止める。generator が尽きたら黙って空の盤から探し直す（どちらの
+   * 探し方もデモでは解のたびに作り直すので、尽きるところまで来ない。万一の備え）。
    * 先読み（`this.peeked`）があればそれを使い、無ければここで 1 手引く
    * （初回や `startSearch()` 直後）。
+   *
+   * ランダムで `animate` の place は、盤へ滑らせる前にトレイでの今の向きから
+   * 置く向きまで回して見せる（`playTurns()`。TODO-065）。回すものが無ければ
+   * （同じ向き、深さ優先、remove、最速）今までどおりその場で仕上げる。
    */
   advance() {
     const { value, done } = this.peeked ?? this.steps.next();
@@ -156,6 +178,57 @@ export default class DemoScene extends GameScene {
     }
     const { animate } = DEMO.speeds[this.speed];
     const piece = this.pieceByName.get(value.name);
+    if (value.type === 'place' && animate && this.strategy === 'random') {
+      const steps = orientationSteps(piece.cells, value.cells);
+      if (steps.length > 0) {
+        this.playTurns(piece, steps, 0, value, animate);
+        return;
+      }
+    }
+    this.finishStep(value, animate, piece);
+  }
+
+  /**
+   * 向きを 1 段ずつ変えて見せる（TODO-065）。トレイの位置のまま
+   * `refreshPiece()` で描き直し、回転か裏返しかで音を分ける。最後の段まで
+   * 進んだら `finishStep()` で今までどおり盤へ滑らせる。
+   */
+  playTurns(piece, steps, index, value, animate) {
+    const step = steps[index];
+    piece.cells = step.cells;
+    this.refreshPiece(piece);
+    if (step.kind === 'rotate') audio.rotate();
+    else audio.flip();
+    this.turning = { piece, value, animate };
+    this.turnTimer = this.time.delayedCall(DEMO.randomTurnStepMs, () => {
+      this.turnTimer = null;
+      if (index + 1 < steps.length) {
+        this.playTurns(piece, steps, index + 1, value, animate);
+      } else {
+        this.turning = null;
+        this.finishStep(value, animate, piece);
+      }
+    });
+  }
+
+  /**
+   * 予約が残っているなら、その場で仕上げてから止める（TODO-065）。速さ・
+   * 探し方の切り替え、次の解へ、で押されたときに呼ぶ。タイトルへ戻る
+   * （シーンの切り替え）は `scene.time` ごと止まるので、ここを通らなくてよい。
+   * 残りの段を飛ばして最終の向きへ直接進める（宙ぶらりんのまま止めない）。
+   */
+  cancelTurn() {
+    if (!this.turnTimer) return;
+    this.turnTimer.remove(false);
+    this.turnTimer = null;
+    const { piece, value, animate } = this.turning;
+    this.turning = null;
+    piece.cells = value.cells;
+    this.finishStep(value, animate, piece);
+  }
+
+  /** 手を仕上げる。滑らせて音を鳴らすのは `animate` の速さだけ。 */
+  finishStep(value, animate, piece) {
     if (value.type === 'place') {
       this.tried += 1;
       piece.cells = value.cells;
@@ -261,6 +334,9 @@ export default class DemoScene extends GameScene {
 
   selectSpeed(speed) {
     audio.button();
+    // 回している途中の予約を残さない（TODO-065）。`startSearch()` を呼ばない
+    // ここだけは明示して止める。
+    this.cancelTurn();
     this.speed = speed;
     // 止まっている間は待ち時間を数え直さない（速さを変えるたびに延びるため）。
     if (this.state === 'running') this.waited = 0;
@@ -286,8 +362,11 @@ export default class DemoScene extends GameScene {
    * 探し直すときは、盤のピースを滑らせずにトレイへ戻す。何枚も同時に滑らせると
    * 探索の 1 手と見分けがつかず、次の探索の最初の手とも重なるため。
    * 見つけた解の数は戻さない。解のたびに探し直すので、戻すと 0 か 1 にしかならない。
+   * 回している途中の予約も、ここで仕上げてから止める（`toggleStrategy()`・
+   * `searchNext()` の両方がここを通るため。TODO-065）。
    */
   startSearch() {
+    this.cancelTurn();
     for (const piece of this.pieces) {
       if (piece.location !== 'board') continue;
       piece.location = 'tray';
