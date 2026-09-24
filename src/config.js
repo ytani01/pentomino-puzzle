@@ -652,6 +652,10 @@ export const TURN_MARK = {
  *   その速さを測る区間。位置を合わせて置くときは指が止まってから離れるので、
  *   速さが残っていれば「置く気は無い」と見てよい。座標はゲームの中のもの
  *   （横画面で 960×640）で、実際の画面の大きさには依らない
+ * - `wheelDebounceMs` … ドラッグ中にホイールで向きを変えるとき、1 段
+ *   進めてから次を受け付けるまでの間（TODO-069）。トラックパッドは 1 回の
+ *   操作で何十もイベントが来るので、間を空けないと何段も進んでしまう。
+ *   値は仮で、画面で見て決める
  */
 export const INPUT = {
   dragThreshold: 8,
@@ -661,6 +665,7 @@ export const INPUT = {
   invalidFlashMs: 260,
   returnTweenMs: 180,
   messageMs: 2600,
+  wheelDebounceMs: 150,
 };
 
 /**

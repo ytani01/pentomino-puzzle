@@ -13,8 +13,9 @@ import {
 } from '../config.js';
 import {
   boardKey, canPlace, createBoard, flip, forcedPlacements, formatTime, isSolved,
-  nextPlaceableTurn, nextTurn,
+  nextPlaceableTurn, nextTurn, prevTurn,
   normalize, outlineEdges, place, remove, rotateCw, sameShape, shapeSize, snapSpot, turnOrder,
+  turnPivot,
 } from '../logic.js';
 import {
   autoFrom, ensureSolutions, hasSolution, solutionNumber,
@@ -109,6 +110,15 @@ export default class GameScene extends Phaser.Scene {
 
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
+    // ドラッグ中に向きを変える入力（TODO-069）。右クリック・ホイール・
+    // 2 本目の指のタップは、盤やピースの当たり判定に関わらず画面のどこでも
+    // 受けたいので、シーン全体で聞く。2 本目の指を受ける設定
+    // （`input.activePointers`）と右クリックのメニューを出さない設定
+    // （`input.disableContextMenu`）は `main.js` の Phaser の起動設定にある
+    // （ゲーム全体に 1 回だけ効く値なので、シーンへ入るたびに呼ぶとポインタが
+    // 積み上がる。TODO-069 レビューの要修正 4）。
+    this.input.on('pointerdown', this.onScenePointerDown, this);
+    this.input.on('wheel', this.onWheel, this);
     // シーンを離れるときに持ち越しの押下状態を捨てる（次に来たとき掴んだままになる）。
     // ついでに、そのときの経過時間まで含めて遊びかけを控える（TODO-030）。
     // 盤が変わったときにも控えているが、置いてから何分も考えて中断すると、
@@ -614,10 +624,13 @@ export default class GameScene extends Phaser.Scene {
   // ---- 入力 -----------------------------------------------------------
 
   onPiecePointerDown(piece, pointer) {
-    if (!this.playing || this.drag || this.pending) return;
+    // 右クリックはドラッグ中の向きの変更にだけ使うので、タップやドラッグの
+    // 始まりとしては受けない（TODO-069）。
+    if (!this.playing || this.drag || this.pending || pointer.rightButtonDown()) return;
     audio.unlock();
     this.pending = {
       piece,
+      pointer,
       startX: pointer.x,
       startY: pointer.y,
       consumed: false,
@@ -626,10 +639,16 @@ export default class GameScene extends Phaser.Scene {
 
   onPointerMove(pointer) {
     if (this.drag) {
+      // ドラッグを始めたポインタだけを見る。2 本目の指（向きの変更に使う）が
+      // 動いても、運んでいるピースを動かさない（TODO-069）。
+      if (pointer.id !== this.drag.pointer.id) return;
       this.updateDrag(pointer);
       return;
     }
-    if (!this.pending) return;
+    // 押しただけでまだドラッグを始めていない間も、押したポインタだけを見る。
+    // 見ないと、2 本目の指がわずかに動いただけで、そちらでドラッグが
+    // 始まってしまう（TODO-069 レビューの要修正 1）。
+    if (!this.pending || pointer.id !== this.pending.pointer.id) return;
     const moved = Phaser.Math.Distance.Between(
       this.pending.startX, this.pending.startY, pointer.x, pointer.y,
     );
@@ -639,14 +658,89 @@ export default class GameScene extends Phaser.Scene {
   /** タップは待たずにその場で次の向きへ進める（TODO-023）。ダブルタップの
    *  反転を無くしたので、2 回目を待つ猶予が要らなくなった。 */
   onPointerUp(pointer) {
+    // 右ボタンを離しても、ドラッグ中の向きの変更（`onScenePointerDown()`）の
+    // ついでに過ぎない。マウスは同じポインタ ID を使い回すので、ボタンで
+    // 見分ける（TODO-069）。
+    if (pointer.button === 2) return;
     if (this.drag) {
+      // 2 本目の指を離してもドラッグは終わらない（TODO-069）。
+      if (pointer.id !== this.drag.pointer.id) return;
       this.dropDrag(pointer);
       return;
     }
+    // 押したポインタ以外が離れても、タップ扱いにしない（同じ理由。TODO-069）。
+    if (!this.pending || pointer.id !== this.pending.pointer.id) return;
     const pending = this.pending;
     this.cancelPending();
-    if (!pending || pending.consumed) return;
+    if (pending.consumed) return;
     this.turnPiece(pending.piece);
+  }
+
+  /**
+   * ドラッグ中に向きを変える入力（TODO-069）。右クリックはボタンで見分けるが、
+   * 2 本目の指はドラッグ中のポインタと違う ID が来たことで見分ける
+   * （マウスの左クリックは常に同じ ID なので、ここでは二重に反応しない）。
+   */
+  onScenePointerDown(pointer) {
+    if (!this.drag) return;
+    if (pointer.rightButtonDown()) {
+      this.turnDrag(1);
+      return;
+    }
+    if (pointer.wasTouch && pointer.id !== this.drag.pointer.id) this.turnDrag(1);
+  }
+
+  /**
+   * ドラッグ中のホイールで向きを変える（TODO-069）。下が次、上が 1 つ前。
+   * トラックパッドは 1 回の操作で何十もイベントが来るので、一定時間は無視する。
+   */
+  onWheel(pointer, gameObjects, deltaX, deltaY) {
+    if (!this.drag || deltaY === 0) return;
+    const now = this.time.now;
+    if (now - this.drag.lastWheelAt < INPUT.wheelDebounceMs) return;
+    this.drag.lastWheelAt = now;
+    this.turnDrag(deltaY > 0 ? 1 : -1);
+  }
+
+  /**
+   * ドラッグ中に向きを 1 段変える（TODO-069）。盤から外れているので
+   * `nextPlaceableTurn()` は使わず、盤の上と同じくタップの巡り方
+   * （`nextTurn()` / `prevTurn()`）をそのまま使う。回す軸は**つかんでいる
+   * マス**で、指の位置ではない。タッチでは `this.drag.offsetX/Y` に
+   * 指へ逃がした 1 マスぶん（`touchShiftX/Y`）が乗っているので、回す前に
+   * 除き、回したあとで同じ分を足し戻す（TODO-069 レビューの要修正 2。
+   * ずらし分ごと回すと、つかんだマスでなく指の位置を軸に回ってしまう）。
+   * 向きが変わったあとも、つかんだマスが画面上の同じ位置に残るよう、
+   * つかんだ点を新しい向きの座標系へ写し直す（`turnPivot()`）。X のように
+   * 向きが 1 通りしかないピースは、今のタップ（`turnPiece()`）と同じく
+   * 音だけ返す。
+   */
+  turnDrag(direction) {
+    const { piece, touchShiftX, touchShiftY } = this.drag;
+    const next = direction > 0
+      ? nextTurn(piece.cells, piece.origin)
+      : prevTurn(piece.cells, piece.origin);
+    if (sameShape(next, piece.cells)) {
+      audio.rotate();
+      return;
+    }
+    const cell = this.layout.board.cell;
+    const point = [
+      (this.drag.offsetY - touchShiftY) / cell,
+      (this.drag.offsetX - touchShiftX) / cell,
+    ];
+    const [row, col] = turnPivot(piece.cells, next, point);
+    const flipped = sameShape(next, normalize(flip(piece.cells)));
+    piece.cells = next;
+    this.drag.offsetX = col * cell + touchShiftX;
+    this.drag.offsetY = row * cell + touchShiftY;
+    this.refreshPiece(piece);
+    piece.container.setPosition(
+      this.drag.pointer.x - this.drag.offsetX, this.drag.pointer.y - this.drag.offsetY,
+    );
+    if (flipped) audio.flip();
+    else audio.rotate();
+    this.refreshDragGhost();
   }
 
   cancelPending() {
@@ -661,21 +755,41 @@ export default class GameScene extends Phaser.Scene {
     // 掴んだ点を拡大率ぶん割り戻して覚える。トレイの縮小表示から盤の大きさへ
     // 広がっても、指の下にあるマスが変わらないようにするため。
     const scale = piece.container.scaleX;
-    let offsetX = (pending.startX - piece.container.x) / scale;
-    let offsetY = (pending.startY - piece.container.y) / scale;
+    const offsetX = (pending.startX - piece.container.x) / scale;
+    const offsetY = (pending.startY - piece.container.y) / scale;
     // 指で隠れないよう、タッチ操作のときだけピースを盤のマス 1 個ぶんずらす。
     // 縦画面では指の上、横画面では指の左（TODO-023）。画面の長い側へ
     // 逃がすので、盤の端でも指を画面の外へ出さずに済む。
     // マウスでは指がないのでずらさない（`pointer.wasTouch` で見分ける）。
+    // ずらした分（`touchShiftX/Y`）は別に持っておく。ドラッグ中に向きを
+    // 変えるとき（`turnDrag()`）、回す軸は「つかんでいるマス」であって
+    // 「指の位置」ではないので、回す前にこの分を除き、回したあとで
+    // 同じ分を足し戻す（TODO-069 レビューの要修正 2）。
+    let touchShiftX = 0;
+    let touchShiftY = 0;
     if (pointer.wasTouch) {
-      if (this.layout.portrait) offsetY += this.layout.board.cell;
-      else offsetX += this.layout.board.cell;
+      if (this.layout.portrait) touchShiftY = this.layout.board.cell;
+      else touchShiftX = this.layout.board.cell;
     }
 
     const snapshot = this.snapshot();
     if (piece.location === 'board') this.board = remove(this.board, piece.name);
 
-    this.drag = { piece, offsetX, offsetY, snapshot, trail: [] };
+    // `pointer` を控えておくのは、ドラッグ中に向きを変える入力（TODO-069）が
+    // 別のポインタ（右クリックや 2 本目の指）から来たとき、運んでいる指の
+    // 今の位置へ収め直すため。Phaser はポインタごとに同じオブジェクトを
+    // 使い回すので、動いてもここで持つ参照のまま最新の座標が読める。
+    this.drag = {
+      piece,
+      offsetX: offsetX + touchShiftX,
+      offsetY: offsetY + touchShiftY,
+      touchShiftX,
+      touchShiftY,
+      snapshot,
+      trail: [],
+      pointer,
+      lastWheelAt: -Infinity,
+    };
     this.drawTurnMark(piece);   // 掴んでいる間は印を消す
     piece.container.setScale(1);
     piece.container.setDepth(DEPTH.dragging);
@@ -694,8 +808,13 @@ export default class GameScene extends Phaser.Scene {
       trail.shift();
     }
 
+    this.refreshDragGhost();
+  }
+
+  /** 今のドラッグの位置と向きに合わせて影を出し直す（`updateDrag()` と `turnDrag()` で使う）。 */
+  refreshDragGhost() {
     const spot = this.dropSpot();
-    if (spot) this.showGhost(piece, spot.row, spot.col);
+    if (spot) this.showGhost(this.drag.piece, spot.row, spot.col);
     else this.ghost.setVisible(false);
   }
 

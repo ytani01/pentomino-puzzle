@@ -26,6 +26,15 @@ window.game = new Phaser.Game({
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
+  // ドラッグ中に向きを変える入力（本編。TODO-069）が使う。ゲーム全体の
+  // InputManager / MouseManager に効く値なので、ここで 1 回だけ設定する
+  // （`GameScene.create()` から毎回呼ぶと、シーンへ入り直すたびにポインタが
+  // 増え、`contextmenu` のリスナーも積み上がる。TODO-069 レビューの要修正 4）。
+  // `activePointers: 2` で、既定の 1 本に加えてもう 1 本（2 本目の指）を受ける。
+  input: {
+    activePointers: 2,
+    disableContextMenu: true,
+  },
   scene: [BootScene, TitleScene, GameScene, ClearScene, RecordsScene, DemoScene],
 });
 

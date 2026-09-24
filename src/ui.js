@@ -291,12 +291,18 @@ export function createButton(scene, options) {
     redraw();
     if (!pointer.wasTouch) tip()?.hide();
   });
+  // ドラッグ中は HUD のボタンを受けない（利用者が決めた。TODO-069）。
+  // ドラッグ中の 2 本目の指はどこを押しても向きの変更だけにするため、
+  // ボタンの上に乗っても `onClick` を走らせない（`scene.drag` は本編・
+  // デモだけが持つので、他の画面では常に偽で今までどおり動く）。
   container.on('pointerdown', () => {
+    if (scene.drag) return;
     container.pressed = true;
     redraw();
     tip()?.hide();
   });
   container.on('pointerup', (pointer) => {
+    if (scene.drag) return;
     const wasPressed = container.pressed;
     container.pressed = false;
     redraw();

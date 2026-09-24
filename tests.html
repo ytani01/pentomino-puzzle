@@ -40,7 +40,8 @@
 <script type="module">
 import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, DEMO, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT, makeLayout } from './src/config.js';
 import {
-  normalize, rotateCw, rotateCcw, flip, sameShape, orientations, turnOrder, nextTurn,
+  normalize, rotateCw, rotateCcw, flip, sameShape, orientations, turnOrder, nextTurn, prevTurn,
+  turnPivot,
   orientationSteps, nextPlaceableTurn, snapSpot, shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
@@ -354,6 +355,53 @@ test('nextTurn を向きの数だけ繰り返すと元へ戻り、途中で全�
 test('X は nextTurn でも向きが変わらない', () => {
   const start = normalize(cellsOf('X'));
   assert(sameShape(nextTurn(start), start), 'X の向きが変わった');
+});
+
+test('prevTurn は nextTurn の逆順（TODO-069）', () => {
+  for (const piece of PIECES) {
+    const start = normalize(piece.cells);
+    const next = nextTurn(start, piece.cells);
+    const back = prevTurn(next, piece.cells);
+    assert(sameShape(back, start), `${piece.name} が prevTurn で戻らない`);
+  }
+});
+
+test('X は prevTurn でも向きが変わらない（TODO-069）', () => {
+  const start = normalize(cellsOf('X'));
+  assert(sameShape(prevTurn(start), start), 'X の向きが変わった');
+});
+
+test('turnPivot は、右回り・左回り・裏返しのどれでも、マス全部の中心をちょうど新しい形のマスへ移す（TODO-069）', () => {
+  // つかむ点はマスの真ん中（`turnDrag()` が実際に扱うのも、マスの中の
+  // 連続した点。マスのラベルそのもの＝角は隣のマスとの境目で、
+  // どちらのマスに属すか決まらないので確かめない）。
+  // 5 マスの移った先が、新しい形の 5 マスとちょうど 1 対 1 で重なるかを見る
+  // （どれか 1 マスだけ合っていても、他がずれていれば見逃さない）。
+  for (const piece of PIECES) {
+    const start = normalize(piece.cells);
+    for (const target of [rotateCw(start), rotateCcw(start), flip(start)]) {
+      if (sameShape(target, start)) continue; // X など、向きが変わらないものは確かめない
+      const mapped = start.map(([row, col]) => {
+        const [r, c] = turnPivot(start, target, [row + 0.5, col + 0.5]);
+        return `${Math.floor(r)},${Math.floor(c)}`;
+      }).sort().join('|');
+      const expected = target.map(([r, c]) => `${r},${c}`).sort().join('|');
+      assertSame(mapped, expected, `${piece.name} が新しい形とちょうど重ならない`);
+    }
+  }
+});
+
+test('turnPivot は行き来しても元の点へ戻る（TODO-069）', () => {
+  for (const piece of PIECES) {
+    const start = normalize(piece.cells);
+    const next = nextTurn(start, piece.cells);
+    if (sameShape(next, start)) continue; // X
+    for (const cellPoint of start) {
+      const moved = turnPivot(start, next, cellPoint);
+      const back = turnPivot(next, start, moved);
+      assertSame(back, cellPoint, `${piece.name} の点が往復で戻らない`);
+    }
+  }
 });
 
 test('orientationSteps は同じ向きなら空を返す（TODO-065）', () => {

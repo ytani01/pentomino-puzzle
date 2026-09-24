@@ -134,6 +134,53 @@ export function nextTurn(cells, origin = null) {
 }
 
 /**
+ * 今の向きの 1 つ前を返す（TODO-069。ドラッグ中、ホイール上で 1 つ前の向きへ
+ * 戻すため）。`turnOrder()` の並びは `nextTurn()` と同じで、逆向きに辿るだけ。
+ */
+export function prevTurn(cells, origin = null) {
+  const order = turnOrder(cells, origin);
+  const shape = normalize(cells);
+  const index = order.findIndex((known) => sameShape(known, shape));
+  return order[(index - 1 + order.length) % order.length];
+}
+
+/**
+ * ドラッグ中に向きを変えるとき、つかんでいる点（`from` の座標系での
+ * `[行, 列]`。マス単位の小数）が `to` の座標系でどこに来るかを返す
+ * （TODO-069）。`turnOrder()` の隣どうしは必ず「右へ 90° 回転」「左へ 90° 回転」
+ * 「その場の裏返し」のどれか 1 つで移れる（`turnOrder()` の JSDoc、
+ * および `turnOrder の隣どうしは、90° 回転かその場の裏返しで移れる` の
+ * テストで確かめてある）ので、`from` を `to` へ変える一歩がどれかを
+ * `sameShape()` で見分ければ、その一歩ぶんだけ点を動かせば足りる
+ * （レビュー: 間引く前の 8 通りを辿る形は作り込みすぎで、対称な形（I・Z）
+ * では途中の道の選び方によって答えが割れる欠点もあった）。
+ *
+ * 各変換の式は、`from` の外接矩形の大きさ（`rows` / `cols`）を使った
+ * `rotateCw()` / `rotateCcw()` / `flip()` の連続版（マスのラベルだけでなく、
+ * マスの中の点まで正しく動かす）。`from` は正規形（左上が原点）である前提。
+ *
+ * I のように右回りと左回りが同じ形になる向きでは（`cw` と `ccw` が両方
+ * 真）、どちらを使っても新しい形の上には乗るが、往復（次の向きへ→1 つ前へ、
+ * など）で同じ向き（例えば右回り）を選び続けると正味 180° 回ったことになり、
+ * つかんだ点が元へ戻らない。`shapeKey()` の大小で一方の呼び出しでは右回り、
+ * 逆向きの呼び出し（`from`/`to` が入れ替わる）では左回りを選ぶようにして、
+ * 往復すると必ず打ち消し合うようにしてある。
+ */
+export function turnPivot(from, to, point) {
+  const { rows, cols } = shapeSize(from);
+  const [row, col] = point;
+  const cw = sameShape(rotateCw(from), to);
+  const ccw = sameShape(rotateCcw(from), to);
+  if (cw && ccw) {
+    return shapeKey(from) < shapeKey(to) ? [col, rows - row] : [cols - col, row];
+  }
+  if (cw) return [col, rows - row];
+  if (ccw) return [cols - col, row];
+  if (sameShape(flip(from), to)) return [row, cols - col];
+  return point; // 一歩で説明できない（起きない想定。念のため動かさずに返す）。
+}
+
+/**
  * `from` から `to`（どちらも正規形）まで、`rotateCw()`・`rotateCcw()`・`flip()` を
  * 使う最短の道を返す（デモで、置く前にトレイで向きを合わせて見せるため。TODO-065）。
  * 右だけでは足りないのは、右 3 回で着く向きが左 1 回で着くことがあるため
