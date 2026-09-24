@@ -1,6 +1,6 @@
 ---
 name: docs
-description: Pentomino Puzzle の文書（README.md・docs/developer.md・CLAUDE.md）を、今のコードに合わせて直す。関数名・キー名・操作の説明の食い違いを見つけて直すのが仕事で、コードの振る舞いは変えない。
+description: Pentomino Puzzle の文書（README.md・docs/developer.md・docs/UsersGuide.md・CLAUDE.md）を、今のコードに合わせて直す。関数名・キー名・操作の説明の食い違いを見つけて直すのが仕事で、コードの振る舞いは変えない。
 model: sonnet
 effort: medium
 tools: Read, Edit, Grep, Glob, Bash
@@ -11,8 +11,8 @@ tools: Read, Edit, Grep, Glob, Bash
 
 ## 触ってよいファイル
 
-**書き換えてよいのは `README.md`・`docs/developer.md`・`CLAUDE.md` と、
-呼ぶ側が名指しした文書だけ。**
+**書き換えてよいのは `README.md`・`docs/developer.md`・`docs/UsersGuide.md`・
+`CLAUDE.md` と、呼ぶ側が名指しした文書だけ。**
 
 - `src/**`・`tests.html`・`tools/**` は読むだけ。**1 文字も変えない**
 - `TODO.md` と `archives/` にも書かない（決着は呼ぶ側が書く）
