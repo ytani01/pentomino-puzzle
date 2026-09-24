@@ -9,60 +9,30 @@
  *
  * 一覧は**頁送り**で、スクロールは使わない。Phaser には要素をはみ出させずに
  * 流す仕組みが無く、当たり判定を持つ行を切り抜くにはカメラかマスクを別に
- * 用意することになる。50 件（`HISTORY_LIMIT`）なら 1 頁 10 件でも 5 頁に
+ * 用意することになる。50 件（`HISTORY_LIMIT`）なら 1 頁 7〜9 件でも数頁に
  * 収まるので、送る手数より作りの単純さを取った。
+ *
+ * 行にはいつもチェックボックスを出し、チェックした複数件をまとめて消せる
+ * （TODO-071）。前へ・次へ・ゴミ箱・タイトルへは画面下の 1 段のアイコンに
+ * まとめてあり、その分の縦の余白で一覧の行数を増やしてある（撮り比べて
+ * 利用者が選んだ配置。もう一つの案は消した）。
  */
 
 import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, HOLE, LAYOUTS, NEON, PALETTES,
   PALETTE_REGISTRY_KEY, PIECES, SCREEN, TEXT_COLORS,
 } from '../config.js';
-import { formatTime } from '../logic.js';
+import { ICONS } from '../icons.js';
+import { formatTime, selectionAfterRemoval } from '../logic.js';
 import { ensureSolutions, solutionCells } from '../solutions.js';
 import {
-  clearFound, clearAuto, clearHistory, loadFound, loadHistory,
-  removeAuto, removeFound, removeHistory,
+  loadFound, loadHistory, removeRecords,
 } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  createButton, createChoiceRow, createPanel, createVersionText, drawAcrylic,
+  createButton, createChoiceRow, createPanel, createTooltip, createVersionText, drawAcrylic,
 } from '../ui.js';
 import { darken, pieceColor } from './boot.js';
-
-/**
- * 画面の向きごとの配置。タイトル・クリアの画面と違って積む部品の高さが
- * 揃わない（一覧と完成形が横に並ぶか縦に並ぶかで組みが変わる）ので、
- * `stackTops()` ではなく向きごとに 1 組ずつ数を書いてある。
- *
- * 横画面は左に一覧・右に完成形、縦画面は上に一覧・下に完成形。
- */
-const L = SCREEN.portrait
-  ? {
-    headingY: 66,
-    chooseY: 136,
-    listX: SCREEN.width / 2,
-    listTop: 190,
-    listWidth: 570,
-    rowsPerPage: 7,
-    detailY: 620,
-    // ボタン列の下に右下のバージョン（`createVersionText`）の分を空けるため、
-    // 完成形の枠を 20 詰めて下の部品を上げてある（TODO-041）。
-    boardBox: { x: 60, y: 660, width: 520, height: 330 },
-    achieveY: 1020,
-    buttonsY: 1070,
-  }
-  : {
-    headingY: 44,
-    chooseY: 106,
-    listX: 250,
-    listTop: 150,
-    listWidth: 432,
-    rowsPerPage: 7,
-    detailY: 500,
-    boardBox: { x: 500, y: 146, width: 424, height: 320 },
-    achieveY: 556,
-    buttonsY: 600,
-  };
 
 /**
  * 一覧の 1 行の高さと、行どうしの間。TODO-026 で文字を大きくしたぶん、
@@ -70,16 +40,66 @@ const L = SCREEN.portrait
  */
 const ROW = { height: 44, gap: 6 };
 
-/** 頁送りの行（前へ・頁数・次へ）。一覧のすぐ下に置く。 */
-const PAGER = {
-  offset: 30, width: 118, height: 40, gap: 140,
-};
+/** 行の左端・一覧の上に置くチェックボックスの大きさと、隣の部品との間隔。 */
+const CHECKBOX = { size: 32, gap: 10 };
 
 /**
- * 下端に並べるボタン。3 つ（TODO-031）なので、一番狭い縦画面の内部解像度 640 から
- * 左右の余白（14 × 2）を引いた 612 に収まる大きさにしてある。
+ * 行の文字（日時・時間・「おまかせ・ヒント」の印）を収める幅。チェックボックスを
+ * 足す前の `listWidth`（TODO-027 の頃からの値。432 は横画面、570 は縦画面）と
+ * 同じにしてあり、印が右詰めで収まることを確かめてある値そのもの。
+ *
+ * `L.listWidth`（チェックボックスぶんを足した、一覧の当たり判定全体の幅）は
+ * ここへ `CHECKBOX.size + CHECKBOX.gap` を足して作る。逆に足し忘れると、
+ * 行の文字を収める幅がその分だけ狭くなり、「おまかせ・ヒント」が経過時間に
+ * くっついてしまう（TODO-071 の案を撮ったときに見つかった不具合）。
  */
-const FOOT = { width: 190, height: 52, gap: 14 };
+const ROW_TEXT_WIDTH = { portrait: 570, landscape: 432 };
+
+/**
+ * 画面の向きごとの配置。タイトル・クリアの画面と違って積む部品の高さが
+ * 揃わない（一覧と完成形が横に並ぶか縦に並ぶかで組みが変わる）ので、
+ * `stackTops()` ではなく向きごとに 1 組ずつ数を書いてある。
+ *
+ * 横画面は左に一覧・右に完成形、縦画面は上に一覧・下に完成形。前へ・次へ・
+ * ゴミ箱・タイトルへは画面下の 1 段のアイコンにまとめてあり（`footY`・
+ * `footSize`）、その分空いた縦の余白を一覧の行数（`rowsPerPage`）へ回してある
+ * （TODO-071。撮り比べて利用者が選んだ配置）。
+ */
+const L = SCREEN.portrait
+  ? {
+    headingY: 60,
+    chooseY: 126,
+    selectAllY: 166,
+    listX: SCREEN.width / 2,
+    listTop: 204,
+    listWidth: ROW_TEXT_WIDTH.portrait + CHECKBOX.size + CHECKBOX.gap,
+    rowsPerPage: 9,
+    detailY: 690,
+    boardBox: { x: 60, y: 730, width: 520, height: 300 },
+    achieveY: 1055,
+    footY: 1100,
+    footSize: 46,
+  }
+  : {
+    headingY: 40,
+    chooseY: 96,
+    selectAllY: 134,
+    listX: 250,
+    listTop: 170,
+    listWidth: ROW_TEXT_WIDTH.landscape + CHECKBOX.size + CHECKBOX.gap,
+    rowsPerPage: 8,
+    detailY: 500,
+    boardBox: { x: 500, y: 146, width: 424, height: 320 },
+    achieveY: 556,
+    footY: 600,
+    footSize: 38,
+  };
+
+/** 下段のアイコンボタンどうしの間隔。大きさは `L.footSize`。 */
+const FOOT_GAP = 14;
+
+/** 頁の数を出す文字の幅（下段の並びに使う）。 */
+const PAGE_TEXT_WIDTH = 64;
 
 /**
  * 確認の枠の寸法。盤に依らない値なので、どの盤の `LAYOUTS` から取っても同じ
@@ -145,6 +165,9 @@ export default class RecordsScene extends Phaser.Scene {
     this.found = [];
     this.page = 0;
     this.selected = 0;
+    // チェックした回の解の番号（TODO-071）。ページを送っても残し、
+    // 盤を切り替えたら `reload()` が作り直す。
+    this.checked = new Set();
 
     const cx = SCREEN.width / 2;
 
@@ -158,63 +181,59 @@ export default class RecordsScene extends Phaser.Scene {
                                         Object.values(BOARDS),
                                         (choice) => this.selectBoard(choice.key));
 
+    this.createSelectAll();
     this.createList();
     this.createDetail();
-
-    // 消せるものが無いときは押せなくする（押しても何も起きないボタンを
-    // 残すより、押せないと見せたほうが分かる）。
-    const step = FOOT.width + FOOT.gap;
-    // 選んでいる 1 件だけを消す（TODO-031）。何を消すのかは、選んだ回の
-    // 完成形と見出しが出ているので確かめてから押せる。
-    this.removeButton = createButton(this, {
-      x: cx - step,
-      y: L.buttonsY,
-      width: FOOT.width,
-      height: FOOT.height,
-      label: 'この回を消す',
-      fontSize: FONT.small,
-      onClick: () => this.confirmRemove(),
-    });
-    this.clearButton = createButton(this, {
-      x: cx,
-      y: L.buttonsY,
-      width: FOOT.width,
-      height: FOOT.height,
-      label: '全部消す',
-      fontSize: FONT.hud,
-      onClick: () => this.confirmClear(),
-    });
-    createButton(this, {
-      x: cx + step,
-      y: L.buttonsY,
-      width: FOOT.width,
-      height: FOOT.height,
-      label: 'タイトルへ',
-      fontSize: FONT.hud,
-      onClick: () => {
-        audio.unlock();
-        audio.button();
-        this.scene.start('Title');
-      },
-    });
+    this.createFoot(cx);
 
     createVersionText(this);
+    // 下段のアイコンの説明。ほかの部品より後に作って手前に出し、確認の枠
+    // （depth 10）には隠れるようにする（本編の `DEPTH` と同じ重なり順）。
+    this.tooltip = createTooltip(this);
     this.createConfirmDialog();
     this.reload();
+  }
+
+  /** 一覧の上の「全部選ぶ」チェック（TODO-071）。見えていない頁の分も対象。 */
+  createSelectAll() {
+    const x = L.listX - L.listWidth / 2 + CHECKBOX.size / 2;
+    this.selectAllButton = createButton(this, {
+      x, y: L.selectAllY, width: CHECKBOX.size, height: CHECKBOX.size,
+      label: '', onClick: () => this.toggleSelectAll(),
+    });
+    this.add.text(x + CHECKBOX.size / 2 + CHECKBOX.gap, L.selectAllY, '全部選ぶ', {
+      fontFamily: FONT.family,
+      fontSize: `${FONT.small}px`,
+      color: TEXT_COLORS.dim,
+    }).setOrigin(0, 0.5);
   }
 
   /**
    * 一覧の行と頁送りを組む。行は毎回作り直さず、1 頁ぶんだけ先に作って
    * 文字と表示・非表示を差し替える（頁を送るたびに当たり判定を作り直すと、
    * 押した直後の行が入れ替わって二重に反応することがあるため）。
+   *
+   * 行の左端にはいつもチェックボックスを出す（TODO-071）。行そのものを
+   * 押すと今までどおり右に完成形を出し、チェックは選ぶ／外すだけをする
+   * （当たり判定を分けてある）。
    */
   createList() {
     this.rowButtons = [];
+    this.rowChecks = [];
+    const rowLeft = L.listX - L.listWidth / 2;
+    const rowX = rowLeft + CHECKBOX.size + CHECKBOX.gap + (L.listWidth - CHECKBOX.size - CHECKBOX.gap) / 2;
+    const rowWidth = L.listWidth - CHECKBOX.size - CHECKBOX.gap;
     for (let i = 0; i < L.rowsPerPage; i += 1) {
+      const y = L.listTop + ROW.height / 2 + i * (ROW.height + ROW.gap);
+      const check = createButton(this, {
+        x: rowLeft + CHECKBOX.size / 2, y, width: CHECKBOX.size, height: CHECKBOX.size,
+        label: '', onClick: () => this.toggleRow(i),
+      });
+      this.rowChecks.push(check);
       const button = createButton(this, {
-        x: L.listX,
-        y: L.listTop + ROW.height / 2 + i * (ROW.height + ROW.gap),
-        width: L.listWidth,
+        x: rowX,
+        y,
+        width: rowWidth,
         height: ROW.height,
         label: '',
         fontSize: FONT.small,
@@ -234,31 +253,51 @@ export default class RecordsScene extends Phaser.Scene {
       '記録なし',
       { fontFamily: FONT.family, fontSize: `${FONT.body}px`, color: TEXT_COLORS.dim },
     ).setOrigin(0.5);
+  }
 
-    const pagerY = L.listTop + (ROW.height + ROW.gap) * L.rowsPerPage + PAGER.offset;
+  /**
+   * 下段。前へ・次へ・頁の数・ゴミ箱・タイトルへを 1 段のアイコンにまとめる
+   * （TODO-071）。
+   */
+  createFoot(cx) {
+    const size = L.footSize;
+    const total = size * 4 + PAGE_TEXT_WIDTH + FOOT_GAP * 4;
+    let x = cx - total / 2;
+    const next = (width) => {
+      const center = x + width / 2;
+      x += width + FOOT_GAP;
+      return center;
+    };
+
     this.prevButton = createButton(this, {
-      x: L.listX - PAGER.gap,
-      y: pagerY,
-      width: PAGER.width,
-      height: PAGER.height,
-      label: '前へ',
-      fontSize: FONT.small,
-      onClick: () => this.turnPage(-1),
+      x: next(size), y: L.footY, width: size, height: size,
+      label: '', icon: ICONS.prevPage, tooltip: '前へ', onClick: () => this.turnPage(-1),
     });
-    this.nextButton = createButton(this, {
-      x: L.listX + PAGER.gap,
-      y: pagerY,
-      width: PAGER.width,
-      height: PAGER.height,
-      label: '次へ',
-      fontSize: FONT.small,
-      onClick: () => this.turnPage(1),
-    });
-    this.pageText = this.add.text(L.listX, pagerY, '', {
+    this.pageText = this.add.text(next(PAGE_TEXT_WIDTH), L.footY, '', {
       fontFamily: FONT.family,
       fontSize: `${FONT.small}px`,
       color: TEXT_COLORS.dim,
     }).setOrigin(0.5);
+    this.nextButton = createButton(this, {
+      x: next(size), y: L.footY, width: size, height: size,
+      label: '', icon: ICONS.nextPage, tooltip: '次へ', onClick: () => this.turnPage(1),
+    });
+    this.trashButton = createButton(this, {
+      x: next(size), y: L.footY, width: size, height: size,
+      label: '', icon: ICONS.trash, tooltip: 'チェックした回を消す', onClick: () => this.confirmTrash(),
+    });
+    // `tools/capture.mjs` が撮るときに吹き出しで指すため、他のボタンと同じく
+    // プロパティに持たせておく（クリック先はタイトルへ戻るだけで、シーンの
+    // 状態としては使わない）。
+    this.titleButton = createButton(this, {
+      x: next(size), y: L.footY, width: size, height: size,
+      label: '', icon: ICONS.title, tooltip: 'タイトルへ',
+      onClick: () => {
+        audio.unlock();
+        audio.button();
+        this.scene.start('Title');
+      },
+    });
   }
 
   /** 選んだ 1 件の見出しと、完成形を描く場所、そして達成度。 */
@@ -322,9 +361,9 @@ export default class RecordsScene extends Phaser.Scene {
       height: CONFIRM.buttonHeight,
       label: 'はい',
       fontSize: FONT.small,
-      // 全部消すのか 1 件だけ消すのか（TODO-031）は、開くときに決めて
-      // `confirmAction` へ持たせる。枠を 2 つ組むより、文言と行き先だけを
-      // 差し替えるほうが、確認の見え方が 2 つに分かれずに済む。
+      // どのくらい消すか（TODO-031、TODO-071）は、開くときに決めて
+      // `confirmAction` へ持たせる。枠を組み直すより、文言と行き先だけを
+      // 差し替えるほうが、確認の見え方が分かれずに済む。
       onClick: () => this.confirmAction(),
     }).setDepth(depth).setVisible(false));
     this.confirmParts.push(createButton(this, {
@@ -358,6 +397,35 @@ export default class RecordsScene extends Phaser.Scene {
     this.refresh();
   }
 
+  /**
+   * 行のチェックを選ぶ／外す（TODO-071）。番号（`entry.no`）で持つので、
+   * 全解のデータが届く前（番号がまだ無い件）はチェックできない——`removeHistoryMany()`
+   * も番号で件を指すため、番号の無いうちは何を消すのかが決まらない。
+   */
+  toggleRow(index) {
+    const entry = this.entries[this.page * L.rowsPerPage + index];
+    if (!entry || !entry.no || this.solutions === null) return;
+    audio.unlock();
+    audio.button();
+    if (this.checked.has(entry.no)) this.checked.delete(entry.no);
+    else this.checked.add(entry.no);
+    this.refresh();
+  }
+
+  /**
+   * 「全部選ぶ」。見えている頁だけでなく、**その盤の記録すべて**を対象にする
+   * （TODO-071）。既に全部選んでいれば外す。
+   */
+  toggleSelectAll() {
+    if (this.solutions === null || this.entries.length === 0) return;
+    audio.unlock();
+    audio.button();
+    const nos = this.entries.filter((entry) => entry.no).map((entry) => entry.no);
+    const allChecked = nos.length > 0 && nos.every((no) => this.checked.has(no));
+    nos.forEach((no) => (allChecked ? this.checked.delete(no) : this.checked.add(no)));
+    this.refresh();
+  }
+
   /** 頁を送る。端では押せなくしてあるので、ここでは範囲だけ守る。 */
   turnPage(step) {
     const pages = this.pageCount();
@@ -369,21 +437,12 @@ export default class RecordsScene extends Phaser.Scene {
     this.refresh();
   }
 
-  confirmClear() {
-    if (this.entries.length === 0) return;
+  /** チェックした回を消す前の確認（TODO-071）。何件消すかを出す。 */
+  confirmTrash() {
+    if (this.checked.size === 0) return;
     this.showConfirm(
-      `${BOARDS[this.boardKey].label} の記録 ${this.entries.length} 件を消しますか？\nもとに戻せません`,
-      () => this.doClear(),
-    );
-  }
-
-  /** 選んでいる 1 件を消す前の確認（TODO-031）。どの回かが分かる文にする。 */
-  confirmRemove() {
-    const entry = this.entries[this.selected];
-    if (!entry || !entry.no || this.solutions === null) return;
-    this.showConfirm(
-      `${formatDate(entry.at)} の ${entry.no} 番を消しますか？\nもとに戻せません`,
-      () => this.doRemove(),
+      `${BOARDS[this.boardKey].label} の記録 ${this.checked.size} 件を消しますか？\nもとに戻せません`,
+      () => this.doTrash(),
     );
   }
 
@@ -401,42 +460,23 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 履歴と、達成度に使う「見つけた解の番号」をまとめて消す（TODO-022）。
-   * おまかせで導いた解の番号（TODO-016）も一緒に消す——記録を消したのに
-   * 「その解は前に出した」とおまかせが避け続けるのは辻褄が合わないため。
-   */
-  doClear() {
-    audio.button();
-    clearHistory(this.boardKey);
-    clearFound(this.boardKey);
-    clearAuto(this.boardKey);
-    this.confirmParts.forEach((part) => part.setVisible(false));
-    this.reload();
-  }
-
-  /**
-   * 選んでいる 1 件だけを消す（TODO-031）。達成度に使う番号（`removeFound`）と、
-   * おまかせが避ける番号（`removeAuto`）も一緒に外す——全部消すとき
-   * （`doClear()`）と揃えてあり、一覧から消えたものが達成度やおまかせの側に
-   * だけ残る状態を作らない。
+   * チェックした回をまとめて消す（TODO-071）。達成度とおまかせの番号の扱いは
+   * `removeRecords()`（`storage.js`）の説明にある。
    *
-   * 消したあとは頁と選び位置を詰め直す。`reload()` で先頭へ戻すと、後ろの頁で
-   * 1 件消すたびに 1 頁目から辿り直すことになるため。
+   * 消したあとの選び位置と頁は `selectionAfterRemoval()`（`logic.js`）で出す。
    */
-  doRemove() {
+  doTrash() {
     audio.button();
     this.confirmParts.forEach((part) => part.setVisible(false));
-    const entry = this.entries[this.selected];
-    if (!entry || !entry.no || this.solutions === null) return;
-    const count = this.solutions.canonical.length;
-    removeHistory(this.boardKey, entry.no, this.solutions);
-    removeFound(this.boardKey, entry.no, count);
-    removeAuto(this.boardKey, entry.no, count);
-    this.entries = loadHistory(this.boardKey, this.solutions);
-    this.found = loadFound(this.boardKey, count);
-    // 消した場所にあった次の件を選ぶ（末尾を消したときは 1 つ前）。
-    this.selected = Math.max(0, Math.min(this.selected, this.entries.length - 1));
-    this.page = Math.min(this.page, this.pageCount() - 1);
+    if (this.solutions === null || this.checked.size === 0) return;
+    const removed = [...this.checked];
+    const next = selectionAfterRemoval(this.entries.map((entry) => entry.no),
+                                       this.selected, this.page, removed, L.rowsPerPage);
+    this.entries = removeRecords(this.boardKey, removed, this.solutions);
+    this.checked.clear();
+    this.found = loadFound(this.boardKey, this.solutions.canonical.length);
+    this.selected = next.selected;
+    this.page = next.page;
     this.refresh();
   }
 
@@ -449,6 +489,9 @@ export default class RecordsScene extends Phaser.Scene {
    * 待つあいだも一覧の日時と時間は出せるので、先に一度描いてから届いたぶんを
    * 足す。待っている間にさらに盤を切り替えられることがあるので、**届いた
    * ときに見ている盤が変わっていたら捨てる**。
+   *
+   * チェック（`this.checked`）は盤を切り替えたら消す（TODO-071）。別の盤の
+   * 履歴の番号を持ち越しても意味が無いため。
    */
   reload() {
     const spec = BOARDS[this.boardKey];
@@ -457,6 +500,7 @@ export default class RecordsScene extends Phaser.Scene {
     this.entries = loadHistory(this.boardKey);
     this.page = 0;
     this.selected = 0;
+    this.checked = new Set();
     this.boardButtons.forEach((button) => button.setSelected(button.choiceKey === this.boardKey));
     this.refresh();
 
@@ -473,32 +517,46 @@ export default class RecordsScene extends Phaser.Scene {
     return Math.max(1, Math.ceil(this.entries.length / L.rowsPerPage));
   }
 
-  /** 一覧・頁送り・完成形を、今の頁と選んでいる 1 件に合わせて出し直す。 */
+  /** 一覧・頁送り・完成形を、今の頁と選んでいる 1 件、チェックに合わせて出し直す。 */
   refresh() {
     const pages = this.pageCount();
+    const ready = this.solutions !== null;
     this.rowButtons.forEach((button, i) => {
       const index = this.page * L.rowsPerPage + i;
       const entry = this.entries[index];
+      const check = this.rowChecks[i];
       button.setVisible(!!entry);
+      check.setVisible(!!entry);
       if (!entry) return;
       button.setLabel(`${formatDate(entry.at)}　${formatTime(entry.ms)}`);
       button.setMark(marksOf(entry));
       button.setSelected(index === this.selected);
+      // チェックできるのは番号を持つ件だけ（TODO-071。`toggleRow()` と同じ理由）。
+      const checkable = ready && !!entry.no;
+      check.setEnabled(checkable);
+      const isChecked = checkable && this.checked.has(entry.no);
+      check.setSelected(isChecked);
+      check.setIcon(isChecked ? ICONS.check : null);
     });
     const empty = this.entries.length === 0;
     this.emptyText.setVisible(empty);
     // 頁送りは 1 頁に収まっていても出す（端で押せなくする）。1 件も無いときだけ
     // 行ごと引っ込める。送る先が無いことと、記録が無いことは別なので。
     this.pageText.setText(empty ? '' : `${this.page + 1} / ${pages}`);
-    this.prevButton.setVisible(!empty).setEnabled(this.page > 0);
-    this.nextButton.setVisible(!empty).setEnabled(this.page < pages - 1);
-    this.clearButton.setEnabled(!empty);
+    this.prevButton.setEnabled(!empty && this.page > 0);
+    this.nextButton.setEnabled(!empty && this.page < pages - 1);
+
+    // 「全部選ぶ」は、番号を持つ件が 1 件以上あり、その全部にチェックが
+    // 付いているときだけ選んである見た目にする（見えていない頁の分も含む）。
+    const nos = this.entries.filter((entry) => entry.no).map((entry) => entry.no);
+    const allChecked = ready && nos.length > 0 && nos.every((no) => this.checked.has(no));
+    this.selectAllButton.setEnabled(ready && nos.length > 0);
+    this.selectAllButton.setSelected(allChecked);
+    this.selectAllButton.setIcon(allChecked ? ICONS.check : null);
+
+    this.trashButton.setEnabled(this.checked.size > 0);
 
     const entry = this.entries[this.selected];
-    // 1 件だけ消せるのは、その件が番号を持つとき（TODO-031）。番号は解のデータが
-    // 届いてから付くので、届く前は押せない——`removeHistory()` は番号で件を
-    // 指すため、番号の無いうちは何を消すのかが決まらない。
-    this.removeButton.setEnabled(!!entry && !!entry.no && this.solutions !== null);
     // 何番の解かも添える（TODO-022）。一覧の行は日時と時間だけで揃えたいので、
     // 番号は選んだ 1 件の見出しにだけ出す。番号はデータが届いてから付く
     // （古い形の件は読み替えたあとに入る）ので、無いうちは日時と時間だけ。

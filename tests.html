@@ -45,6 +45,7 @@ import {
   orientationSteps, nextPlaceableTurn, snapSpot, shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
+  clampSelection, selectionAfterRemoval,
   forcedPlacements, touchingEdges, moveDistance, countCellMoves,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
   solveSteps, solveStepsRandom,
@@ -59,7 +60,7 @@ import {
   sanitizeHistory, sanitizeFound, migrateHistory, loadHistory, addHistory,
   clearHistory, loadFound, addFound, clearFound, loadBest, shouldRecordBest,
   loadAuto, addAuto, clearAuto,
-  removeHistory, removeFound, removeAuto,
+  removeHistory, removeHistoryMany, removeRecords, removeFound, removeAuto,
   sanitizeProgress, loadProgress, saveProgress, clearProgress,
 } from './src/storage.js';
 
@@ -782,6 +783,60 @@ test('formatTime は mm:ss、1 時間を超えたら h:mm:ss', () => {
   assertSame(formatTime(65432), '01:05');
   assertSame(formatTime(599000), '09:59');
   assertSame(formatTime(3661000), '1:01:01');
+});
+
+// ---- logic：clampSelection（TODO-071）------------------------------------
+
+test('clampSelection は範囲内ならそのまま返す', () => {
+  assertSame(clampSelection(10, 3, 0, 7), { selected: 3, page: 0 });
+});
+
+test('clampSelection は選び位置が件数からはみ出したら詰める', () => {
+  assertSame(clampSelection(5, 9, 0, 7), { selected: 4, page: 0 });
+});
+
+test('clampSelection は件数が 0 でも選び位置を負にしない', () => {
+  assertSame(clampSelection(0, 3, 0, 7), { selected: 0, page: 0 });
+});
+
+test('clampSelection は頁が減った件数からはみ出したら詰める', () => {
+  // 7 件ずつ 2 頁（0, 1）あったところから 3 件まで減った想定。
+  assertSame(clampSelection(3, 0, 1, 7), { selected: 0, page: 0 });
+});
+
+test('clampSelection は頁が範囲内ならそのまま返す', () => {
+  assertSame(clampSelection(20, 8, 1, 7), { selected: 8, page: 1 });
+});
+
+// ---- logic：selectionAfterRemoval（TODO-071）-----------------------------
+
+test('selectionAfterRemoval は見ていた回が残れば、前の行が消えてもその回を選んだまま', () => {
+  // 番号 10〜17 の 8 件、5 行目（番号 14）を見ている。前の 2 件を消す。
+  const nos = [10, 11, 12, 13, 14, 15, 16, 17];
+  assertSame(selectionAfterRemoval(nos, 4, 0, [10, 11], 7), { selected: 2, page: 0 });
+});
+
+test('selectionAfterRemoval は見ていた回が残れば、その回の見える頁へ移る', () => {
+  // 3 件ずつの頁で 2 頁目（番号 13）を見ながら、1 頁目にいる。前の 1 件を消す。
+  const nos = [10, 11, 12, 13, 14];
+  assertSame(selectionAfterRemoval(nos, 3, 0, [10], 3), { selected: 2, page: 0 });
+  // 後ろの行だけ消しても、見ていた回の頁へ移る。
+  assertSame(selectionAfterRemoval(nos, 3, 0, [14], 3), { selected: 3, page: 1 });
+});
+
+test('selectionAfterRemoval は見ていた回を消したら、残った中の次の回へ移る', () => {
+  const nos = [10, 11, 12, 13, 14];
+  // 11・12 を消すと、次の回は 13（消したあとの添字 1）。
+  assertSame(selectionAfterRemoval(nos, 2, 0, [11, 12], 7), { selected: 1, page: 0 });
+});
+
+test('selectionAfterRemoval は見ていた回を末尾ごと消したら、1 つ前へ・頁も詰める', () => {
+  const nos = [10, 11, 12, 13, 14];
+  assertSame(selectionAfterRemoval(nos, 4, 1, [13, 14], 3), { selected: 2, page: 0 });
+});
+
+test('selectionAfterRemoval は全部消したら先頭の頁へ', () => {
+  assertSame(selectionAfterRemoval([10, 11], 1, 0, [10, 11], 7), { selected: 0, page: 0 });
 });
 
 // ---- logic：forcedPlacements（TODO-044）----------------------------------
@@ -3050,6 +3105,35 @@ for (const state of boardStates) {
     });
   });
 
+  // ---- TODO-071：履歴からチェックした複数件をまとめて消す ------------------
+
+  test(`removeHistoryMany は指した番号の件だけをまとめて消す（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      addHistory(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
+      addHistory(spec.key, { at: 3000, ms: 300, no: 3 }, solutions);
+      removeHistoryMany(spec.key, [1, 3], solutions);
+      assertSame(loadHistory(spec.key, solutions).map((e) => e.no), [2]);
+    });
+  });
+
+  test(`removeHistoryMany は無い番号が混ざっていても、ある分だけ消す（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      addHistory(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
+      removeHistoryMany(spec.key, [2, 9], solutions);
+      assertSame(loadHistory(spec.key, solutions).map((e) => e.no), [1]);
+    });
+  });
+
+  test(`removeHistoryMany に空の配列を渡しても何も変わらない（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      removeHistoryMany(spec.key, [], solutions);
+      assertSame(loadHistory(spec.key, solutions).map((e) => e.no), [1]);
+    });
+  });
+
   test(`removeFound / removeAuto は指した番号だけを外す（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
       addFound(spec.key, 1, total);
@@ -3060,6 +3144,33 @@ for (const state of boardStates) {
       removeAuto(spec.key, 2, total);
       assertSame(loadFound(spec.key, total), [2], '達成度の側');
       assertSame(loadAuto(spec.key, total), [1], 'おまかせの側');
+    });
+  });
+
+  test(`removeRecords で一部だけ消すと、消した番号だけを found・auto から外す（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      addHistory(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
+      [1, 2, 3].forEach((no) => { addFound(spec.key, no, total); addAuto(spec.key, no, total); });
+      const next = removeRecords(spec.key, [1], solutions);
+      assertSame(next.map((e) => e.no), [2], '戻り値');
+      assertSame(loadHistory(spec.key, solutions).map((e) => e.no), [2], '履歴');
+      assertSame(loadFound(spec.key, total), [2, 3], '達成度の側');
+      assertSame(loadAuto(spec.key, total), [2, 3], 'おまかせの側');
+    });
+  });
+
+  test(`removeRecords で全部消すと、履歴に無い番号も含めて found・auto を空にする（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      addHistory(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
+      // 3 は履歴からあふれた番号、4 は履歴に無いおまかせの番号の想定。
+      [1, 2, 3].forEach((no) => addFound(spec.key, no, total));
+      [1, 4].forEach((no) => addAuto(spec.key, no, total));
+      removeRecords(spec.key, [1, 2], solutions);
+      assertSame(loadHistory(spec.key, solutions), [], '履歴');
+      assertSame(loadFound(spec.key, total), [], '達成度の側');
+      assertSame(loadAuto(spec.key, total), [], 'おまかせの側');
     });
   });
 

@@ -57,7 +57,8 @@ async function autoPlace(page, n) {
 /**
  * 注記を重ねる。`at` はシーン `s` から部品（か部品の配列、か {x, y, width, height}）
  * を返す式。`text` があれば吹き出しを `side` の向きへ出し、無ければ丸だけを
- * 部品の右上に付ける（説明は文書の表に任せる）。
+ * 部品の枠の内側の左端に付ける（説明は文書の表に任せる）。`text` が無くても
+ * `side` があれば、丸だけを部品の外へ出して線で指す（丸で隠れてしまう小さなボタン用）。
  */
 async function annotate(page, sceneKey, notes) {
   await page.evaluate(({ sceneKey, notes }) => {
@@ -115,7 +116,7 @@ async function annotate(page, sceneKey, notes) {
     for (const note of notes) {
       const r = rectOf(new Function('s', `return (${note.at});`)(s));
       if (note.frame) box(r);
-      if (!note.text) {
+      if (!note.text && !note.side) {
         const el = document.createElement('div');
         // ボタンの枠の内側の左端に置く。角に載せると隣のボタンとの間に見え、
         // どちらの番号か紛れるため（TODO-057）。丸は枠線込みで 28px。
@@ -137,7 +138,9 @@ async function annotate(page, sceneKey, notes) {
       el.style.cssText = 'position:absolute;display:flex;gap:6px;align-items:center;'
         + 'padding:4px 10px 4px 4px;background:#fff;color:#222;border-radius:16px;'
         + `border:2px solid ${ACCENT};box-shadow:0 2px 6px #0006;white-space:nowrap;`;
-      el.innerHTML = `${badge(note.n)}<span>${note.text}</span>`;
+      // 文字の無い丸だけを外へ出すときは、枠を付けずに丸だけ置く（小さなボタン用）。
+      if (note.text) el.innerHTML = `${badge(note.n)}<span>${note.text}</span>`;
+      else { el.style.cssText = 'position:absolute;'; el.innerHTML = badge(note.n); }
       layer.append(el);
       // 吹き出しの中心を向きの先へ置き、はみ出す分だけ画面の内側へ戻す。
       const { width: bw, height: bh } = el.getBoundingClientRect();
@@ -219,7 +222,8 @@ async function shot(page, name) {
 
 // ---- UsersGuide: 記録の画面 --------------------------------------------
 {
-  const context = await browser.newContext({ viewport: VIEWPORT });
+  // 下の段のボタンはアイコンだけで小さく、丸を載せると隠れる。下の帯へ出す。
+  const context = await browser.newContext({ viewport: BANDED });
   const page = await open(context);
   await page.evaluate(async () => {
     const s = await import('/src/storage.js');
@@ -236,16 +240,21 @@ async function shot(page, name) {
   });
   await go(page, 'Records');
   await annotate(page, 'Records', [
-    { n: 1, at: 's.rowButtons.filter((b) => b.visible)', text: '一覧', side: 'bottom',
+    { n: 'A', at: 's.rowButtons.filter((b) => b.visible)', text: '一覧', side: 'bottom',
       frame: true, dist: 12 },
-    { n: 2, at: 's.rowButtons[3].list[3]', text: '印', side: 'bottom', dist: 56 },
+    // チェックボックスの左には余白が無いので、一番下のものを下から指す。
+    { n: 'B', at: 's.rowChecks[4]', text: 'チェック', side: 'bottom', dist: 20 },
+    { n: 'C', at: 's.selectAllButton', text: '全部選ぶ', side: 'top', dist: 16 },
+    { n: 'D', at: 's.rowButtons[3].list[3]', text: '印', side: 'bottom', dist: 56 },
     // 完成形は Graphics で大きさを持たないので、下の見出しからの位置で指す。
     // ponytail: 数値は決め打ち。記録の画面の配置を変えたら撮った画像を見て合わせ直す。
-    { n: 3, at: '({ x: s.detailText.x - 160, y: s.detailText.y - 355, width: 320, height: 320 })',
+    { n: 'E', at: '({ x: s.detailText.x - 160, y: s.detailText.y - 355, width: 320, height: 320 })',
       text: '完成形', side: 'top', dist: 12 },
-    { n: 4, at: 's.achieveText', text: '達成度', side: 'right', dist: 16 },
-    { n: 5, at: 's.removeButton', text: 'この回を消す', side: 'top', dist: 24 },
-    { n: 6, at: 's.clearButton', text: '全部消す', side: 'top', dist: 24 },
+    { n: 'F', at: 's.achieveText', text: '達成度', side: 'right', dist: 16 },
+    { n: 1, at: 's.prevButton', side: 'bottom', dist: 12 },
+    { n: 2, at: 's.nextButton', side: 'bottom', dist: 12 },
+    { n: 3, at: 's.trashButton', side: 'bottom', dist: 12 },
+    { n: 4, at: 's.titleButton', side: 'bottom', dist: 12 },
   ]);
   await shot(page, 'records.png');
   await context.close();

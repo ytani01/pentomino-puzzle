@@ -380,7 +380,12 @@ export function createTooltip(scene) {
     back.strokeRoundedRect(0, 0, width, height, 6);
     const x = Phaser.Math.Clamp(button.x - width / 2,
       SCREEN.margin, SCREEN.width - SCREEN.margin - width);
-    box.setPosition(x, button.y + button.height / 2 + TOOLTIP.gap);
+    // 下に出すと画面からはみ出すボタン（記録の画面の下段。TODO-071）では上に出す。
+    const below = button.y + button.height / 2 + TOOLTIP.gap;
+    const y = below + height > SCREEN.height - SCREEN.margin
+      ? button.y - button.height / 2 - TOOLTIP.gap - height
+      : below;
+    box.setPosition(x, y);
     box.setVisible(true);
   };
 

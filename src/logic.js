@@ -962,6 +962,40 @@ export function canonicalCellsKey(cells, spec) {
   return boardKey(canonicalBoard(board));
 }
 
+/**
+ * 一覧で選んでいる位置と頁を、件数が変わったあとに合わせ直す（純関数。TODO-071）。
+ *
+ * 選んでいた位置（一覧全体での添字）をそのまま保ち、件数からはみ出した
+ * ときだけ末尾へ詰める。頁も同じように、はみ出したときだけ最後の頁へ詰める。
+ * 選んでいた回を消したあとに使う（`selectionAfterRemoval()`）。1 件ずつ
+ * 消していたとき（TODO-031）と同じ計算で、次の回（末尾なら 1 つ前）が選ばれる。
+ */
+export function clampSelection(length, selected, page, rowsPerPage) {
+  const nextSelected = Math.max(0, Math.min(selected, length - 1));
+  const pages = Math.max(1, Math.ceil(length / rowsPerPage));
+  const nextPage = Math.min(Math.max(page, 0), pages - 1);
+  return { selected: nextSelected, page: nextPage };
+}
+
+/**
+ * 記録画面でチェックした回を消したあとの、選ぶ位置と頁（純関数。TODO-071）。
+ * `nos` は消す前の一覧の番号を並びどおりに、`removed` は消した番号を渡す。
+ *
+ * 見ていた回が残っていれば、その回を選んだまま、見える頁へ移る。前の行が
+ * 消えて添字がずれても、別の回の完成形に差し替わらないようにするため。
+ * 見ていた回を消したときだけ、残った中で次の回（末尾なら 1 つ前）へ移り、
+ * 頁は `clampSelection()` で詰める（1 件ずつ消していた TODO-031 と同じ）。
+ */
+export function selectionAfterRemoval(nos, selected, page, removed, rowsPerPage) {
+  const gone = new Set(removed);
+  const kept = nos.filter((no) => !gone.has(no));
+  const keptBefore = nos.slice(0, selected).filter((no) => !gone.has(no)).length;
+  if (selected < nos.length && !gone.has(nos[selected])) {
+    return { selected: keptBefore, page: Math.floor(keptBefore / rowsPerPage) };
+  }
+  return clampSelection(kept.length, keptBefore, page, rowsPerPage);
+}
+
 /** 経過時間の表示。1 時間を超えたら `h:mm:ss` に伸ばす。 */
 export function formatTime(ms) {
   const total = Math.max(0, Math.floor(ms / 1000));

@@ -287,6 +287,50 @@ export function removeHistory(boardKey, no, solutions = null) {
   return next;
 }
 
+/**
+ * 履歴からチェックした複数件をまとめて消して、保存後の配列を返す（TODO-071）。
+ *
+ * 消す件は解の番号の配列で指す（`removeHistory()` と同じ考え方）。
+ * `removeHistory()` を件数ぶん呼ぶのと結果は同じだが、保存を 1 回で済ませる。
+ */
+export function removeHistoryMany(boardKey, nos, solutions = null) {
+  const board = boardOf(boardKey);
+  const set = new Set(nos);
+  const next = loadHistory(boardKey, solutions).filter((entry) => !set.has(entry.no));
+  try {
+    window.localStorage.setItem(board.historyKey, JSON.stringify(next));
+  } catch (error) {
+    // 消せなくても、その場の一覧は消したあとの形で出せる。
+  }
+  return next;
+}
+
+/**
+ * 記録画面でチェックした回を消して、保存後の履歴を返す（TODO-071）。
+ * 履歴・見つけた解（`found`）・おまかせの番号（`auto`）をまとめて扱う。
+ *
+ * - 一部だけ消したとき: 消した番号だけを `found` と `auto` からも外す
+ *   （TODO-031 で 1 件ずつ消していたときと同じ）。一覧から消えたものが
+ *   達成度やおまかせの側にだけ残る状態を作らないため
+ * - その盤の記録が 1 件も残らないとき: `found` と `auto` を丸ごと消す。履歴（50 件まで）からあふれた番号や、履歴に
+ *   無いおまかせの番号まで消さないと、一覧が空なのに達成度が 0 にならず、
+ *   それを消す手段も画面に無くなるため
+ */
+export function removeRecords(boardKey, nos, solutions) {
+  const next = removeHistoryMany(boardKey, nos, solutions);
+  if (next.length === 0) {
+    clearFound(boardKey);
+    clearAuto(boardKey);
+    return next;
+  }
+  const count = solutions.canonical.length;
+  nos.forEach((no) => {
+    removeFound(boardKey, no, count);
+    removeAuto(boardKey, no, count);
+  });
+  return next;
+}
+
 /** その盤の履歴を消す。最短時間（`clearBest()`）とは別に消せる。 */
 export function clearHistory(boardKey) {
   try {
@@ -371,7 +415,8 @@ function removeNumber(storeKey, no, count) {
 }
 
 /**
- * 見つけた解の番号を 1 つ外す（TODO-031）。履歴を 1 件消すときに一緒に呼ぶ。
+ * 見つけた解の番号を 1 つ外す（TODO-031）。記録の一部を消すときに
+ * `removeRecords()` が呼ぶ。
  * 一覧から消えたのに達成度には残る、という辻褄の合わない状態を作らないため。
  */
 export function removeFound(boardKey, no, count) {
@@ -421,9 +466,9 @@ export function addAuto(boardKey, no, count) {
 }
 
 /**
- * おまかせが導いた解の番号を 1 つ外す（TODO-031）。履歴を 1 件消すときに、
- * `removeFound()` と一緒に呼ぶ。全部消すときに `clearAuto()` まで呼ぶのと
- * 同じ理由で、記録を消した解を「前に出した」と避け続けないようにする。
+ * おまかせが導いた解の番号を 1 つ外す（TODO-031）。記録の一部を消すときに
+ * `removeRecords()` が `removeFound()` と一緒に呼ぶ。記録を消した解を
+ * 「前に出した」と避け続けないようにするため。
  */
 export function removeAuto(boardKey, no, count) {
   return removeNumber(boardOf(boardKey).autoKey, no, count);

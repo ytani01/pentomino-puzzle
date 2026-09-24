@@ -192,6 +192,40 @@ export const ICONS = {
     g.strokeCircle(0, 0, r);
     g.strokeCircle(0, 0, 0.16 * U);
   },
+  /** チェックボックスの印（TODO-071）。 */
+  check(g, color) {
+    begin(g, color, ICON.lineWidth + 1);
+    g.beginPath();
+    g.moveTo(-0.5 * U, 0.05 * U);
+    g.lineTo(-0.15 * U, 0.45 * U);
+    g.lineTo(0.55 * U, -0.45 * U);
+    g.strokePath();
+  },
+
+  /** 消す: ゴミ箱（TODO-071）。 */
+  trash(g, color) {
+    begin(g, color);
+    g.strokeRect(-0.4 * U, -0.35 * U, 0.8 * U, 0.85 * U);
+    g.lineBetween(-0.55 * U, -0.35 * U, 0.55 * U, -0.35 * U);
+    g.lineBetween(-0.18 * U, -0.35 * U, -0.18 * U, -0.6 * U);
+    g.lineBetween(0.18 * U, -0.35 * U, 0.18 * U, -0.6 * U);
+    g.lineBetween(-0.18 * U, -0.6 * U, 0.18 * U, -0.6 * U);
+    g.lineBetween(-0.16 * U, -0.1 * U, -0.16 * U, 0.35 * U);
+    g.lineBetween(0.16 * U, -0.1 * U, 0.16 * U, 0.35 * U);
+  },
+
+  /** 前の頁へ: 左向きの三角（TODO-071）。 */
+  prevPage(g, color) {
+    begin(g, color);
+    g.fillTriangle(0.35 * U, -0.5 * U, 0.35 * U, 0.5 * U, -0.35 * U, 0);
+  },
+
+  /** 次の頁へ: 右向きの三角（TODO-071）。 */
+  nextPage(g, color) {
+    begin(g, color);
+    g.fillTriangle(-0.35 * U, -0.5 * U, -0.35 * U, 0.5 * U, 0.35 * U, 0);
+  },
+
   random(g, color) {
     begin(g, color, ICON.lineWidth + 2);
     // 鉤の先が真下（角度 90°）で終わるように半径・中心を選び、その下へ
