@@ -72,7 +72,7 @@ Chromium を動かして撮る。TODO-034）。
 | `src/scenes/title.js` | タイトル |
 | `src/scenes/game.js` | 本編。Phaser とのつなぎに徹し、判定は `logic.js` に任せる |
 | `src/scenes/clear.js` | クリア表示。本編を止めてその上に重ねる。記録の更新は本編が完成を見つけたときに済ませる（TODO-072） |
-| `src/scenes/records.js` | クリア記録の一覧、選んだ回の完成形（TODO-008）、達成度（TODO-022）、チェックした回をまとめて消す（TODO-031・TODO-071） |
+| `src/scenes/records.js` | クリア記録の一覧、選んだ回の完成形（TODO-008）、達成度（TODO-022）、チェックした回をまとめて消す（TODO-031・TODO-071）、選んだ回の続きを遊ぶ（TODO-073） |
 | `src/scenes/demo.js` | コンピューターが探索して解を見つける様子を見せるデモ。`GameScene` を継承し盤・トレイの描画を使い回す。記録・遊びかけ・見つけた解には何も残さない（TODO-040）。探し方を深さ優先・ランダムから選べる（TODO-050・TODO-057） |
 | `tools/enumerate.mjs` | 全解の数え上げ（開発時のみ。元は `src/solver.js`） |
 | `tools/gen-solutions.mjs` | `src/data/*.js` を作る／突き合わせる（開発時のみ） |

@@ -26,7 +26,7 @@ import { ICONS } from '../icons.js';
 import { formatTime, selectionAfterRemoval } from '../logic.js';
 import { ensureSolutions, solutionCells } from '../solutions.js';
 import {
-  loadFound, loadHistory, removeRecords,
+  loadFound, loadHistory, loadProgress, progressFromRecord, removeRecords, saveProgress,
 } from '../storage.js';
 import * as audio from '../audio.js';
 import {
@@ -64,6 +64,9 @@ const ROW_TEXT_WIDTH = { portrait: 570, landscape: 432 };
  * ゴミ箱・タイトルへは画面下の 1 段のアイコンにまとめてあり（`footY`・
  * `footSize`）、その分空いた縦の余白を一覧の行数（`rowsPerPage`）へ回してある
  * （TODO-071。撮り比べて利用者が選んだ配置）。
+ *
+ * 完成形の下に「この回を続ける」（`continueY`）を置くため、完成形の枠
+ * （`boardBox`）の高さを詰めてある（TODO-073）。一覧の行数と下段は変えない。
  */
 const L = SCREEN.portrait
   ? {
@@ -75,7 +78,8 @@ const L = SCREEN.portrait
     listWidth: ROW_TEXT_WIDTH.portrait + CHECKBOX.size + CHECKBOX.gap,
     rowsPerPage: 9,
     detailY: 690,
-    boardBox: { x: 60, y: 730, width: 520, height: 300 },
+    boardBox: { x: 60, y: 730, width: 520, height: 250 },
+    continueY: 1008,
     achieveY: 1055,
     footY: 1100,
     footSize: 46,
@@ -88,12 +92,19 @@ const L = SCREEN.portrait
     listTop: 170,
     listWidth: ROW_TEXT_WIDTH.landscape + CHECKBOX.size + CHECKBOX.gap,
     rowsPerPage: 8,
-    detailY: 500,
-    boardBox: { x: 500, y: 146, width: 424, height: 320 },
+    detailY: 455,
+    boardBox: { x: 500, y: 146, width: 424, height: 280 },
+    continueY: 510,
     achieveY: 556,
     footY: 600,
     footSize: 38,
   };
+
+/**
+ * 「この回を続ける」の大きさ（TODO-073）。下段の ▶（次へ）と取り違えないよう、
+ * アイコンではなく文字のボタンにしてある。
+ */
+const CONTINUE_BUTTON = { width: 220, height: 40 };
 
 /** 下段のアイコンボタンどうしの間隔。大きさは `L.footSize`。 */
 const FOOT_GAP = 14;
@@ -312,6 +323,11 @@ export default class RecordsScene extends Phaser.Scene {
       },
     ).setOrigin(0.5);
     this.mini = this.add.graphics();
+    this.continueButton = createButton(this, {
+      x: L.boardBox.x + L.boardBox.width / 2, y: L.continueY,
+      width: CONTINUE_BUTTON.width, height: CONTINUE_BUTTON.height,
+      label: 'この回を続ける', fontSize: FONT.small, onClick: () => this.confirmContinue(),
+    });
     // 達成度（TODO-022）。分母は盤で違う（8×8 は 65、6×10 は 2339）ので、
     // どちらの盤の話かが分かるように盤の名前を頭に付ける。
     this.achieveText = this.add.text(
@@ -324,7 +340,7 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 消す前の確認。ブラウザの `confirm()` は使わない方針（CLAUDE.md）なので、
+   * 確かめてから進める操作（消す・この回を続ける。TODO-073）の確認。ブラウザの `confirm()` は使わない方針（CLAUDE.md）なので、
    * `game.js` のタイトルへ戻る確認と同じ組みで Canvas 内に作る。背景の帯に
    * 当たり判定を持たせ、開いている間は後ろのボタンへクリックが抜けないようにする。
    */
@@ -446,6 +462,45 @@ export default class RecordsScene extends Phaser.Scene {
     );
   }
 
+  /**
+   * 選んでいる回の完成形から本編を始める（TODO-073）。遊びかけは盤ごとに
+   * 1 つしか持てないので、あれば消えることを確かめてから置き換える。
+   */
+  confirmContinue() {
+    if (this.continueProgress() === null) return;
+    if (loadProgress(this.boardKey) === null) {
+      audio.unlock();
+      this.doContinue();
+      return;
+    }
+    this.showConfirm(
+      `${BOARDS[this.boardKey].label} の遊びかけの盤面が消えます\nこの回を続けますか？`,
+      () => this.doContinue(),
+    );
+  }
+
+  /** 選んでいる回から作った遊びかけ。完成形を引けないうちは `null`。 */
+  continueProgress() {
+    const entry = this.entries[this.selected];
+    if (!entry || !entry.no || this.solutions === null) return null;
+    const cells = solutionCells(this.solutions, entry.no);
+    return cells === null ? null : progressFromRecord(entry, cells, BOARDS[this.boardKey]);
+  }
+
+  /**
+   * 遊びかけを置き換えて本編へ移る。遊ぶ盤は `registry` で渡すので、ここで
+   * 見ている盤へ切り替える（この画面で盤を切り替えても、ほかでは書き換えない）。
+   * `progress` を本編へ直接渡すのは、保存できない環境でも始められるようにするため。
+   */
+  doContinue() {
+    const progress = this.continueProgress();
+    if (progress === null) return;
+    audio.button();
+    saveProgress(this.boardKey, progress);
+    this.registry.set(BOARD_REGISTRY_KEY, this.boardKey);
+    this.scene.start('Game', { progress });
+  }
+
   showConfirm(text, action) {
     audio.unlock();
     audio.button();
@@ -555,6 +610,8 @@ export default class RecordsScene extends Phaser.Scene {
     this.selectAllButton.setIcon(allChecked ? ICONS.check : null);
 
     this.trashButton.setEnabled(this.checked.size > 0);
+    this.continueButton.setVisible(!empty);
+    this.continueButton.setEnabled(this.continueProgress() !== null);
 
     const entry = this.entries[this.selected];
     // 何番の解かも添える（TODO-022）。一覧の行は日時と時間だけで揃えたいので、

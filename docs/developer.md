@@ -159,6 +159,7 @@ stateDiagram-v2
   Clear --> Game: 続ける（止めた Game を動かす）／もう一度（新しく始める）
   Clear --> Records: 記録
   Clear --> Title: タイトルへ
+  Records --> Game: この回を続ける（確認あり）
   Records --> Title: タイトルへ
   Demo --> Title: タイトルへ
 ```
@@ -169,6 +170,10 @@ Clear の「続ける」は `GameScene.continuePlay()` で止めた Game を動�
 「もう一度」「記録」「タイトルへ」は止めてある Game を `scene.stop()` で閉じてから移る
 （閉じないと下で止まったまま残る）。「もう一度」だけは遊びかけを捨て、
 「記録」「タイトルへ」は完成した盤面を遊びかけとして残す。
+Records の「この回を続ける」は、選んだ回の完成形から作った遊びかけ
+（`progressFromRecord()`）を保存し、`{ progress }` を渡して Game を始める。
+localStorage が使えないときも始められるよう、保存した値とは別に直接渡す（TODO-073）。
+確認を挟むのは、その盤に遊びかけがあるときだけ。
 
 ### registry のキー
 
@@ -181,7 +186,9 @@ Clear の「続ける」は `GameScene.continuePlay()` で止めた Game を動�
 | `solutions/<盤>` | 読み込み済みの全解のデータ。`solutions.js` の `solutionsRegistryKey()` が `SOLUTIONS_REGISTRY_PREFIX`（`'solutions/'`）から盤のキーを添えて作る |
 
 `BOARD_REGISTRY_KEY` と `PALETTE_REGISTRY_KEY` は Boot が起動時に既定値で
-一度書き込み、Title で選び直すたびに書き換える。`registry` は起動のたびに
+一度書き込み、Title で選び直すたびに書き換える。`BOARD_REGISTRY_KEY` は
+Records の「この回を続ける」でも、記録の画面で見ている盤へ書き換える
+（本編は `registry` の盤で始まるため。TODO-073）。`registry` は起動のたびに
 初期化されるので、盤・色の選択はページを読み込み直すと既定へ戻る
 （色の組だけは `savePalette()` で localStorage にも覚えておき、次回はそちらを読む）。
 
@@ -234,6 +241,7 @@ Clear の「続ける」は `GameScene.continuePlay()` で止めた Game を動�
 | **達成度**（achieve） | 「8×8 … 65 解中 12 解」の 1 行。分母が盤で違うので**盤の名前を頭に付ける** |
 | **チェック**（check） | 一覧の各行の左端の四角。押すと消す回として選ぶ／外す。行を押したとき（完成形を出す）とは別。頁を送っても残り、盤を切り替えると消える |
 | **全部選ぶ**（select all） | 一覧の上のチェック。見えていない頁の分も含め、その盤の記録をすべて選ぶ／外す |
+| **この回を続ける**（continue） | 完成形の下のボタン。選んだ回の完成形を並べた盤から本編を始める。時計とおまかせ・ヒントの印はその回のものを引き継ぐ。記録が無いときは出ず、全解のデータを読み込むまでは押せない |
 | **ゴミ箱**（trash） | 下段のボタン。チェックが 1 件以上のときだけ押せ、画面内で件数を確かめてから消す。その盤の記録が 1 件も残らなければ、達成度とおまかせの番号も消す |
 
 デモの画面（`src/scenes/demo.js`）で使う呼び名:
@@ -421,6 +429,7 @@ localStorage に一切触らない純関数で、localStorage を触るのは `l
 | おまかせで解を出したとき | `addAuto()` |
 | 完成したとき（続けて作った解も） | `recordCompletion()`（中で `saveBest()`（自力のときだけ）・`recordClear()`・`addFound()`）・`saveProgress()` |
 | やり直したとき・クリアの表示で「もう一度」 | `clearProgress()` |
+| 記録の画面で「この回を続ける」 | `saveProgress()`（`progressFromRecord()` で作った遊びかけで置き換える） |
 | チェックした記録を消したとき | `removeRecords()`（一部なら `removeHistoryMany()` + `removeFound()` + `removeAuto()`、その盤の記録が残らなければ `removeHistoryMany()` + `clearFound()` + `clearAuto()`） |
 
 記録と遊びかけを書き込むのは Game・Clear・Records の 3 つのシーンだけ
@@ -444,6 +453,7 @@ flowchart LR
     R1["チェックした回を<br>ゴミ箱で消す"] --> RM["removeRecords()"]
     RM -- "一部" --> RP["removeHistoryMany()<br>removeFound()<br>removeAuto()"]
     RM -- "残らない" --> CL["removeHistoryMany()<br>clearFound()<br>clearAuto()"]
+    R2["この回を続ける"] --> RS["saveProgress()"]
   end
 ```
 

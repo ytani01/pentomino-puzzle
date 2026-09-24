@@ -234,7 +234,7 @@ async function shot(page, name) {
       { no: 57, ms: 190000, a: true, h: true }, { no: 21, ms: 523000 },
     ];
     entries.reverse().forEach((e, i) => {
-      s.addHistory('8x8', { at: now - (entries.length - i) * day, ...e });
+      s.recordClear('8x8', { at: now - (entries.length - i) * day, ...e });
       if (!e.a && !e.h) s.addFound('8x8', e.no, 65);
     });
   });
@@ -248,9 +248,10 @@ async function shot(page, name) {
     { n: 'D', at: 's.rowButtons[3].list[3]', text: '印', side: 'bottom', dist: 56 },
     // 完成形は Graphics で大きさを持たないので、下の見出しからの位置で指す。
     // ponytail: 数値は決め打ち。記録の画面の配置を変えたら撮った画像を見て合わせ直す。
-    { n: 'E', at: '({ x: s.detailText.x - 160, y: s.detailText.y - 355, width: 320, height: 320 })',
+    { n: 'E', at: '({ x: s.detailText.x - 140, y: s.detailText.y - 309, width: 280, height: 280 })',
       text: '完成形', side: 'top', dist: 12 },
     { n: 'F', at: 's.achieveText', text: '達成度', side: 'right', dist: 16 },
+    { n: 'G', at: 's.continueButton', text: 'この回を続ける', side: 'left', dist: 16 },
     { n: 1, at: 's.prevButton', side: 'bottom', dist: 12 },
     { n: 2, at: 's.nextButton', side: 'bottom', dist: 12 },
     { n: 3, at: 's.trashButton', side: 'bottom', dist: 12 },

@@ -15,7 +15,7 @@ import {
 import {
   canPlace, createBoard, normalize, orientations, place, sameShape,
 } from './logic.js';
-import { solutionNumber } from './solutions.js';
+import { placementIn, solutionNumber } from './solutions.js';
 
 /** 盤のキーから盤の定義を引く。知らない盤なら既定の盤として扱う。 */
 function boardOf(boardKey) {
@@ -680,4 +680,25 @@ export function clearProgress(boardKey) {
   } catch (error) {
     // 消せなくても実害は無い。
   }
+}
+
+/**
+ * 記録の 1 件から、その回の完成形を並べた遊びかけを作る（純関数。TODO-073）。
+ * 記録画面の「この回を続ける」が、遊びかけの再開と同じ道で本編を始めるため。
+ *
+ * `cells` はその回の完成形（`solutionCells()` が返す代表形の文字列）、
+ * `board` は `BOARDS[key]`。時計はその回の経過時間から、おまかせ・ヒントの
+ * 印もその回のものを持ち越す（数手入れ替えるだけで短い時間や自力の記録を
+ * 作れないようにするため）。その回の番号は、そのプレーで作った解として
+ * `solved` に持ち越す（TODO-072）。続けた直後に完成と見なさないのは、本編が
+ * 始めるときに `checkSolved()` を呼ばないため。
+ * 形が合わなければ `sanitizeProgress()` が `null` を返す。
+ */
+export function progressFromRecord(entry, cells, board) {
+  const pieces = PIECES.map(({ name }) => ({
+    ...placementIn(cells, board.cols, name), location: 'board',
+  }));
+  return sanitizeProgress({
+    ms: entry.ms, usedAuto: entry.a === true, usedHint: entry.h === true, pieces, solved: [entry.no],
+  }, board);
 }

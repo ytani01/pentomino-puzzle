@@ -46,17 +46,24 @@ export default class GameScene extends Phaser.Scene {
 
   /**
    * `resume` が真なら、保存してある遊びかけから始める（TODO-030）。
-   * タイトルの `つづきから` だけが渡す。`scene.restart()`（やり直し）は
-   * 引数を明示して渡し直すので、続きから始め直してしまうことは無い。
+   * タイトルの `つづきから` だけが渡す。Game を始める呼び出しは、どれも
+   * 引数を明示して渡す（`はじめる`・`scene.restart()`・クリアの「もう一度」）。
+   * Phaser は引数を省くと前回の値を渡し直すので、省くと続きから始まってしまう。
+   *
+   * `progress` を渡すと、保存してある遊びかけではなくその盤面から始める。
+   * 記録画面の「この回を続ける」が使う（TODO-073）。localStorage が使えない
+   * ときも、その回の完成形から始められるようにするため。
    */
   init(data) {
-    this.resuming = !!(data && data.resume);
+    this.startProgress = (data && data.progress) || null;
+    this.resuming = !!(data && data.resume) || this.startProgress !== null;
   }
 
   create() {
     this.cameras.main.setBackgroundColor(COLORS.background);
 
-    // 盤はタイトルで選ぶ（TODO-009）。選び直せるのはタイトルだけなので、
+    // 盤はタイトルで選ぶ（TODO-009。記録画面の「この回を続ける」も、始める前に
+    // 書き換える。TODO-073）。どちらも本編が動いていないときに書くので、
     // ここで 1 回読めば、このシーンが生きている間は変わらない。
     this.boardKey = this.registry.get(BOARD_REGISTRY_KEY);
     this.spec = BOARDS[this.boardKey];
@@ -130,7 +137,7 @@ export default class GameScene extends Phaser.Scene {
     this.events.once('shutdown', this.onShutdown, this);
 
     // 遊びかけの読み込みは、部品を組んでから（`refreshPiece()` などが要る）。
-    if (this.resuming) this.applyProgress(loadProgress(this.spec.key));
+    if (this.resuming) this.applyProgress(this.startProgress || loadProgress(this.spec.key));
     this.refreshHud();
     // ここから先の `refreshHud()` は、盤が変わったところから呼ばれる。
     // 組み立ての最中に控えると、まだ何も置いていない状態で保存してある

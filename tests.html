@@ -61,7 +61,7 @@ import {
   clearHistory, loadFound, addFound, clearFound, loadBest, shouldRecordBest,
   loadAuto, addAuto, clearAuto,
   removeHistory, removeHistoryMany, removeRecords, removeFound, removeAuto,
-  sanitizeProgress, loadProgress, saveProgress, clearProgress,
+  sanitizeProgress, loadProgress, saveProgress, clearProgress, progressFromRecord,
   isBetterClear, dedupeHistory, recordClear, recordCompletion,
 } from './src/storage.js';
 
@@ -2853,6 +2853,39 @@ test('壊れた JSON・object でない値は null になる', () => {
 });
 
 // ---- storage：最短時間を更新してよいか（TODO-020、TODO-024）--------------
+
+group('src/storage.js — 記録の 1 件から続ける遊びかけ（progressFromRecord。TODO-073）');
+
+for (const { spec, canonical } of boardStates) {
+  const cells = canonical[2];
+
+  test(`完成形のとおりに 12 個とも盤へ並べる（${spec.label}）`, () => {
+    const result = progressFromRecord({ at: 1, ms: 5000, no: 3 }, cells, spec);
+    assert(result !== null, '遊びかけを作れなかった');
+    assertSame(result.pieces.filter((p) => p.location === 'board').length, PIECES.length,
+      '盤に置いてある数');
+    const grid = [...cells].map((ch) => (ch === HOLE ? HOLE : '.'));
+    result.pieces.forEach((p) => p.cells.forEach(([r, c]) => {
+      grid[(p.row + r) * spec.cols + (p.col + c)] = p.name;
+    }));
+    assertSame(grid.join(''), cells, '並べた盤面が完成形と違う');
+  });
+
+  test(`時計・印・完成させた解はその回のものを持ち越す（${spec.label}）`, () => {
+    const plain = progressFromRecord({ at: 1, ms: 5000, no: 3 }, cells, spec);
+    assertSame([plain.ms, plain.usedAuto, plain.usedHint, plain.solved], [5000, false, false, [3]]);
+    const auto = progressFromRecord({ at: 1, ms: 777, no: 3, a: true }, cells, spec);
+    assertSame([auto.ms, auto.usedAuto, auto.usedHint], [777, true, false], 'おまかせの回');
+    const hint = progressFromRecord({ at: 1, ms: 777, no: 3, h: true }, cells, spec);
+    assertSame([hint.usedAuto, hint.usedHint], [false, true], 'ヒントの回');
+  });
+
+  test(`形の合わない盤面なら null（${spec.label}）`, () => {
+    assertSame(progressFromRecord({ ms: 1, no: 3 }, cells.slice(1), spec), null, '1 マス短い');
+    assertSame(progressFromRecord({ ms: 1, no: 3 }, cells.replaceAll('X', 'F'), spec), null,
+      'X が無い');
+  });
+}
 
 group('src/storage.js — 最短時間を更新してよいか（shouldRecordBest）');
 

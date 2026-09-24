@@ -259,6 +259,8 @@ export default class TitleScene extends Phaser.Scene {
   start() {
     audio.unlock();
     audio.button();
-    this.scene.start('Game');
+    // 引数を明示する。省くと Phaser は前回 `init()` へ渡した値（`つづきから`の
+    // `resume`、記録画面の `progress`）をそのまま使い、まっさらに始まらない（TODO-073）。
+    this.scene.start('Game', { resume: false });
   }
 }
