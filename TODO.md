@@ -1,6 +1,6 @@
 # TODO
 
-**残っている項目: TODO-064・074。** これまでに 72 件を決着させた。
+**残っている項目: TODO-064。** これまでに 73 件を決着させた。
 新しく足すときは「完了済み」の上に節を作る。
 **新規項目の番号は `TODO-075` から。**
 
@@ -27,22 +27,6 @@
 （`logic.js` も少し触る）。探索の順番は変えない。
 確認は TODO-059 の振り返りのとおり、画面の時間ではなく `pickWaitScale()` の
 値を `evaluate` で集めて見る（headless ではフレームが重く測れない）。
-
----
-
-## TODO-074. デモのランダムで、狭い所を埋める強さと崩す回数の値を決める
-
-|      | main | 担当 |
-|------|------|------|
-| 見込み | Opus 5.5 / effort medium | main（値の変更）+ verifier（Haiku 4.5） |
-
-- [ ] `src/config.js` の `DEMO.randomTightWeight` を 4 → 10、`DEMO.randomCollapseAfter` を 5 → 3 にする
-- [ ] 値の説明（`config.js` の JSDoc）の「値は仮」を、決めた値の書き方に直す
-- [ ] `tests.html` の全件が通ることを確かめる（値に合わせて組んだ比べ方のテストがある）
-
-TODO-061・063 で仮に置いた値を、利用者が決めた。ほかの仮の値（`randomNearPower` 2・`randomCollapseMoves` 3・
-`randomTurnStepMs` 150ms・`wheelDebounceMs` 150ms）と、TODO-068 のその場で外す動きは今のままにすると決めた（2026-09-25）。
-値だけの変更なので reviewer は入れない。
 
 ---
 

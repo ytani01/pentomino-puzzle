@@ -662,7 +662,7 @@ export const TURN_MARK = {
  * - `wheelDebounceMs` … ドラッグ中にホイールで向きを変えるとき、1 段
  *   進めてから次を受け付けるまでの間（TODO-069）。トラックパッドは 1 回の
  *   操作で何十もイベントが来るので、間を空けないと何段も進んでしまう。
- *   値は仮で、画面で見て決める
+ *   値は画面で見て利用者が決めた（TODO-074）
  */
 export const INPUT = {
   dragThreshold: 8,
@@ -765,24 +765,24 @@ export const HINT_BADGE = {
  * - `randomNearPower` … ランダムで置き方を抽選するとき、直前に置いた手からの
  *   距離（`logic.js` の `moveDistance()`）で重みを弱める強さ（TODO-062）。
  *   重みに `1 / (1 + distance) ** randomNearPower` を掛け、近いほど選ばれやすく
- *   する（人は盤の上を飛び回らず近くから順に埋めるため）。値は仮で、
- *   画面で見て決める
+ *   する（人は盤の上を飛び回らず近くから順に埋めるため）。値は画面で見て
+ *   利用者が決めた（TODO-074）
  * - `randomTightWeight` … ランダムでピースを抽選するとき、置ける手が一番少ない
  *   マス（「狭い所」）を覆える手を持つピースに掛ける重み（狭い所を覆えない
  *   ピースは 1）。人は「この隙間に入るのはどれか」と考えて選ぶため（TODO-061）。
- *   値は仮で、画面で見て決める
+ *   値は画面で見て利用者が決めた（TODO-074）
  * - `randomCollapseAfter` … ランダムで、盤に残るピースの数（深さ）が同じところへ
  *   「詰まり」（置ける手が尽きて戻る行き詰まりの一続き）で何回戻ったら、1 手ずつ
  *   でなく数手まとめて外すか（TODO-063）。置いた直後にその場で外す手
  *   （TODO-060・066〜068）は詰まりに数えない。人は同じ所で詰まり続けると
- *   「やり直そう」と大きく崩すため。値は仮で、画面で見て決める
+ *   「やり直そう」と大きく崩すため。値は画面で見て利用者が決めた（TODO-074）
  * - `randomCollapseMoves` … まとめて崩すとき、何手まで外すか（スタックにある分
- *   まで。TODO-063）。値は仮で、画面で見て決める
+ *   まで。TODO-063）。値は画面で見て利用者が決めた（TODO-074）
  * - `randomTurnStepMs` … ランダムで置く前に、トレイでの今の向きから置く向きまで
  *   1 段（90° 回転かその場の裏返し）ごとに空ける時間（`logic.js` の
  *   `orientationSteps()`。TODO-065）。人は手に取ってから向きを合わせて置くので、
- *   その動きを見せる。最速（`animate: false`）では回さない。値は仮で、
- *   画面で見て決める
+ *   その動きを見せる。最速（`animate: false`）では回さない。値は画面で見て
+ *   利用者が決めた（TODO-074）
  */
 export const DEMO = {
   speeds: {
@@ -795,8 +795,8 @@ export const DEMO = {
   randomJitter: 0.5,
   randomRemoveMultiplier: 2,
   randomNearPower: 2,
-  randomTightWeight: 4,
-  randomCollapseAfter: 5,
+  randomTightWeight: 10,
+  randomCollapseAfter: 3,
   randomCollapseMoves: 3,
   randomTurnStepMs: 150,
 };
