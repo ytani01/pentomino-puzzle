@@ -44,7 +44,7 @@ import {
   nextPlaceableTurn, snapSpot, shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
-  forcedPlacements, touchingEdges, moveDistance,
+  forcedPlacements, touchingEdges, moveDistance, countCellMoves,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
   solveSteps, solveStepsRandom,
 } from './src/logic.js';
@@ -1546,79 +1546,100 @@ for (const spec of BOARD_LIST) {
     // `forcedPlacements()` の候補のうち、盤面ごとの控え（failed）に入っている
     // ものは実際には選ばれない（`forcedMoves()` が除くため。TODO-066）。
     // control 用に、手元でも同じ控えを再現してから絞り込む。
-    const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces, 4000);
+    //
+    // ピースの選び方が変わり（狭い所の重み付け。TODO-061）、固定の 1 シードでは
+    // この場面が毎回出るとは限らなくなったため、複数シードを試す（node で
+    // シードの組を 1-5・6-10・…・46-50 の 10 通りずらして、8×8・6×10 とも
+    // 出ることを確かめた）。見つけた場面はすべて確かめる（reviewer 報告
+    // TODO-061 の検討 1。最初の 1 件で止めると「必ず」の名前と合わない）。
+    const SEED_START = 1;
+    const SEED_COUNT = 5;
     const sigOf = (name, cells, row, col) => `${name}:${JSON.stringify(cells)}:${row}:${col}`;
-    const failedByBoard = new Map();
-    const failedOf = (key) => {
-      if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
-      return failedByBoard.get(key);
-    };
-    const activeStack = [];
-    let board = createBoard(spec);
     let sawForced = false;
-    for (const step of steps) {
-      if (step.type === 'place') {
-        const unused = NAMES.filter((name) => !placedNames(board).includes(name));
-        const failedHere = failedOf(boardKey(board));
-        const forced = forcedPlacements(board, unused)
-          .filter((found) => !failedHere.has(sigOf(found.name, found.cells, found.row, found.col)));
-        if (forced.length > 0) {
-          sawForced = true;
-          const placedSig = sigOf(step.name, step.cells, step.row, step.col);
-          assert(forced.some((found) => sigOf(found.name, found.cells, found.row, found.col) === placedSig),
-            `${step.name} を置く前に合う手（${forced.map((f) => f.name).join(', ')}）があったのに、それ以外を置いた`);
+    for (let seed = SEED_START; seed < SEED_START + SEED_COUNT; seed += 1) {
+      const steps = randomSteps(spec, mulberry32(seed), regionsFitPieces, 1200);
+      const failedByBoard = new Map();
+      const failedOf = (key) => {
+        if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
+        return failedByBoard.get(key);
+      };
+      const activeStack = [];
+      let board = createBoard(spec);
+      for (const step of steps) {
+        if (step.type === 'place') {
+          const unused = NAMES.filter((name) => !placedNames(board).includes(name));
+          const failedHere = failedOf(boardKey(board));
+          const forced = forcedPlacements(board, unused)
+            .filter((found) => !failedHere.has(sigOf(found.name, found.cells, found.row, found.col)));
+          if (forced.length > 0) {
+            sawForced = true;
+            const placedSig = sigOf(step.name, step.cells, step.row, step.col);
+            assert(forced.some((found) => sigOf(found.name, found.cells, found.row, found.col) === placedSig),
+              `${step.name} を置く前に合う手（${forced.map((f) => f.name).join(', ')}）があったのに、それ以外を置いた`);
+          }
+          board = place(board, step.name, step.cells, step.row, step.col);
+          activeStack.push(sigOf(step.name, step.cells, step.row, step.col));
+        } else {
+          board = remove(board, step.name);
+          failedOf(boardKey(board)).add(activeStack.pop());
         }
-        board = place(board, step.name, step.cells, step.row, step.col);
-        activeStack.push(sigOf(step.name, step.cells, step.row, step.col));
-      } else {
-        board = remove(board, step.name);
-        failedOf(boardKey(board)).add(activeStack.pop());
       }
     }
-    assert(sawForced, '選んだシード・手数で、合う手のある 5 マスの穴が一度も出なかった');
+    assert(sawForced,
+      `シード ${SEED_START}〜${SEED_START + SEED_COUNT - 1}・手数 1200 以内で、合う手のある 5 マスの穴が一度も出なかった`);
   });
 
   test(`5 マスの穴に合う手を埋めた直後に解なしになると、その手と直前の手をまとめて外す（TODO-066, ${spec.label}）`, () => {
-    const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), makeFailAfterForcedFill(), 3000);
-    let board = createBoard(spec);
-    const activeStack = [];
+    // ピースの選び方が変わり（TODO-061）、固定の 1 シードでは forced な解なしの
+    // 二重 remove が毎回出るとは限らなくなったため、複数シードを試す（node で
+    // シードの組を 1-5・6-10・…・46-50 の 10 通りずらして、8×8・6×10 とも
+    // 出ることを確かめた）。見つけた場面はすべて確かめる（reviewer 報告
+    // TODO-061 の検討 1。最初の 1 件で止めると「必ず」の名前と合わない）。
+    const SEED_START = 1;
+    const SEED_COUNT = 5;
     let sawDoubleUndo = false;
-    let i = 0;
-    while (i < steps.length) {
-      const step = steps[i];
-      if (step.type === 'place') {
-        const boardBeforePlace = board;
-        board = place(board, step.name, step.cells, step.row, step.col);
-        activeStack.push({ name: step.name });
-        i += 1;
-        if (isForcedFillStep(boardBeforePlace, step)) {
-          assertSame(step.ok, false, `${step.name} の forced な place の ok が偽でない`);
-          if (i >= steps.length) break;
-          assert(steps[i] && steps[i].type === 'remove' && steps[i].name === step.name,
-            `${step.name} の forced な place が解なしなのに、直後が同じ名前の remove でない`);
-          board = remove(board, steps[i].name);
-          activeStack.pop();
+    for (let seed = SEED_START; seed < SEED_START + SEED_COUNT; seed += 1) {
+      const steps = randomSteps(spec, mulberry32(seed), makeFailAfterForcedFill(), 1200);
+      let board = createBoard(spec);
+      const activeStack = [];
+      let i = 0;
+      while (i < steps.length) {
+        const step = steps[i];
+        if (step.type === 'place') {
+          const boardBeforePlace = board;
+          board = place(board, step.name, step.cells, step.row, step.col);
+          activeStack.push({ name: step.name });
           i += 1;
-          if (activeStack.length > 0) {
-            const prevName = activeStack[activeStack.length - 1].name;
+          if (isForcedFillStep(boardBeforePlace, step)) {
+            assertSame(step.ok, false, `${step.name} の forced な place の ok が偽でない`);
             if (i >= steps.length) break;
-            assert(steps[i] && steps[i].type === 'remove' && steps[i].name === prevName,
-              `${step.name} を外した直後、その前に置いた ${prevName} の remove が続かない`);
+            assert(steps[i] && steps[i].type === 'remove' && steps[i].name === step.name,
+              `${step.name} の forced な place が解なしなのに、直後が同じ名前の remove でない`);
             board = remove(board, steps[i].name);
             activeStack.pop();
             i += 1;
+            if (activeStack.length > 0) {
+              const prevName = activeStack[activeStack.length - 1].name;
+              if (i >= steps.length) break;
+              assert(steps[i] && steps[i].type === 'remove' && steps[i].name === prevName,
+                `${step.name} を外した直後、その前に置いた ${prevName} の remove が続かない`);
+              board = remove(board, steps[i].name);
+              activeStack.pop();
+              i += 1;
+            }
+            sawDoubleUndo = true;
           }
-          sawDoubleUndo = true;
+          continue;
         }
-        continue;
+        board = remove(board, step.name);
+        const popped = activeStack.pop();
+        assert(popped && popped.name === step.name,
+          `${step.name} の remove が、控えのスタックの先頭と合わない`);
+        i += 1;
       }
-      board = remove(board, step.name);
-      const popped = activeStack.pop();
-      assert(popped && popped.name === step.name,
-        `${step.name} の remove が、控えのスタックの先頭と合わない`);
-      i += 1;
     }
-    assert(sawDoubleUndo, '選んだシード・手数で forced な解なしの二重 remove が一度も起きなかった');
+    assert(sawDoubleUndo,
+      `シード ${SEED_START}〜${SEED_START + SEED_COUNT - 1}・手数 1200 以内で forced な解なしの二重 remove が一度も起きなかった`);
   });
 }
 
@@ -1796,6 +1817,196 @@ for (const spec of BOARD_LIST) {
     assert(withNearAvg < withoutNearAvg,
       `randomNearPower を効かせたときの平均距離（${withNearAvg}）が、`
       + `効かせないとき（${withoutNearAvg}）より小さくなっていない`);
+  });
+}
+
+// ---- logic：狭い所の重み（countCellMoves, solveStepsRandom, TODO-061）-----
+
+group('src/logic.js — 狭い所の重み（countCellMoves, TODO-061）');
+
+test('countCellMoves は、空きマスごとにそれを覆う手の数を手で数えた値と一致する', () => {
+  // moveDistance のテスト（TODO-062）と同じく、実際の盤ではなく手で数えられる
+  // 小さな choices（ピースごとの手の配列の配列）を組み立てる。
+  // A: (0,0) だけを覆う手・(0,1) だけを覆う手の 2 つ
+  // B: (0,0) と (0,1) をどちらも覆う手が 1 つ
+  // C: (0,0) だけを覆う手が 1 つ
+  const choices = [
+    [{ row: 0, col: 0, shape: [[0, 0]] }, { row: 0, col: 1, shape: [[0, 0]] }], // A
+    [{ row: 0, col: 0, shape: [[0, 0], [0, 1]] }], // B
+    [{ row: 0, col: 0, shape: [[0, 0]] }], // C
+  ];
+  const counts = countCellMoves(choices);
+  // (0,0): A の 1 手目・B の 1 手目・C の 1 手目 → 3
+  assertSame(counts.get('0,0'), 3, '(0,0) の数');
+  // (0,1): A の 2 手目・B の 1 手目 → 2
+  assertSame(counts.get('0,1'), 2, '(0,1) の数');
+  assertSame(counts.size, 2, '覆われたマスの数');
+});
+
+test('countCellMoves は、どの手にも覆われないマスを持たない（空の choices は空の Map）', () => {
+  assertSame(countCellMoves([]).size, 0);
+});
+
+/**
+ * `board` の時点での `solveStepsRandom()` の choices を、手元でも同じやり方
+ * （`unusedNames`・`failedSet` による除外）で再現する。狭い所の判定に使う
+ * `countCellMoves()` へそのまま渡せる形（ピースごとの手の配列の配列）で返す。
+ */
+function computeChoices(spec, board, unusedNames, failedSet) {
+  const choices = [];
+  for (const name of unusedNames) {
+    const moves = [];
+    for (const shape of orientations(cellsOf(name))) {
+      for (let row = 0; row < spec.rows; row += 1) {
+        for (let col = 0; col < spec.cols; col += 1) {
+          if (canPlace(board, shape, row, col).ok) {
+            const sig = `${name}:${JSON.stringify(shape)}:${row}:${col}`;
+            if (!failedSet.has(sig)) moves.push({
+              name, shape, row, col, sig,
+            });
+          }
+        }
+      }
+    }
+    if (moves.length > 0) choices.push(moves);
+  }
+  return choices;
+}
+
+/**
+ * `place` の直前の盤面から、`countCellMoves()` で「狭い所」（覆える手が
+ * 一番少ない空きマス）を求める。同数で並んだマスが複数あるときは、
+ * `solveStepsRandom()` の内部の `random()` で 1 つに絞っており外からは
+ * 追えないので、`tightCells`（同数の全部）をそのまま返す。
+ */
+function tightCellsOf(choices) {
+  const counts = countCellMoves(choices);
+  const min = Math.min(...counts.values());
+  return [...counts.entries()].filter(([, count]) => count === min).map(([key]) => key);
+}
+
+for (const spec of BOARD_LIST) {
+  test(`狭い所を覆える手が一番少ないマスを唯一絞れる場面では、その手を持つピースを選んだ place は必ずそれを覆う（${spec.label}）`, () => {
+    // 「狭い所」が同数タイで複数あると、実際に絞り込んだ 1 マスは
+    // solveStepsRandom() 内部の random() で決まり、外からは追えない
+    // （上の tightCellsOf() の説明）。タイが無い（狭い所が 1 マスに絞れる）
+    // 場面だけに絞れば、その 1 マスが実際に絞り込んだマスと一致するので、
+    // 「そのマスを覆える手を持つピースを選んだら、置き方も必ずそのマスを
+    // 覆う」という絞り込みの結果を確かめられる（node で seed 1〜20、
+    // 8×8・6×10 とも成り立つことを確かめた）。
+    const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces, 1500);
+    const failedByBoard = new Map();
+    const failedOf = (key) => {
+      if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
+      return failedByBoard.get(key);
+    };
+    const activeStack = [];
+    let board = createBoard(spec);
+    let checked = 0;
+    for (const step of steps) {
+      if (step.type === 'place') {
+        const before = board;
+        if (!isForcedFillStep(before, step)) {
+          const unused = NAMES.filter((name) => !placedNames(before).includes(name));
+          const failedHere = failedOf(boardKey(before));
+          const choices = computeChoices(spec, before, unused, failedHere);
+          const tightCells = tightCellsOf(choices);
+          if (tightCells.length === 1) {
+            const [tightCell] = tightCells;
+            const pieceMoves = choices.find((moves) => moves[0].name === step.name) || [];
+            const pieceCanCoverTight = pieceMoves.some((m) => m.shape
+              .some(([dr, dc]) => `${m.row + dr},${m.col + dc}` === tightCell));
+            if (pieceCanCoverTight) {
+              checked += 1;
+              const covered = step.cells.some(([dr, dc]) => `${step.row + dr},${step.col + dc}` === tightCell);
+              assert(covered,
+                `${step.name} は狭い所（${tightCell}）を覆える手を持っていたのに、実際の置き方は覆っていない`);
+            }
+          }
+        }
+        board = place(board, step.name, step.cells, step.row, step.col);
+        activeStack.push({ sig: `${step.name}:${JSON.stringify(step.cells)}:${step.row}:${step.col}`, name: step.name });
+      } else {
+        board = remove(board, step.name);
+        const popped = activeStack.pop();
+        failedOf(boardKey(board)).add(popped.sig);
+      }
+    }
+    assert(checked > 0, '選んだシード・手数で、狭い所を唯一絞れて確かめられる場面が一度も無かった');
+  });
+}
+
+/**
+ * `solveStepsRandom()` の抽選で選ばれた place（forced を除く）のうち、
+ * 「狭い所」（`countCellMoves()` で数えた、覆える手が一番少ない空きマスの
+ * どれか）を覆った件数と、比べる対象の件数。`DEMO.randomTightWeight` は
+ * 呼び出し側で一時的に書き換えて渡す。
+ */
+function sumTightCoverage(spec, seed, limit) {
+  let board = createBoard(spec);
+  const activeStack = [];
+  const failedByBoard = new Map();
+  const failedOf = (key) => {
+    if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
+    return failedByBoard.get(key);
+  };
+  let covered = 0;
+  let total = 0;
+  let taken = 0;
+  for (const step of solveStepsRandom(spec, mulberry32(seed), regionsFitPieces)) {
+    taken += 1;
+    if (taken > limit) break;
+    if (step.type === 'place') {
+      const before = board;
+      if (!isForcedFillStep(before, step)) {
+        const unused = NAMES.filter((name) => !placedNames(before).includes(name));
+        const failedHere = failedOf(boardKey(before));
+        const choices = computeChoices(spec, before, unused, failedHere);
+        const tightCells = tightCellsOf(choices);
+        total += 1;
+        if (step.cells.some(([dr, dc]) => tightCells.includes(`${step.row + dr},${step.col + dc}`))) covered += 1;
+      }
+      board = place(board, step.name, step.cells, step.row, step.col);
+      activeStack.push({ sig: `${step.name}:${JSON.stringify(step.cells)}:${step.row}:${step.col}`, name: step.name });
+    } else {
+      board = remove(board, step.name);
+      const popped = activeStack.pop();
+      failedOf(boardKey(board)).add(popped.sig);
+    }
+  }
+  return { covered, total };
+}
+
+for (const spec of BOARD_LIST) {
+  test(`狭い所を覆える手のあるピースを選びやすい抽選になっている（狭い所を覆った place の割合が、DEMO.randomTightWeight を 1 にしたときより大きい、${spec.label}）`, () => {
+    // node でシードの組を 1-5・6-10・…・46-50 の 10 通りずらして、8×8・6×10
+    // とも成り立つことを確かめた（1 組あたり 1 秒未満）。
+    const SEEDS = 5;
+    const LIMIT = 200;
+    const savedWeight = DEMO.randomTightWeight;
+    const withWeight = { covered: 0, total: 0 };
+    const withoutWeight = { covered: 0, total: 0 };
+    try {
+      for (let seed = 1; seed <= SEEDS; seed += 1) {
+        DEMO.randomTightWeight = savedWeight;
+        const a = sumTightCoverage(spec, seed, LIMIT);
+        withWeight.covered += a.covered;
+        withWeight.total += a.total;
+        DEMO.randomTightWeight = 1;
+        const b = sumTightCoverage(spec, seed, LIMIT);
+        withoutWeight.covered += b.covered;
+        withoutWeight.total += b.total;
+      }
+    } finally {
+      DEMO.randomTightWeight = savedWeight;
+    }
+    assert(withWeight.total > 0 && withoutWeight.total > 0,
+      '選んだシード・手数で、比べられる place（forced を除く）が一度も無かった');
+    const rateWith = withWeight.covered / withWeight.total;
+    const rateWithout = withoutWeight.covered / withoutWeight.total;
+    assert(rateWith > rateWithout,
+      `DEMO.randomTightWeight を効かせたときの割合（${rateWith}）が、`
+      + `1 にしたとき（${rateWithout}）より大きくなっていない`);
   });
 }
 

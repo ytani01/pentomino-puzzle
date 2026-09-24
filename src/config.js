@@ -755,6 +755,10 @@ export const HINT_BADGE = {
  *   重みに `1 / (1 + distance) ** randomNearPower` を掛け、近いほど選ばれやすく
  *   する（人は盤の上を飛び回らず近くから順に埋めるため）。値は仮で、
  *   画面で見て決める
+ * - `randomTightWeight` … ランダムでピースを抽選するとき、置ける手が一番少ない
+ *   マス（「狭い所」）を覆える手を持つピースに掛ける重み（狭い所を覆えない
+ *   ピースは 1）。人は「この隙間に入るのはどれか」と考えて選ぶため（TODO-061）。
+ *   値は仮で、画面で見て決める
  */
 export const DEMO = {
   speeds: {
@@ -767,6 +771,7 @@ export const DEMO = {
   randomJitter: 0.5,
   randomRemoveMultiplier: 2,
   randomNearPower: 2,
+  randomTightWeight: 4,
 };
 
 /**

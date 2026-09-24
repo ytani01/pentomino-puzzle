@@ -414,6 +414,49 @@ export function moveDistance(a, b) {
   return min;
 }
 
+/**
+ * `choices`（残りの全ピースの置ける手。ピースごとの手の配列の配列）から、
+ * 空きマスごとに「そのマスを覆う手の数」を数える。デモのランダムで
+ * 「狭い所」（一番少ないマス）を選ぶため（TODO-061）。純関数として export し、
+ * `tests.html` から確かめられるようにする。
+ */
+export function countCellMoves(choices) {
+  const counts = new Map();
+  for (const moves of choices) {
+    for (const move of moves) {
+      for (const [dr, dc] of move.shape) {
+        const key = `${move.row + dr},${move.col + dc}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+    }
+  }
+  return counts;
+}
+
+/** `move` が空きマス `cellKey`（`"row,col"`）を覆うか。 */
+function moveCoversCell(move, cellKey) {
+  return move.shape.some(([dr, dc]) => `${move.row + dr},${move.col + dc}` === cellKey);
+}
+
+/**
+ * `counts`（`countCellMoves()` の戻り値）から、数が 1 以上で一番少ないマスを
+ * 1 つ選ぶ（同数なら `random` で選ぶ）。覆う手が無いマスは無い（`counts` は
+ * 覆われたマスしか持たない）。`counts` は空でないこと（置ける手があるときだけ呼ぶ）。
+ */
+function pickTightCell(counts, random) {
+  let min = Infinity;
+  let keys = [];
+  for (const [key, count] of counts) {
+    if (count < min) {
+      min = count;
+      keys = [key];
+    } else if (count === min) {
+      keys.push(key);
+    }
+  }
+  return keys[Math.floor(random() * keys.length)];
+}
+
 /** 重み付き抽選。`weights` は `items` と同じ長さ・並びで、`random` だけで決める。 */
 function pickWeighted(items, weights, random) {
   const total = weights.reduce((sum, weight) => sum + weight, 0);
@@ -510,14 +553,16 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  *
  * 速く解くためではなく、人が試行錯誤しながら置いていく様子を見せるため。
  * 5 マスの穴に残りのピースがちょうど合う手があれば必ずそれを置く（後述の
- * `forcedPlacements()`）。無ければピースは残りから `random` で一様に選ぶが、
- * 置き方は一様に選ばない。`touchingEdges()` で数えた「盤の外・穴・置き済みの
- * マスに接する辺の数」を `touchWeight()` で重みにして抽選する（隅や、置いた
- * ピースの隣に置きやすくなる。人はまず端や既に置いたものへ寄せて置くため）。
- * さらに直前に置いた手（`stack` の最後）からの `moveDistance()` が近いほど
- * 重みを大きくする（TODO-062。人は盤の上を飛び回らず近くから順に埋めるため）。
- * 近さを掛けるのはピースを選んだあとの置き方だけで、ピースの選び方には
- * 掛けない（選び方は TODO-061 で扱う。利用者が決めた）。
+ * `forcedPlacements()`）。無ければ、まず「狭い所」（残りの手で覆える数が
+ * 一番少ない空きマス。`countCellMoves()`）を探し、それを覆える手を持つ
+ * ピースを `DEMO.randomTightWeight` で選ばれやすくして抽選する（TODO-061。
+ * 人は「この隙間に入るのはどれか」と考えてピースを選ぶため）。選んだピースが
+ * 狭い所を覆えるなら、置き方は狭い所を覆う手だけに絞る。置き方は一様に選ばない。
+ * `touchingEdges()` で数えた「盤の外・穴・置き済みのマスに接する辺の数」を
+ * `touchWeight()` で重みにして抽選する（隅や、置いたピースの隣に置きやすく
+ * なる。人はまず端や既に置いたものへ寄せて置くため）。さらに直前に置いた手
+ * （`stack` の最後）からの `moveDistance()` が近いほど重みを大きくする
+ * （TODO-062。人は盤の上を飛び回らず近くから順に埋めるため）。
  *
  * 置いた直後に `canContinue(board)` が偽（そこから先は解が無い盤面）でも
  * **その場では外さない**（置ける手が尽きたら、`canContinue(board)` が真になるまで
@@ -628,7 +673,16 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     if (forced.length > 0) {
       move = pickOne(forced);
     } else {
-      const movesForName = pickOne(choices);
+      // まず「狭い所」（覆える手が一番少ない空きマス）を探し、それを覆える
+      // 手を持つピースを選ばれやすくし、選んだら狭い所を覆う置き方に絞る（TODO-061）。
+      const tightCell = pickTightCell(countCellMoves(choices), random);
+      const covering = choices.map((moves) => moves.filter((m) => moveCoversCell(m, tightCell)));
+      const pick = pickWeighted(
+        choices.map((_, i) => i),
+        covering.map((moves) => (moves.length > 0 ? DEMO.randomTightWeight : 1)),
+        random,
+      );
+      const movesForName = covering[pick].length > 0 ? covering[pick] : choices[pick];
       // 重みは選んだピースの置き方の分だけ数える（全ピース分は要らない）。
       // 直前に置いた手（stack の最後）からの近さも掛け、盤の上を飛び回らず
       // 近くから順に埋めていくようにする（TODO-062）。スタックが空（盤が
