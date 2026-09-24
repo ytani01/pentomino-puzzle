@@ -759,6 +759,13 @@ export const HINT_BADGE = {
  *   マス（「狭い所」）を覆える手を持つピースに掛ける重み（狭い所を覆えない
  *   ピースは 1）。人は「この隙間に入るのはどれか」と考えて選ぶため（TODO-061）。
  *   値は仮で、画面で見て決める
+ * - `randomCollapseAfter` … ランダムで、盤に残るピースの数（深さ）が同じところへ
+ *   「詰まり」（置ける手が尽きて戻る行き詰まりの一続き）で何回戻ったら、1 手ずつ
+ *   でなく数手まとめて外すか（TODO-063）。置いた直後にその場で外す手
+ *   （TODO-060・066〜068）は詰まりに数えない。人は同じ所で詰まり続けると
+ *   「やり直そう」と大きく崩すため。値は仮で、画面で見て決める
+ * - `randomCollapseMoves` … まとめて崩すとき、何手まで外すか（スタックにある分
+ *   まで。TODO-063）。値は仮で、画面で見て決める
  */
 export const DEMO = {
   speeds: {
@@ -772,6 +779,8 @@ export const DEMO = {
   randomRemoveMultiplier: 2,
   randomNearPower: 2,
   randomTightWeight: 4,
+  randomCollapseAfter: 5,
+  randomCollapseMoves: 3,
 };
 
 /**

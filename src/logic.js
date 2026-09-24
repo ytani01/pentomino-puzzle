@@ -588,6 +588,21 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  * 変わるうえ、外して戻った先の盤面でも前の失敗をまた試さないため。
  * 空の盤で全部だめになったときだけ、空の盤の控えを消して選び直す。
  *
+ * 同じ深さ（盤に残るピースの数）で「詰まり」が続くと、1 手ずつでなく数手
+ * まとめて外す（TODO-063。人は同じ所で詰まり続けると「やり直そう」と
+ * 大きく崩すため）。「詰まり」に数えるのは、置ける手が尽きて `ok` が真に
+ * なるまで戻る**行き詰まりの一続きだけ**。置いた直後にその場で外す手
+ * （5 の倍数でない空き・5 マスの穴に合う手をまとめて外す 2 手・置き済みの
+ * ピースと同じ形の空きのいずれも。TODO-060・066〜068）は、置いた側の
+ * 判断が明らかに間違っていただけで「試行錯誤して詰まった」わけではないので
+ * 数えない。行き詰まりの一続きが終わるたびに、そのときの `stack.length` を
+ * 深さとして回数を数える。回数が `DEMO.randomCollapseAfter` に達したら、
+ * 続けて `DEMO.randomCollapseMoves` 手（`stack` にある分まで）を 1 手ずつ
+ * `undoLast()` で `remove` として yield する。外した手は、通常の 1 手外しと
+ * 同じくそれぞれ外した後の盤面の控えへ入れる（同じ崩し方を繰り返さない
+ * ため）。崩したあとは、崩した後の深さ以上の回数を消して数え直す
+ * （崩したことで前と違う状況になるため）。
+ *
  * 最初の solved で終わる（`solveSteps()` と違い次の解は探さない。デモは解の
  * たびに作り直すため）。
  *
@@ -622,6 +637,23 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     failedOf(boardKey(board)).add(last.key);
     return { type: 'remove', name: last.name, ok: canContinue(board) };
   };
+  // 深さ（盤に残るピースの数）ごとに、その深さで行き詰まった回数を数える（TODO-063）。
+  const collapseCounts = new Map();
+  // 行き詰まりの一続きが終わるたびに呼ぶ。回数が閾値に達したら数手まとめて外す。
+  function* maybeCollapse() {
+    const depth = stack.length;
+    const count = (collapseCounts.get(depth) || 0) + 1;
+    collapseCounts.set(depth, count);
+    if (count < DEMO.randomCollapseAfter) return;
+    const moves = Math.min(DEMO.randomCollapseMoves, stack.length);
+    for (let i = 0; i < moves; i += 1) {
+      yield undoLast();
+    }
+    const newDepth = stack.length;
+    for (const key of [...collapseCounts.keys()]) {
+      if (key >= newDepth) collapseCounts.delete(key);
+    }
+  }
 
   while (true) {
     if (unused.length === 0) {
@@ -659,6 +691,7 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
         yield step;
         if (step.ok) break;
       }
+      yield* maybeCollapse();
       continue;
     }
 
@@ -704,17 +737,20 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     if (forced.length > 0 && !ok) {
       // 穴の形に合うピースはそれしか無いので、埋めて解なしなら埋める前の
       // 盤面がすでに解なし。その手と、その前に置いた手をまとめて外す（TODO-066）。
+      // 置いた直後のその場外しは「詰まり」に数えない（TODO-063）。
       yield undoLast();
       if (stack.length > 0) yield undoLast();
     } else if (!regionsFitPieces(board)) {
       // 5 の倍数でない閉じた空き（ピースで埋め切れず必ず解なしになる）は
       // 詰みが確定しているので、行き詰まりを待たずにその場で外す（TODO-060・068）。
+      // 置いた直後のその場外しは「詰まり」に数えない（TODO-063）。
       yield undoLast();
     } else if (forcedPlacements(board, PIECES.map((p) => p.name).filter(
       (name) => !unused.includes(name),
     )).length > 0) {
       // 置き済みのピースと同じ形の 5 マスの空きができたら、そのピースは
       // もう無いので必ず解なし。行き詰まりを待たずにその場で外す（TODO-067）。
+      // 置いた直後のその場外しは「詰まり」に数えない（TODO-063）。
       yield undoLast();
     }
   }

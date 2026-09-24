@@ -1387,12 +1387,22 @@ for (const spec of BOARD_LIST) {
     assert(removed > 0, 'remove が一度も起きなかった（手数を見直すこと）');
   });
 
-  test(`外す連なりが ok:true で止まったとき、まだ（控えていない）置ける手が残っていれば、次は必ず place になる（${spec.label}）`, () => {
+  test(`外す連なりが ok:true で止まったとき、まだ（控えていない）置ける手が残っていて、崩し（TODO-063）も起きなければ、次は必ず place になる（${spec.label}）`, () => {
     // 「ok:true になったら break する」ことは、置ける手が本当に無いのに外し
     // 続けている（＝ break を忘れた）ことでは検知しづらい場面がある
     // （ok:true の直後に、盤面ごとの控えのせいで本当に置ける手が無く、
     // すぐ次の連なりが始まることが実際にある）。そこで「まだ置ける手が
     // 残っている場面」に絞り、そのときは必ず次が place になることを見る。
+    //
+    // ただし、置ける手が尽きた連なり（行き詰まり）が終わるたびに、その深さ
+    // （盤に残るピース数）で何回目かを数え、DEMO.randomCollapseAfter 回目
+    // なら続けて DEMO.randomCollapseMoves 手を remove として崩す（TODO-063）。
+    // 崩しの続きの remove は「次は必ず place」に当てはまらないので、手元でも
+    // 同じ規則（maybeCollapse()）で崩しの発生を再現し、崩しの間は確かめない。
+    // 置いた直後のその場外し（TODO-060/066〜068）は崩しに数えないので、
+    // 行き詰まりの連なりかどうかを、置いた直後の判定（isForcedFillStep・
+    // hasUnfitClosedRegion・hasPlacedFormClosedRegion）で見分ける（上の
+    // 「置ける手が尽きて 1 手ずつ外す並び…」のテストと同じ分け方）。
     const STEPS = 4000;
     const sigOf = (step) => `${step.name}:${JSON.stringify(step.cells)}:${step.row}:${step.col}`;
     const failedByBoard = new Map();
@@ -1428,24 +1438,93 @@ for (const spec of BOARD_LIST) {
     }
 
     let board = createBoard(spec);
-    let checkedRunEnds = 0;
-    for (let i = 0; i < steps.length; i += 1) {
-      const step = steps[i];
-      if (step.type === 'place') {
-        board = place(board, step.name, step.cells, step.row, step.col);
-        activeStack.push({ sig: sigOf(step), name: step.name });
-        continue;
-      }
-      board = remove(board, step.name);
+    const doRemove = (name) => {
+      board = remove(board, name);
       const popped = activeStack.pop();
       failedOf(boardKey(board)).add(popped.sig);
-      if (step.ok && placedNames(board).length > 0
+    };
+
+    const collapseCounts = new Map(); // 深さ -> その深さで行き詰まった回数（maybeCollapse() と同じ規則）
+    let checkedRunEnds = 0;
+    let i = 0;
+    while (i < steps.length) {
+      const step = steps[i];
+      if (step.type === 'place') {
+        const boardBeforePlace = board;
+        board = place(board, step.name, step.cells, step.row, step.col);
+        activeStack.push({ sig: sigOf(step), name: step.name });
+        const forcedFail = step.ok === false && isForcedFillStep(boardBeforePlace, step);
+        const unfitRegion = !forcedFail && hasUnfitClosedRegion(board);
+        const placedFormRegion = !forcedFail && !unfitRegion && hasPlacedFormClosedRegion(board);
+        i += 1;
+        if (forcedFail) {
+          if (i >= steps.length) break; // limit で打ち切った末尾
+          doRemove(steps[i].name);
+          i += 1;
+          if (placedNames(board).length > 0) {
+            if (i >= steps.length) break;
+            doRemove(steps[i].name);
+            i += 1;
+          }
+        } else if (unfitRegion || placedFormRegion) {
+          if (i >= steps.length) break;
+          doRemove(steps[i].name);
+          i += 1;
+        }
+        continue;
+      }
+      // 置ける手が尽きた連なり（行き詰まり）の始まり。ok:true か盤が空になるまで
+      // 1 手ずつ外す（連なりの中身自体は上のテストで確かめる。ここでは
+      // 終わった位置と、その先の崩しの有無だけを使う）。
+      let runEndOk = false;
+      for (;;) {
+        if (i >= steps.length) break; // limit で打ち切った末尾
+        doRemove(steps[i].name);
+        runEndOk = steps[i].ok;
+        i += 1;
+        if (runEndOk || placedNames(board).length === 0) break;
+      }
+
+      // 行き詰まりの一続きが終わるたびに、その深さでの回数を数える（TODO-063）。
+      const depth = placedNames(board).length;
+      const count = (collapseCounts.get(depth) || 0) + 1;
+      collapseCounts.set(depth, count);
+      if (count >= DEMO.randomCollapseAfter) {
+        const moves = Math.min(DEMO.randomCollapseMoves, placedNames(board).length);
+        let truncated = false;
+        for (let k = 0; k < moves; k += 1) {
+          if (i >= steps.length) { truncated = true; break; } // limit で打ち切った末尾。これ以上は確かめない
+          assert(steps[i] && steps[i].type === 'remove',
+            `深さ ${depth} で ${DEMO.randomCollapseAfter} 回目の行き詰まりのはずなのに、崩し（TODO-063）の remove が続かない（外す手数が少ない？）`);
+          doRemove(steps[i].name);
+          i += 1;
+        }
+        const newDepth = placedNames(board).length;
+        for (const key of [...collapseCounts.keys()]) {
+          if (key >= newDepth) collapseCounts.delete(key);
+        }
+        // 崩しがちょうど moves 手で終われば、置ける手が残っている限り、崩しの
+        // あとも「次は必ず place」（上と同じ理屈）に戻るはず。多く外しすぎて
+        // いないか（moves を超えて remove が続いていないか）はここで見る。
+        if (!truncated && placedNames(board).length > 0
+          && hasUnfailedMove(board, failedOf(boardKey(board)))) {
+          const next = steps[i];
+          if (next) {
+            checkedRunEnds += 1;
+            assert(next.type === 'place',
+              `深さ ${depth} の崩し（${moves} 手）のあと、まだ置ける手が残っているのに次が place でない（外す手数が多い？）`);
+          }
+        }
+        continue;
+      }
+
+      if (runEndOk && placedNames(board).length > 0
         && hasUnfailedMove(board, failedOf(boardKey(board)))) {
-        const next = steps[i + 1];
+        const next = steps[i];
         if (!next) break; // limit で打ち切った末尾。次の手は分からない
         checkedRunEnds += 1;
         assert(next.type === 'place',
-          `${step.name} の remove で ok:true になり、まだ置ける手が残っているのに次が place でない`);
+          `深さ ${depth} の remove の連なりで ok:true になり、まだ置ける手が残っているのに次が place でない`);
       }
     }
     assert(checkedRunEnds > 0, '選んだシード・手数で確かめられる場面が一度も無かった（見直すこと）');
