@@ -492,19 +492,25 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  * `solveSteps()` のランダム版（デモで探し方を選べるようにするため。TODO-057）。
  *
  * 速く解くためではなく、人が試行錯誤しながら置いていく様子を見せるため。
- * ピースは残りから `random` で一様に選ぶが、置き方は一様に選ばない。
- * `touchingEdges()` で数えた「盤の外・穴・置き済みのマスに接する辺の数」を
- * `touchWeight()` で重みにして抽選する（隅や、置いたピースの隣に置きやすく
- * なる。人はまず端や既に置いたものへ寄せて置くため）。
+ * 5 マスの穴に残りのピースがちょうど合う手があれば必ずそれを置く（後述の
+ * `forcedPlacements()`）。無ければピースは残りから `random` で一様に選ぶが、
+ * 置き方は一様に選ばない。`touchingEdges()` で数えた「盤の外・穴・置き済みの
+ * マスに接する辺の数」を `touchWeight()` で重みにして抽選する（隅や、置いた
+ * ピースの隣に置きやすくなる。人はまず端や既に置いたものへ寄せて置くため）。
  *
  * 置いた直後に `canContinue(board)` が偽（そこから先は解が無い盤面）でも
  * **その場では外さない**（置ける手が尽きたら、`canContinue(board)` が真になるまで
  * 最後に置いた手から順に 1 手ずつ外す。スタックが空になったら諦めて止める。
- * `canContinue` が常に偽を返す盤でも無限に外し続けないため）。ただし、
- * 小さな閉じた空き（ピースより小さい。埋めようが無く必ず解無しになる）だけは
- * 置いた瞬間に気づいて外す（TODO-060）。人も置いた瞬間に気づくのはこの手の
- * 明らかな詰みだけで、7 や 12 マスのような大きい空きは今までどおり行き詰まって
- * から戻す。
+ * `canContinue` が常に偽を返す盤でも無限に外し続けないため）。ただし、次の
+ * 2 つは行き詰まりを待たずに置いた直後にその場で外す。人も置いた瞬間に
+ * 明らかな詰みだと気づくのはこの 2 つだけで、7 や 12 マスのような大きい
+ * 空きは今までどおり行き詰まってから戻す。
+ *
+ * - 小さな閉じた空き（ピースより小さい。埋めようが無く必ず解無しになる。TODO-060）
+ * - 5 マスの穴に合う残りのピースで埋めた手が、その `canContinue` を偽にしたとき
+ *   （その穴の形はもうそのピースでしか埋まらない以上「埋める前の盤面が
+ *   すでに解なし」ということなので、埋めた手と、その前に置いた手をまとめて
+ *   外す。TODO-066）
  *
  * 外した手は、盤面ごとに `failed` に控えて選び直さない（同じ失敗を
  * 繰り返すと試行錯誤に見えないため）。盤面ごとにするのは、失敗は盤面によって
@@ -585,10 +591,22 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
       continue;
     }
 
-    const movesForName = pickOne(choices);
-    // 重みは選んだピースの置き方の分だけ数える（全ピース分は要らない）。
-    const weights = movesForName.map((m) => touchWeight(touchingEdges(board, m.shape, m.row, m.col)));
-    const move = pickWeighted(movesForName, weights, random);
+    // 5 マスの穴に合うピースがあれば、抽選より先にそれで埋める（TODO-066）。
+    // `choices` からその手を拾うので、鍵の組み立てと `failed` の除外は
+    // `choices` を作った箇所（上）の 1 か所で済む。
+    const forcedFound = forcedPlacements(board, unused);
+    const forced = choices.flat().filter((m) => forcedFound.some(
+      (f) => f.name === m.name && f.row === m.row && f.col === m.col && sameShape(f.cells, m.shape),
+    ));
+    let move;
+    if (forced.length > 0) {
+      move = pickOne(forced);
+    } else {
+      const movesForName = pickOne(choices);
+      // 重みは選んだピースの置き方の分だけ数える（全ピース分は要らない）。
+      const weights = movesForName.map((m) => touchWeight(touchingEdges(board, m.shape, m.row, m.col)));
+      move = pickWeighted(movesForName, weights, random);
+    }
     fill(move, move.name);
     unused.splice(unused.indexOf(move.name), 1);
     const ok = canContinue(board);
@@ -596,9 +614,14 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     yield {
       type: 'place', name: move.name, cells: move.shape, row: move.row, col: move.col, ok,
     };
-    // 小さな閉じた空き（ピースより小さい）は詰みが確定しているので、
-    // 行き詰まりを待たずにその場で外す（TODO-060）。
-    if (emptyRegionSizes(board).some((size) => size < PIECE_SIZE)) {
+    if (forced.length > 0 && !ok) {
+      // 穴の形に合うピースはそれしか無いので、埋めて解なしなら埋める前の
+      // 盤面がすでに解なし。その手と、その前に置いた手をまとめて外す（TODO-066）。
+      yield undoLast();
+      if (stack.length > 0) yield undoLast();
+    } else if (emptyRegionSizes(board).some((size) => size < PIECE_SIZE)) {
+      // 小さな閉じた空き（ピースより小さい）は詰みが確定しているので、
+      // 行き詰まりを待たずにその場で外す（TODO-060）。
       yield undoLast();
     }
   }
