@@ -117,7 +117,9 @@ async function annotate(page, sceneKey, notes) {
       if (note.frame) box(r);
       if (!note.text) {
         const el = document.createElement('div');
-        el.style.cssText = `position:absolute;left:${r.x + r.w - 14}px;top:${r.y - 10}px;`;
+        // ボタンの枠の内側の左端に置く。角に載せると隣のボタンとの間に見え、
+        // どちらの番号か紛れるため（TODO-057）。丸は枠線込みで 28px。
+        el.style.cssText = `position:absolute;left:${r.x + 6}px;top:${r.y + r.h / 2 - 14}px;`;
         el.innerHTML = badge(note.n);
         layer.append(el);
         continue;

@@ -162,19 +162,20 @@ export const ICONS = {
   },
 
   /**
-   * デモの探し方（TODO-050）。上の根から、深さ優先は 1 本を下へ深く、
-   * 幅優先は同じ段の横へ広げる。点の並ぶ向きで進む向きを見せる。
+   * デモの探し方（TODO-050・TODO-057）。深さ優先は上の根から 1 本を下へ深く
+   * 進む点の並び、ランダムはサイコロ（5 の目）。
    */
   depthFirst(g, color) {
     begin(g, color);
     g.lineBetween(0, -0.75 * U, 0, 0.75 * U);
     for (const y of [-0.75, 0, 0.75]) g.fillCircle(0, y * U, 0.22 * U);
   },
-  breadthFirst(g, color) {
+  random(g, color) {
     begin(g, color);
-    for (const x of [-0.75, 0, 0.75]) g.lineBetween(0, -0.7 * U, x * U, 0.6 * U);
-    g.fillCircle(0, -0.7 * U, 0.22 * U);
-    for (const x of [-0.75, 0, 0.75]) g.fillCircle(x * U, 0.6 * U, 0.22 * U);
+    g.strokeRoundedRect(-0.8 * U, -0.8 * U, 1.6 * U, 1.6 * U, 0.3 * U);
+    for (const [x, y] of [[-0.4, -0.4], [0.4, -0.4], [0, 0], [-0.4, 0.4], [0.4, 0.4]]) {
+      g.fillCircle(x * U, y * U, 0.14 * U);
+    }
   },
 };
 
