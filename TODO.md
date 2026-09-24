@@ -10,11 +10,10 @@
 
 |      | main | 担当 |
 |------|------|------|
-| 見込み | Opus 5.5 / effort medium | measure（Sonnet 5 / medium）+ implementer（Sonnet 5 / medium）+ tests（Sonnet 5 / medium）+ reviewer（Opus 5.5 / high）+ verifier（Sonnet 5 / medium） |
+| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5 / medium）+ tests（Sonnet 5 / medium）+ reviewer（Opus 5.5 / high）+ verifier（Sonnet 5 / medium） |
 
-- [ ] 着手前に、2 の案で解くまでの手数を measure に実測させる（8×8・6×10、1 の案あり／なし）
 - [ ] 1. 置き場所を、壁・置き済みのマスに接する辺の数で重みを付けて抽選する（`solveStepsRandom()`）
-- [ ] 2. 行き詰まりの判定を `hasSolution` から `regionsFitPieces` に戻し、目に見えて詰まってから戻す（`demo.js` の `startSearch()`）
+- [ ] 2. 置ける場所が無くなるまで置き続け、無くなってから 1 手ずつ戻す。全解の照合（`hasSolution`）は解の有無の表示にだけ使い、戻る判断には使わない（`solveStepsRandom()`・`demo.js` の `startSearch()`）
 - [ ] 3. 手と手の間隔に揺らぎを足す。外したあとは少し長く待つ（`demo.js` の `update()`、値は `config.js` の `DEMO`）
 - [ ] `tests.html` に 1 の重み付けのテストを足す（壊すと落ちるかも確かめる）
 - [ ] 文書（`docs/UsersGuide.md`・`docs/developer.md`）のランダムの説明を直す
@@ -25,11 +24,9 @@
 3 案とも入れると決めた（2026-09-24）。深さ優先は変えない。
 デモの目的は動きを見せることで、解くまで長くかかってもよい。
 
-決めること（measure の実測のあとで利用者に聞く）:
-
-- **2 の案で手数が膨らみすぎたときの扱い。** 選択肢は「上限の手数で空の盤から
-  やり直す」「上限なし」「一定の深さで `hasSolution` に切り替える」
-- 1 の重みの式と、3 の揺らぎの幅は実装で決め、画面で見て利用者に確かめる
+解くまでの手数は測らずに、まず置ける場所が無くなるまで置く形で入れる（2026-09-24 に
+利用者が決めた）。手数が膨らみすぎて困るようなら、画面で見てから考える。
+1 の重みの式と、3 の揺らぎの幅は実装で決め、画面で見て利用者に確かめる。
 
 ---
 
