@@ -57,11 +57,12 @@ import {
 import { SOLUTIONS as SOLUTIONS_8X8 } from './src/data/8x8.js';
 import { SOLUTIONS as SOLUTIONS_6X10 } from './src/data/6x10.js';
 import {
-  sanitizeHistory, sanitizeFound, migrateHistory, loadHistory, addHistory,
+  sanitizeHistory, sanitizeFound, migrateHistory, loadHistory,
   clearHistory, loadFound, addFound, clearFound, loadBest, shouldRecordBest,
   loadAuto, addAuto, clearAuto,
   removeHistory, removeHistoryMany, removeRecords, removeFound, removeAuto,
   sanitizeProgress, loadProgress, saveProgress, clearProgress,
+  isBetterClear, dedupeHistory, recordClear, recordCompletion,
 } from './src/storage.js';
 
 // ---- ごく小さなテストの土台 ----------------------------------------------
@@ -2777,9 +2778,22 @@ for (const state of boardStates) {
     assert(sanitizeProgress(JSON.stringify(sample()), spec) !== null);
   });
 
-  test(`12 個とも盤に載っていたら捨てる（${spec.label}）`, () => {
-    // 完成した盤面に続きは無い。
-    assertSame(sanitizeProgress(progressFrom(spec, canonical[0], []), spec), null);
+  test(`12 個とも盤に載った（完成した）盤面も捨てずに通す（${spec.label}）`, () => {
+    // 完成したあとも続けて遊び、別の解を作れるようにした（TODO-072）。
+    const result = sanitizeProgress(progressFrom(spec, canonical[0], []), spec);
+    assert(result !== null, '完成した盤面を捨てた');
+    assertSame(result.pieces.filter((p) => p.location === 'board').length, PIECES.length,
+      '盤に置いてある数');
+  });
+
+  test(`完成させた解の番号は、正の整数だけを重なりなく持ち越す（${spec.label}）`, () => {
+    const result = sanitizeProgress({ ...sample(), solved: [3, 1, 3, 0, -2, 1.5, '4'] }, spec);
+    assertSame(result.solved, [3, 1]);
+  });
+
+  test(`完成させた解の番号を持たない前の形は、空の一覧として読む（${spec.label}）`, () => {
+    assertSame(sanitizeProgress(sample(), spec).solved, []);
+    assertSame(sanitizeProgress({ ...sample(), solved: 'x' }, spec).solved, [], '配列でない値');
   });
 
   test(`同じピースが 2 つあったら捨てる（${spec.label}）`, () => {
@@ -2858,6 +2872,58 @@ test('両方使っても最短時間は更新しない', () => {
   assertSame(shouldRecordBest(true, true), false);
 });
 
+// ---- storage：成績の比べ方と、同じ解のまとめ方（TODO-072）------------------
+
+group('src/storage.js — 成績の比べ方（isBetterClear・dedupeHistory）');
+
+test('印の無い回は、印のある回より遅くてもよい', () => {
+  assertSame(isBetterClear({ ms: 900 }, { ms: 100, a: true }), true, '自力 対 おまかせ');
+  assertSame(isBetterClear({ ms: 900 }, { ms: 100, h: true }), true, '自力 対 ヒント表示');
+});
+
+test('印のある回は、印の無い回より速くてもよくない', () => {
+  assertSame(isBetterClear({ ms: 100, a: true }, { ms: 900 }), false, 'おまかせ 対 自力');
+  assertSame(isBetterClear({ ms: 100, h: true }, { ms: 900 }), false, 'ヒント表示 対 自力');
+});
+
+test('印の有無が同じなら、短い方だけがよい（同じ時間はよくない）', () => {
+  assertSame(isBetterClear({ ms: 100 }, { ms: 200 }), true, '自力どうしで短い');
+  assertSame(isBetterClear({ ms: 200 }, { ms: 100 }), false, '自力どうしで長い');
+  assertSame(isBetterClear({ ms: 100 }, { ms: 100 }), false, '同じ時間');
+  assertSame(isBetterClear({ ms: 100, a: true }, { ms: 200, a: true }), true, '印どうしで短い');
+});
+
+test('印は有無だけを見る（おまかせ・ヒント表示・両方を区別しない）', () => {
+  assertSame(isBetterClear({ ms: 100, a: true }, { ms: 200, h: true }), true, 'a の短い方');
+  assertSame(isBetterClear({ ms: 200, a: true, h: true }, { ms: 100, a: true }), false,
+    '両方の長い方');
+  assertSame(isBetterClear({ ms: 100, a: true, h: true }, { ms: 200, h: true }), true,
+    '両方の短い方');
+});
+
+test('dedupeHistory は同じ番号を、成績が一番よい 1 件にまとめて元の位置に残す', () => {
+  const entries = [
+    { at: 5000, ms: 500, no: 1, a: true },
+    { at: 4000, ms: 400, no: 2 },
+    { at: 3000, ms: 900, no: 1 },
+    { at: 2000, ms: 300, no: 1 },
+    { at: 1000, ms: 100, no: 1, h: true },
+  ];
+  assertSame(dedupeHistory(entries), [
+    { at: 4000, ms: 400, no: 2 },
+    { at: 2000, ms: 300, no: 1 },
+  ]);
+});
+
+test('dedupeHistory は成績が同じなら先（新しい方）を残し、番号の無い件はそのまま通す', () => {
+  const entries = [
+    { at: 3000, ms: 100, no: 1 },
+    { at: 2000, ms: 100, cells: 'x' },
+    { at: 1000, ms: 100, no: 1 },
+  ];
+  assertSame(dedupeHistory(entries), entries.slice(0, 2));
+});
+
 // ---- storage：保存して読み出す（TODO-008）--------------------------------
 //
 // ここだけ本物の localStorage を触る。利用者が実際に遊んだ記録を消さない
@@ -2893,45 +2959,37 @@ for (const state of boardStates) {
   const { spec, solutions, canonical } = state;
   const total = canonical.length;
 
-  test(`addHistory で足したものが loadHistory で新しい順に返る（${spec.label}）`, () => {
+  test(`recordClear で足したものが loadHistory で新しい順に返る（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 5000, no: 1 }, solutions);
-      addHistory(spec.key, { at: 2000, ms: 6000, no: 2 }, solutions);
+      recordClear(spec.key, { at: 1000, ms: 5000, no: 1 }, solutions);
+      recordClear(spec.key, { at: 2000, ms: 6000, no: 2 }, solutions);
       assertSame(loadHistory(spec.key).map((e) => e.at), [2000, 1000], '新しい順');
     });
   });
 
-  test(`51 件目を足すと一番古い件が落ち、件数が 50 のままになる（${spec.label}）`, () => {
+  test(`recordClear で 51 件目を足すと一番古い件が落ち、件数が 50 のままになる（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
       for (let i = 0; i < HISTORY_LIMIT; i += 1) {
-        addHistory(spec.key, { at: 1000 + i, ms: 100, no: i + 1 }, solutions);
+        recordClear(spec.key, { at: 1000 + i, ms: 100, no: i + 1 }, solutions);
       }
       let list = loadHistory(spec.key);
       assertSame(list.length, HISTORY_LIMIT, '50 件目までの件数');
       assert(list.some((e) => e.at === 1000), '一番古い件がまだ残っているはず');
-      addHistory(spec.key, { at: 9999, ms: 100, no: HISTORY_LIMIT + 1 }, solutions);
+      recordClear(spec.key, { at: 9999, ms: 100, no: HISTORY_LIMIT + 1 }, solutions);
       list = loadHistory(spec.key);
       assertSame(list.length, HISTORY_LIMIT, '51 件目を足した後の件数');
       assert(!list.some((e) => e.at === 1000), '一番古い件（at: 1000）が残っている');
       assert(list.some((e) => e.at === 9999), '足した件が見当たらない');
-    });
-  });
-
-  test(`同じ番号の解は既出として足されない（${spec.label}）`, () => {
-    // 回転・反転しただけの解は同じ番号になるので、番号を見るだけで足りる（TODO-021）。
-    withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 5 }, solutions);
-      addHistory(spec.key, { at: 2000, ms: 200, no: 5 }, solutions);
-      const list = loadHistory(spec.key);
-      assertSame(list.length, 1, '同じ番号が別件になった');
-      assertSame(list[0].at, 1000, '既にある件が書き換わった');
+      // 読むとき（sanitizeHistory）も 50 件で切るので、保存した形でも確かめる。
+      assertSame(JSON.parse(window.localStorage.getItem(spec.historyKey)).length, HISTORY_LIMIT,
+        '保存した件数');
     });
   });
 
   test(`違う番号は別件として残る（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 5 }, solutions);
-      addHistory(spec.key, { at: 2000, ms: 100, no: 6 }, solutions);
+      recordClear(spec.key, { at: 1000, ms: 100, no: 5 }, solutions);
+      recordClear(spec.key, { at: 2000, ms: 100, no: 6 }, solutions);
       assertSame(loadHistory(spec.key).length, 2, '違う番号なのに 1 件にまとまった');
     });
   });
@@ -2948,7 +3006,7 @@ for (const state of boardStates) {
         { at: 1000, ms: 100, no: 1 },
       ], '読み替えられていない');
       // 書き戻すと番号へ揃う（古い形がいつまでも残らない）。
-      addHistory(spec.key, { at: 3000, ms: 300, no: 3 }, solutions);
+      recordClear(spec.key, { at: 3000, ms: 300, no: 3 }, solutions);
       const raw = JSON.parse(window.localStorage.getItem(spec.historyKey));
       assert(raw.every((e) => typeof e.no === 'number' && e.cells === undefined),
         `古い形が残っている: ${JSON.stringify(raw)}`);
@@ -2957,7 +3015,7 @@ for (const state of boardStates) {
 
   test(`clearHistory の後は空の配列になる（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
       clearHistory(spec.key);
       assertSame(loadHistory(spec.key), []);
     });
@@ -2966,7 +3024,7 @@ for (const state of boardStates) {
   test(`clearHistory は最短時間（loadBest）を消さない（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
       window.localStorage.setItem(spec.storageKey, '12345');
-      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
       clearHistory(spec.key);
       assertSame(loadBest(spec.key), 12345, '最短時間が消えた');
     });
@@ -3002,46 +3060,16 @@ for (const state of boardStates) {
 
   test(`おまかせ・ヒント表示を使った回も履歴に残り、印が付く（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, {
+      recordClear(spec.key, {
         at: 1000, ms: 100, no: 1, a: true,
       }, solutions);
-      addHistory(spec.key, {
+      recordClear(spec.key, {
         at: 2000, ms: 200, no: 2, h: true,
       }, solutions);
       const list = loadHistory(spec.key, solutions);
       assertSame(list.length, 2, '件数');
       assertSame(list[0], { at: 2000, ms: 200, no: 2, h: true }, 'ヒント表示の件');
       assertSame(list[1], { at: 1000, ms: 100, no: 1, a: true }, 'おまかせの件');
-    });
-  });
-
-  test(`印の付いた解を自力で解き直すと、印だけ外れる（${spec.label}）`, () => {
-    withCleanStorage(spec, () => {
-      addHistory(spec.key, {
-        at: 1000, ms: 100, no: 5, a: true, h: true,
-      }, solutions);
-      addHistory(spec.key, { at: 2000, ms: 200, no: 5 }, solutions);
-      const list = loadHistory(spec.key, solutions);
-      assertSame(list.length, 1, '別件になった');
-      // 日時と時間は初めに解いた回のまま（TODO-021 の「書き換えない」を保つ）。
-      assertSame(list[0], { at: 1000, ms: 100, no: 5 });
-    });
-  });
-
-  test(`印の付いた件は、また頼って解いても印が増えない・減らない（${spec.label}）`, () => {
-    withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 5, a: true }, solutions);
-      addHistory(spec.key, { at: 2000, ms: 200, no: 5, h: true }, solutions);
-      assertSame(loadHistory(spec.key, solutions),
-        [{ at: 1000, ms: 100, no: 5, a: true }]);
-    });
-  });
-
-  test(`自力で解いた件は、あとで頼って解いても印が付かない（${spec.label}）`, () => {
-    withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 5 }, solutions);
-      addHistory(spec.key, { at: 2000, ms: 200, no: 5, a: true }, solutions);
-      assertSame(loadHistory(spec.key, solutions), [{ at: 1000, ms: 100, no: 5 }]);
     });
   });
 
@@ -3078,9 +3106,9 @@ for (const state of boardStates) {
 
   test(`removeHistory は指した番号の件だけを消す（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
-      addHistory(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
-      addHistory(spec.key, { at: 3000, ms: 300, no: 3 }, solutions);
+      recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      recordClear(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
+      recordClear(spec.key, { at: 3000, ms: 300, no: 3 }, solutions);
       removeHistory(spec.key, 2, solutions);
       assertSame(loadHistory(spec.key, solutions).map((e) => e.no), [3, 1]);
     });
@@ -3088,7 +3116,7 @@ for (const state of boardStates) {
 
   test(`removeHistory は無い番号を指しても何も変わらない（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
       removeHistory(spec.key, 9, solutions);
       assertSame(loadHistory(spec.key, solutions).map((e) => e.no), [1]);
     });
@@ -3109,9 +3137,9 @@ for (const state of boardStates) {
 
   test(`removeHistoryMany は指した番号の件だけをまとめて消す（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
-      addHistory(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
-      addHistory(spec.key, { at: 3000, ms: 300, no: 3 }, solutions);
+      recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      recordClear(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
+      recordClear(spec.key, { at: 3000, ms: 300, no: 3 }, solutions);
       removeHistoryMany(spec.key, [1, 3], solutions);
       assertSame(loadHistory(spec.key, solutions).map((e) => e.no), [2]);
     });
@@ -3119,8 +3147,8 @@ for (const state of boardStates) {
 
   test(`removeHistoryMany は無い番号が混ざっていても、ある分だけ消す（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
-      addHistory(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
+      recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      recordClear(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
       removeHistoryMany(spec.key, [2, 9], solutions);
       assertSame(loadHistory(spec.key, solutions).map((e) => e.no), [1]);
     });
@@ -3128,7 +3156,7 @@ for (const state of boardStates) {
 
   test(`removeHistoryMany に空の配列を渡しても何も変わらない（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
       removeHistoryMany(spec.key, [], solutions);
       assertSame(loadHistory(spec.key, solutions).map((e) => e.no), [1]);
     });
@@ -3149,8 +3177,8 @@ for (const state of boardStates) {
 
   test(`removeRecords で一部だけ消すと、消した番号だけを found・auto から外す（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
-      addHistory(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
+      recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      recordClear(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
       [1, 2, 3].forEach((no) => { addFound(spec.key, no, total); addAuto(spec.key, no, total); });
       const next = removeRecords(spec.key, [1], solutions);
       assertSame(next.map((e) => e.no), [2], '戻り値');
@@ -3162,8 +3190,8 @@ for (const state of boardStates) {
 
   test(`removeRecords で全部消すと、履歴に無い番号も含めて found・auto を空にする（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
-      addHistory(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
+      recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      recordClear(spec.key, { at: 2000, ms: 200, no: 2 }, solutions);
       // 3 は履歴からあふれた番号、4 は履歴に無いおまかせの番号の想定。
       [1, 2, 3].forEach((no) => addFound(spec.key, no, total));
       [1, 4].forEach((no) => addAuto(spec.key, no, total));
@@ -3171,6 +3199,127 @@ for (const state of boardStates) {
       assertSame(loadHistory(spec.key, solutions), [], '履歴');
       assertSame(loadFound(spec.key, total), [], '達成度の側');
       assertSame(loadAuto(spec.key, total), [], 'おまかせの側');
+    });
+  });
+
+  // ---- TODO-072：完成した 1 回を履歴へ反映する（recordClear）----------------
+
+  /** 履歴を `entries` の形で置いてから `entry` を反映し、結果と読み直した履歴を返す。 */
+  const recordOnto = (entries, entry) => {
+    window.localStorage.setItem(spec.historyKey, JSON.stringify(entries));
+    const status = recordClear(spec.key, entry, solutions);
+    return { status, list: loadHistory(spec.key, solutions) };
+  };
+
+  test(`記録に無い解は履歴の先頭に 1 件足し、'new' を返す（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      const { status, list } = recordOnto([{ at: 1000, ms: 100, no: 1 }],
+        { at: 2000, ms: 200, no: 2, a: true });
+      assertSame(status, 'new', '結果');
+      assertSame(list, [{ at: 2000, ms: 200, no: 2, a: true }, { at: 1000, ms: 100, no: 1 }]);
+    });
+  });
+
+  test(`印ありの記録を印なしの回が上書きし（遅くても）、先頭へ移して 'improved' を返す（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      const { status, list } = recordOnto(
+        [{ at: 2000, ms: 200, no: 2 }, { at: 1000, ms: 100, no: 5, a: true, h: true }],
+        { at: 3000, ms: 900, no: 5 });
+      assertSame(status, 'improved', '結果');
+      assertSame(list, [{ at: 3000, ms: 900, no: 5 }, { at: 2000, ms: 200, no: 2 }]);
+      // 読むときのまとめ（dedupeHistory）に頼らず、保存の時点で 1 件になっている。
+      assertSame(JSON.parse(window.localStorage.getItem(spec.historyKey)).length, 2,
+        '保存した件数');
+    });
+  });
+
+  test(`印が同じなら短い回が上書きし、'improved' を返す（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      const { status, list } = recordOnto([{ at: 1000, ms: 500, no: 5, h: true }],
+        { at: 2000, ms: 300, no: 5, h: true });
+      assertSame(status, 'improved', '結果');
+      assertSame(list, [{ at: 2000, ms: 300, no: 5, h: true }]);
+    });
+  });
+
+  test(`印なしの記録は、印ありで速い回に上書きされず 'kept'（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      const { status, list } = recordOnto([{ at: 1000, ms: 900, no: 5 }],
+        { at: 2000, ms: 100, no: 5, a: true });
+      assertSame(status, 'kept', '結果');
+      assertSame(list, [{ at: 1000, ms: 900, no: 5 }]);
+    });
+  });
+
+  test(`印が同じで遅い回・同じ時間の回は何も変えず 'kept'（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      for (const ms of [600, 500]) {
+        const { status, list } = recordOnto([{ at: 1000, ms: 500, no: 5 }],
+          { at: 2000, ms, no: 5 });
+        assertSame(status, 'kept', `ms: ${ms} の結果`);
+        assertSame(list, [{ at: 1000, ms: 500, no: 5 }], `ms: ${ms} の履歴`);
+      }
+    });
+  });
+
+  test(`同じ解が複数ある履歴は、読むと成績が一番よい 1 件にまとまる（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.historyKey, JSON.stringify([
+        { at: 3000, ms: 100, no: 5, a: true },
+        { at: 2000, ms: 800, no: 5 },
+        { at: 1000, ms: 400, no: 5 },
+      ]));
+      assertSame(loadHistory(spec.key, solutions), [{ at: 1000, ms: 400, no: 5 }]);
+    });
+  });
+
+  test(`recordClear は最短時間（loadBest）に触らない（${spec.label}）`, () => {
+    // 最短時間は自力の回だけ本編が saveBest で更新する（shouldRecordBest）。
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.storageKey, '12345');
+      recordOnto([], { at: 1000, ms: 100, no: 1 });
+      recordOnto([{ at: 1000, ms: 900, no: 1 }], { at: 2000, ms: 100, no: 1 });
+      assertSame(loadBest(spec.key), 12345, '最短時間が変わった');
+    });
+  });
+
+  // ---- TODO-072：完成した 1 回を記録へまとめて反映する（recordCompletion）----
+
+  test(`recordCompletion: 自力の回は最短時間・履歴・見つけた解を更新する（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.storageKey, '12345');
+      const result = recordCompletion(spec.key, {
+        at: 1000, ms: 100, no: 3, usedAuto: false, usedHint: false,
+      }, solutions);
+      assertSame(result, { best: 100, updated: true, status: 'new' }, '戻り値');
+      assertSame(loadBest(spec.key), 100, '最短時間');
+      assertSame(loadHistory(spec.key, solutions), [{ at: 1000, ms: 100, no: 3 }], '履歴');
+      assertSame(loadFound(spec.key, total), [3], '見つけた解');
+    });
+  });
+
+  test(`recordCompletion: 頼った回は最短時間に入れず、履歴（印つき）と見つけた解には残す（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.storageKey, '12345');
+      const result = recordCompletion(spec.key, {
+        at: 1000, ms: 100, no: 3, usedAuto: true, usedHint: true,
+      }, solutions);
+      assertSame(result, { best: 12345, updated: false, status: 'new' }, '戻り値');
+      assertSame(loadBest(spec.key), 12345, '最短時間が変わった');
+      assertSame(loadHistory(spec.key, solutions),
+        [{ at: 1000, ms: 100, no: 3, a: true, h: true }], '履歴');
+      assertSame(loadFound(spec.key, total), [3], '見つけた解');
+    });
+  });
+
+  test(`recordCompletion: 番号が無ければ履歴にも見つけた解にも残さない（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      const result = recordCompletion(spec.key, {
+        at: 1000, ms: 100, no: null, usedAuto: true, usedHint: false,
+      }, solutions);
+      assertSame(result.status, null, '結果');
+      assertSame(loadHistory(spec.key, solutions), [], '履歴');
+      assertSame(loadFound(spec.key, total), [], '見つけた解');
     });
   });
 
@@ -3185,6 +3334,25 @@ for (const state of boardStates) {
       assertSame(loaded.ms, progress.ms, '経過時間');
       assertSame(loaded.pieces.filter((p) => p.location === 'board').length,
         PIECES.length - 2, '盤に置いてある数');
+    });
+  });
+
+  test(`完成した盤面と、完成させた解の番号も保存して戻る（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      saveProgress(spec.key, { ...progressFrom(spec, canonical[0], []), solved: [1, 2] });
+      const loaded = loadProgress(spec.key);
+      assert(loaded !== null, '完成した盤面が読めない');
+      assertSame(loaded.solved, [1, 2], '完成させた解の番号');
+    });
+  });
+
+  test(`完成させた解の番号を持たない前の形の遊びかけも読める（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.progressKey,
+        JSON.stringify(progressFrom(spec, canonical[0], ['X'])));
+      const loaded = loadProgress(spec.key);
+      assert(loaded !== null, '前の形が読めない');
+      assertSame(loaded.solved, [], '完成させた解の番号');
     });
   });
 
@@ -3214,7 +3382,7 @@ for (const state of boardStates) {
   test(`遊びかけは履歴・達成度と別に保たれる（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
       saveProgress(spec.key, progressFrom(spec, canonical[0], ['X']));
-      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
       clearHistory(spec.key);
       clearFound(spec.key);
       assert(loadProgress(spec.key) !== null, '記録を消したら遊びかけまで消えた');
@@ -3223,7 +3391,7 @@ for (const state of boardStates) {
 
   test(`removeFound は履歴（loadHistory）を消さない（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
-      addHistory(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
+      recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
       addFound(spec.key, 1, total);
       removeFound(spec.key, 1, total);
       assertSame(loadHistory(spec.key, solutions).length, 1, '履歴まで消えた');

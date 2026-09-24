@@ -85,7 +85,7 @@ export function savePalette(key) {
  * 最短時間を更新してよいか（TODO-020、TODO-024）。
  *
  * おまかせ・ヒント表示のどちらかに頼ったら「自力ではない」と見なし、
- * 最短時間には入れない。`clear.js` から使う。
+ * 最短時間には入れない。本編（`game.js`）とクリア表示（`clear.js`）から使う。
  *
  * **見るのは最短時間だけ**（TODO-024）。前は履歴と達成度も同じ判定で
  * 落としていたが、それだと解けた回そのものが残らず、あとから
@@ -215,63 +215,121 @@ export function migrateHistory(entries, solutions) {
  *
  * `solutions`（`solutions.js` の読み込み済みデータ）を渡すと、古い形の件を
  * 番号へ読み替えて返す。渡さなければ保存されている形のまま返す。
+ * 同じ番号の件は、読むたびに成績が一番よい 1 件にまとめる（`dedupeHistory()`。TODO-072）。
  */
 export function loadHistory(boardKey, solutions = null) {
   const board = boardOf(boardKey);
   try {
     const entries = sanitizeHistory(window.localStorage.getItem(board.historyKey), board);
-    return migrateHistory(entries, solutions);
+    return dedupeHistory(migrateHistory(entries, solutions));
   } catch (error) {
     return [];
   }
 }
 
 /**
- * 1 件（`{ at, ms, no }`）を先頭へ足して保存し、保存後の配列を返す。
+ * `entry` の成績が `other` より**よい**か（TODO-072）。同じなら偽。
  *
- * あふれた古い件は捨てる（`HISTORY_LIMIT`）。保存に失敗しても配列は返すので、
- * その回の一覧は正しく出せる（`saveBest()` と同じ方針）。
- *
- * 同じ番号の解が既にあれば足さない（TODO-021）。記録の意味は「どのパターンを
- * クリアしたか」で、時間で順位付けはしないため、既にある件を書き換えることも
- * しない。回転・反転しただけの解は同じ番号になるので、番号を見るだけで足りる。
- *
- * **例外は印を外すときだけ**（TODO-024）。おまかせやヒント表示に頼って解いた回に
- * 印が付いたあと、同じ解を自力で解き直したら、その件の印を落とす。日時と時間は
- * 初めに解いた回のまま残す（上の「既にある件を書き換えない」を保つ）。
- *
- * `solutions` を渡すのは、**書き戻すときに古い形の件も番号へ揃えるため**
- * （読み替えずに書き戻すと、いつまでも `cells` の件が残ってしまう）。
+ * おまかせ・ヒント表示の印（`a` / `h`）が無い回を先に立て、印の有無が
+ * 同じときだけ経過時間の短いほうをよいとする。印は「あるか無いか」だけを
+ * 見て、`a` と `h` のどちらか・両方かは比べない（どれも「自力ではない」で、
+ * 最短時間から外す判定 `shouldRecordBest()` と同じ区切り）。
  */
-export function addHistory(boardKey, entry, solutions = null) {
+export function isBetterClear(entry, other) {
+  const marked = (item) => item.a === true || item.h === true;
+  if (marked(entry) !== marked(other)) return !marked(entry);
+  return entry.ms < other.ms;
+}
+
+/**
+ * 同じ番号の件を、成績が一番よい 1 件にまとめる（純関数。TODO-072）。
+ *
+ * TODO-072 より前は「最初に解いた回を残し、後の回は足さない」だったので
+ * 同じ番号は 1 件のはずだが、手で書き換えたものや古い `cells` の件を番号へ
+ * 読み替えたときに重なることがある。読むたびにここを通すので、画面と
+ * 書き戻し（`recordClear()`・`removeHistory()` など）はまとめた形だけを見る。
+ * 残した件は元の位置（新しい順）のまま。成績が同じなら新しいほうを残す。
+ * 番号を持たない件（読み替える前の `cells`）はそのまま通す。
+ */
+export function dedupeHistory(entries) {
+  const best = new Map();
+  for (const entry of entries) {
+    if (!Number.isInteger(entry.no)) continue;
+    const kept = best.get(entry.no);
+    if (kept === undefined || isBetterClear(entry, kept)) best.set(entry.no, entry);
+  }
+  return entries.filter((entry) => !Number.isInteger(entry.no) || best.get(entry.no) === entry);
+}
+
+/**
+ * 完成した 1 回（`{ at, ms, no, a?, h? }`）を履歴へ反映し、どうなったかを返す
+ * （TODO-072）。本編が完成を見つけるたびに呼ぶ（続けて作った解も同じ）。
+ *
+ * - `'new'` … その番号が履歴に無かったので、先頭へ足した
+ * - `'improved'` … 履歴の件より成績がよい（`isBetterClear()`）ので、その件を
+ *   外して今回の件を先頭へ足した（日時・経過時間・印が今回のものになる）
+ * - `'kept'` … 履歴の件のほうがよいか同じなので、何も書かない
+ *
+ * 書き換えた件を先頭へ移すのは、履歴を日時の新しい順に保つため。
+ * あふれた古い件は捨てる（`HISTORY_LIMIT`）。回転・反転しただけの解は同じ
+ * 番号になるので、同じ解かどうかは番号を見るだけで足りる。
+ * `solutions` は、**書き戻すときに古い `cells` の件を番号へ揃えるため**に渡す
+ * （読み替えずに書き戻すと、いつまでも `cells` の件が残ってしまう）。
+ * 保存に失敗しても結果は返す（その回の表示は出せる）。
+ */
+export function recordClear(boardKey, entry, solutions = null) {
   const board = boardOf(boardKey);
   const existing = loadHistory(boardKey, solutions);
-  const index = existing.findIndex((item) => item.no === entry.no);
-  let list;
-  if (index < 0) {
-    list = [entry, ...existing];
-  } else {
-    const marked = existing[index].a === true || existing[index].h === true;
-    // 印の付いた件を、印の無い回（＝自力）でなぞったときだけ書き換える。
-    if (!marked || entry.a === true || entry.h === true) return existing;
-    list = existing.map((item, i) => (i === index
-      ? { at: item.at, ms: item.ms, no: item.no }
-      : item));
-  }
-  const next = sanitizeHistory(list, board);
+  const found = existing.find((item) => item.no === entry.no);
+  if (found && !isBetterClear(entry, found)) return 'kept';
+  const list = [entry, ...existing.filter((item) => item !== found)];
   try {
-    window.localStorage.setItem(board.historyKey, JSON.stringify(next));
+    window.localStorage.setItem(board.historyKey, JSON.stringify(sanitizeHistory(list, board)));
   } catch (error) {
-    // 保存できなくても、その回の一覧は表示できる。
+    // 保存できなくても、その回の表示は出せる。
   }
-  return next;
+  return found ? 'improved' : 'new';
+}
+
+/** `recordClear()` の結果ごとに、HUD とクリア表示に出す文言（TODO-072）。 */
+export const RECORD_STATUS = {
+  new: '新しい解',
+  improved: '記録を更新',
+  kept: '記録済み',
+};
+
+/**
+ * 完成した 1 回を記録へまとめて反映する（TODO-072）。本編が完成を見つける
+ * たびに呼ぶ。`clear` は `{ at, ms, no, usedAuto, usedHint }` で、`no` は
+ * 何番の解か（データが届く前に解き切ったときは `null`）。
+ *
+ * - 最短時間（`saveBest()`）は自力の回だけ（`shouldRecordBest()`。TODO-020）
+ * - 履歴（`recordClear()`）と見つけた解（`addFound()`）は、頼った回も残し、
+ *   履歴には何に頼ったかの印を付ける（TODO-024）
+ * - 番号が無い、または `solutions` が無いときは、履歴にも見つけた解にも残せない
+ *
+ * 返り値は `{ best, updated, status }`。`best` / `updated` は `saveBest()` と同じ
+ * （自力でない回は今の最短と `false`）。`status` は `recordClear()` の結果で、
+ * 残せなかったときは `null`。
+ */
+export function recordCompletion(boardKey, clear, solutions = null) {
+  const record = shouldRecordBest(clear.usedAuto, clear.usedHint)
+    ? saveBest(boardKey, clear.ms)
+    : { best: loadBest(boardKey), updated: false };
+  if (clear.no === null || !solutions) return { ...record, status: null };
+  const entry = { at: clear.at, ms: clear.ms, no: clear.no };
+  if (clear.usedAuto) entry.a = true;
+  if (clear.usedHint) entry.h = true;
+  const status = recordClear(boardKey, entry, solutions);
+  addFound(boardKey, clear.no, solutions.canonical.length);
+  return { ...record, status };
 }
 
 /**
  * 履歴から 1 件だけ消して、保存後の配列を返す（TODO-031）。
  *
- * 消す件は**解の番号で指す**。履歴は同じ番号を 2 件持たない（`addHistory()`）
- * ので番号で 1 件に決まり、頁送りの何行目かのような**見た目の位置に依らない**。
+ * 消す件は**解の番号で指す**。履歴は同じ番号を 2 件持たない（書くのは
+ * `recordClear()` だけで、読むたびに `dedupeHistory()` でまとめる）ので番号で 1 件に決まり、頁送りの何行目かのような**見た目の位置に依らない**。
  *
  * 番号を持たない古い形の件（`cells`）は、`solutions` を渡せば読み替えてから
  * 消せる。渡さなければ読み替えられない件はそのまま残る。
@@ -492,6 +550,8 @@ export function clearAuto(boardKey) {
  *   自力扱いにしない**ために持ち越す（TODO-020 の判定を、中断で消せてしまうと
  *   最短時間の意味が無くなる）
  * - `pieces` … 12 種ぶんの `{ name, cells, location, row, col }`
+ * - `solved` … そのプレーで完成させた解の番号の配列（TODO-072）。完成したあとも
+ *   続けて遊べるので、どの解を作ったかを続きへ持ち越す
  *
  * **盤面（`board.grid`）そのものは持たない。** ピースの位置から組み直せるうえ、
  * 盤面まで別に持つと、手で書き換えられたときに 2 つの食い違いをどう扱うかを
@@ -513,12 +573,14 @@ export function clearAuto(boardKey) {
  * ので壊れた件だけ捨てられるが、こちらは 12 個で 1 つの盤面なので、一部だけ
  * 通すと**遊べない盤面**（同じ升へ 2 個、知らない向き）が出来てしまう。
  *
- * 見るのは次の 4 つ。
+ * 見るのは次の 3 つ。
  *
  * - 12 種がそれぞれ 1 個ずつあること
  * - `cells` がそのピースの向きのどれかであること（`orientations()` と照合）
  * - 盤に置いてある分が、順に置いていって重ならないこと（`canPlace()`）
- * - 12 個とも盤に載っていないこと——それは完成した盤面で、続きが無い
+ *
+ * 12 個とも盤に載った（完成した）盤面も通す。完成したあとも続けて遊び、
+ * ピースを入れ替えて別の解を作れるようにしたため（TODO-072）。
  */
 export function sanitizeProgress(value, board) {
   let parsed = value;
@@ -566,13 +628,19 @@ export function sanitizeProgress(value, board) {
       name: entry.name, cells, location: 'board', row: entry.row, col: entry.col,
     });
   }
-  if (pieces.every((piece) => piece.location === 'board')) return null;
+  // そのプレーで完成させた解の番号（TODO-072）。TODO-072 より前に保存した
+  // ものは持たないので空とみなす。解の総数はここでは分からないので、
+  // 正の整数かどうかだけを見て、重なりは落とす。
+  const solved = Array.isArray(parsed.solved)
+    ? [...new Set(parsed.solved.filter((no) => Number.isInteger(no) && no > 0))]
+    : [];
 
   return {
     ms: parsed.ms,
     usedAuto: parsed.usedAuto === true,
     usedHint: parsed.usedHint === true,
     pieces,
+    solved,
   };
 }
 
@@ -605,7 +673,7 @@ export function saveProgress(boardKey, progress) {
   return sane;
 }
 
-/** その盤の遊びかけを消す。解き切ったとき・やり直したときに呼ぶ。 */
+/** その盤の遊びかけを消す。やり直したときに呼ぶ。 */
 export function clearProgress(boardKey) {
   try {
     window.localStorage.removeItem(boardOf(boardKey).progressKey);

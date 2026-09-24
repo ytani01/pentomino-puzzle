@@ -8,7 +8,7 @@
  */
 
 import {
-  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, INPUT, LAYOUTS, NEON,
+  BACKDROP, BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, INPUT, LAYOUTS, NEON,
   OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, TURN_MARK,
 } from '../config.js';
 import {
@@ -21,7 +21,8 @@ import {
   autoFrom, ensureSolutions, hasSolution, solutionNumber,
 } from '../solutions.js';
 import {
-  addAuto, clearProgress, loadAuto, loadFound, loadProgress, saveProgress,
+  addAuto, clearProgress, loadAuto, loadFound, loadProgress, recordCompletion, RECORD_STATUS,
+  saveProgress,
 } from '../storage.js';
 import * as audio from '../audio.js';
 import {
@@ -78,6 +79,8 @@ export default class GameScene extends Phaser.Scene {
     this.pending = null;
     this.drag = null;
     this.messageTimer = null;
+    // このプレーで完成させた解の番号（TODO-072）。遊びかけと一緒に保存する。
+    this.solvedNumbers = [];
 
     this.drawBoard();
     this.drawTray();
@@ -290,6 +293,15 @@ export default class GameScene extends Phaser.Scene {
     this.hintBadge = createHintBadge(this, hud.x + hud.padding + hud.statusX, rowY(0), 0)
       .setDepth(DEPTH.hud);
 
+    // 完成した解が新しいか記録済みか（TODO-072）。解の有無の札と同じ位置に出すが、
+    // 札はトレイが空（盤が完成）のときは出ず、こちらは完成しているときだけ出す
+    // （`refreshHud()` で消す）ので重ならない。
+    this.recordText = this.add.text(hud.x + hud.padding + hud.statusX, rowY(0), '', {
+      fontFamily: FONT.family,
+      fontSize: `${FONT.hud}px`,
+      color: TEXT_COLORS.accent,
+    }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
+
     // 前半 3 つが「解くのを助けるもの」、後半 3 つが「遊び方を変えるもの」。
     // 縦画面ではこの 3 つずつがそのまま 1 段になる。
     this.buttons = this.createHudButtons([
@@ -362,7 +374,8 @@ export default class GameScene extends Phaser.Scene {
 
     this.confirmParts = [];
 
-    const backdrop = this.add.rectangle(0, 0, this.layout.width, this.layout.height, 0x000000, 0.55)
+    const backdrop = this.add.rectangle(0, 0, this.layout.width, this.layout.height,
+                                        BACKDROP.color, BACKDROP.alpha)
       .setOrigin(0).setDepth(DEPTH.confirm).setInteractive().setVisible(false);
     this.confirmParts.push(backdrop);
 
@@ -904,7 +917,7 @@ export default class GameScene extends Phaser.Scene {
       this.board = place(this.board, piece.name, piece.cells, spot.row, spot.col);
       this.settlePiece(piece, false);
       audio.drop();
-      this.refreshHud();
+      this.refreshHud(true);
       this.checkSolved();
       return;
     }
@@ -1032,9 +1045,10 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 戻しても盤が変わらない控えがある。ヒント表示が切のときに打った手へ戻して、
-   * 戻した盤面でまた埋まったとき（TODO-044）と、同じ場所へ置き直した手。
+   * 戻しても盤が変わらない控えがある。同じ場所へ置き直した手がそれで、
    * 押したのに何も起きないように見えるので、盤が変わるまで続けて戻す。
+   * 戻したあとは形の決まった空きを埋めない（`refreshHud()` の `fill`）ので、
+   * 戻した盤面がまた埋まって同じ盤に戻ることは無い（TODO-072）。
    */
   undo() {
     if (this.history.length === 0) return;
@@ -1053,8 +1067,9 @@ export default class GameScene extends Phaser.Scene {
    *
    * 1 個も置いていないときは控えずに消す。何も進んでいない状態を残しても
    * `つづきから` が「はじめから」と同じ意味になるだけで、押せるボタンが
-   * 増えたぶん紛らわしい。解き終えたあと（`playing` が偽）は
-   * `checkSolved()` が消したものを書き戻さないよう、何もしない。
+   * 増えたぶん紛らわしい。`playing` が偽のとき（完成してクリア表示を
+   * 出している間・やり直しで捨てたあと）は何もしない。完成した盤面は
+   * `checkSolved()` が `playing` を偽にする前に控える（TODO-072）。
    */
   persist() {
     if (!this.playing) return;
@@ -1066,6 +1081,7 @@ export default class GameScene extends Phaser.Scene {
       ms: this.elapsed,
       usedAuto: this.usedAuto,
       usedHint: this.usedHint,
+      solved: this.solvedNumbers,
       pieces: this.pieces.map((piece) => ({
         name: piece.name,
         cells: piece.cells,
@@ -1109,6 +1125,7 @@ export default class GameScene extends Phaser.Scene {
     this.elapsed = progress.ms;
     this.usedAuto = progress.usedAuto;
     this.usedHint = progress.usedHint;
+    this.solvedNumbers = progress.solved;
     this.timeText.setText(formatTime(this.elapsed));
   }
 
@@ -1144,7 +1161,7 @@ export default class GameScene extends Phaser.Scene {
     }
     audio.auto();
     this.showMessage(`${name} を置いた`);
-    this.refreshHud();
+    this.refreshHud(true);
     this.checkSolved();
   }
 
@@ -1163,7 +1180,7 @@ export default class GameScene extends Phaser.Scene {
       // 一度でも入にしたら、答えに頼ったものとして扱う（TODO-020 へ渡す）。
       this.usedHint = true;
       // 入にした時点で、形の決まった空きを埋める（TODO-044）。
-      this.refreshHud();
+      this.refreshHud(true);
       return;
     }
     this.hintState = null;
@@ -1282,15 +1299,19 @@ export default class GameScene extends Phaser.Scene {
    * どれもここを通るので、形の決まった空きを埋める（TODO-044）・解の有無を調べ直す・
    * 遊びかけを控える入口をここ 1 つにまとめてある。埋めるのを先にするのは、
    * 残りの数・ボタン・解の有無・控えを埋めたあとの盤面で出すため。
+   *
+   * 埋めるのは `fill` が真のとき、つまりピースを置いたとき（手で置く・おまかせ）と
+   * ヒント表示を入にしたときだけ。外す・戻す・向きを変えるときは埋めない。
+   * 外した穴はそのピースの形なので、埋めると外す前の盤へすぐ戻ってしまい、
+   * 完成した盤からピースを外して入れ替えられなくなるため（TODO-072）。
    */
-  refreshHud() {
-    const filled = this.fillForced();
-    // 囲まれたピースを外すと、その空きへ同じピースが埋め戻されて外す前と同じ盤に
-    // なる。そのとき積んだ控えを残すと、次の一手戻すが空振りするので捨てる。
-    const last = this.history[this.history.length - 1];
-    if (filled && last && boardKey(last.board) === boardKey(this.board)) this.history.pop();
+  refreshHud(fill = false) {
+    const filled = fill && this.fillForced();
     const left = this.pieces.filter((piece) => piece.location === 'tray').length;
     this.remainText.setText(`残り ${left}`);
+    // 完成した解の知らせ（TODO-072）は、盤が完成でなくなるまで出しておく。
+    // 完成した盤から変えられるのは外す手だけなので、残りが出たら消せば足りる。
+    if (left > 0) this.recordText.setText('');
     this.undoButton.setEnabled(this.playing && this.history.length > 0);
     // 全解のデータが届くまでは、おまかせもヒント表示も出せない（TODO-022）。
     this.autoButton.setEnabled(this.playing && left > 0 && this.solutions !== null);
@@ -1310,27 +1331,80 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * 完成を見つけたら、時計を止めて記録を更新し、本編の上にクリア表示を重ねる
+   * （TODO-072）。画面を移らないのは、完成したあとも続けて遊び、ピースを
+   * 入れ替えて別の解を作れるようにするため。本編は `pause()` で止めておく
+   * （時計・入力・Tween が止まる）。「続ける」で `continuePlay()` が動かす。
+   *
+   * `playing` を偽にする前に遊びかけを控える。`persist()` は `playing` が
+   * 偽だと何もしないので、先に控えないと完成した盤面と解の一覧が残らない。
+   */
   checkSolved() {
     // 自動で埋めて `refreshHud()` が先にクリアへ進めたあと、呼んだ側
-    // （`dropDrag()`・`useAuto()`）がもう一度呼ぶので、二重に `Clear` へ移らないように。
+    // （`dropDrag()`・`useAuto()`）がもう一度呼ぶので、二重に数えないように。
     if (!this.playing) return;
     if (!isSolved(this.board)) return;
+    // 何番の解か（TODO-022）。データが届く前に解き切ることもありうるので、
+    // そのときは `null`（記録に残せない）。
+    const no = this.solutions ? solutionNumber(this.solutions, boardKey(this.board)) : null;
+    const result = this.recordSolved(no);
+    if (no !== null && !this.solvedNumbers.includes(no)) this.solvedNumbers.push(no);
+    this.persist();
     this.playing = false;
-    // 解き切った盤面に続きは無いので、遊びかけは捨てる（TODO-030）。
-    // `playing` を偽にしたあとなので、`persist()` が書き戻すことはない。
-    clearProgress(this.spec.key);
     this.refreshHud();
+    this.showRecordStatus(no, result.status);
     this.showMessage('完成');
     this.time.delayedCall(700, () => {
-      this.scene.start('Clear', {
+      this.scene.pause();
+      this.scene.launch('Clear', {
         ms: this.elapsed,
         usedAuto: this.usedAuto,
         usedHint: this.usedHint,
-        // 何番の解かを渡す（TODO-022）。記録に残すかどうかを決めるのは
-        // `clear.js` なので、ここは番号を引くところまで。データが届く前に
-        // 解き切ることもありうるので、そのときは `null` を渡す。
-        no: this.solutions ? solutionNumber(this.solutions, boardKey(this.board)) : null,
+        no,
+        total: this.solutions ? this.solutions.canonical.length : null,
+        best: result.best,
+        bestUpdated: result.updated,
+        status: result.status,
       });
     });
+  }
+
+  /**
+   * 完成した回を記録へ反映する（TODO-072。前は `clear.js` が受け持っていた）。
+   * 続けて作った解も同じく反映するので、クリア表示ではなく完成を見つける
+   * ここに置く。経過時間は最初からの累計のまま。
+   *
+   * 最短時間は自力の回だけ（TODO-020）。履歴と見つけた解は頼った回も残し、
+   * 印を付ける（TODO-024）。履歴に足すか・上書きするか・何もしないかは
+   * `recordClear()` が決める。番号が無ければ履歴にも見つけた解にも残せない。
+   */
+  recordSolved(no) {
+    const result = recordCompletion(this.spec.key, {
+      at: Date.now(), ms: this.elapsed, no, usedAuto: this.usedAuto, usedHint: this.usedHint,
+    }, this.solutions);
+    // 続けて遊ぶと `create()` を通らないので、おまかせで避ける番号にもここで足す（TODO-016）。
+    if (no !== null) this.avoidNumbers.add(no);
+    return result;
+  }
+
+  /** HUD に、完成した解が新しいか記録済みかを出す（TODO-072）。 */
+  showRecordStatus(no, status) {
+    if (status === null) return;
+    this.recordText.setText(`${RECORD_STATUS[status]}（${no} 番）`)
+      .setColor(status === 'kept' ? TEXT_COLORS.dim : TEXT_COLORS.accent);
+  }
+
+  /**
+   * クリア表示の「続ける」から呼ばれる（TODO-072）。盤は完成した並びのまま、
+   * 時計を動かして遊べるようにする。盤を変えずに完成と見なさないよう、
+   * `checkSolved()` は呼ばない（次に置いたときに呼ばれる）。
+   * HUD の知らせは盤が変わるまで残すので、`refreshHud()` は通さず
+   * ボタンの状態だけ戻す。
+   */
+  continuePlay() {
+    this.scene.resume();
+    this.playing = true;
+    this.undoButton.setEnabled(this.history.length > 0);
   }
 }

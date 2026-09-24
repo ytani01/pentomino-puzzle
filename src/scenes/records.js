@@ -19,7 +19,7 @@
  */
 
 import {
-  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, HOLE, LAYOUTS, NEON, PALETTES,
+  BACKDROP, BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, HOLE, LAYOUTS, NEON, PALETTES,
   PALETTE_REGISTRY_KEY, PIECES, SCREEN, TEXT_COLORS,
 } from '../config.js';
 import { ICONS } from '../icons.js';
@@ -337,7 +337,7 @@ export default class RecordsScene extends Phaser.Scene {
     const depth = 10;
 
     this.confirmParts = [
-      this.add.rectangle(0, 0, SCREEN.width, SCREEN.height, 0x000000, 0.55)
+      this.add.rectangle(0, 0, SCREEN.width, SCREEN.height, BACKDROP.color, BACKDROP.alpha)
         .setOrigin(0).setDepth(depth).setInteractive().setVisible(false),
       createPanel(this, x, y, CONFIRM.width, CONFIRM.height)
         .setDepth(depth).setVisible(false),

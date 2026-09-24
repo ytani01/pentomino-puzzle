@@ -144,7 +144,8 @@ flowchart LR
 ### シーンの移り方
 
 `src/main.js` が登録するシーンは Boot・Title・Game・Clear・Records・Demo の
-6 つ（`scene.start()` で遷移する）。
+6 つ（`scene.start()` で遷移する）。Clear だけは例外で、Game を `scene.pause()` で
+止めたまま `scene.launch()` で上に重ねて出す（完成したあとも続けて遊べるようにするため。TODO-072）。
 
 ```mermaid
 stateDiagram-v2
@@ -154,8 +155,8 @@ stateDiagram-v2
   Title --> Records: 記録
   Title --> Demo: デモ
   Game --> Title: タイトルへ（確認あり）
-  Game --> Clear: 完成
-  Clear --> Game: もう一度
+  Game --> Clear: 完成（Game を止めて重ねる）
+  Clear --> Game: 続ける（止めた Game を動かす）／もう一度（新しく始める）
   Clear --> Records: 記録
   Clear --> Title: タイトルへ
   Records --> Title: タイトルへ
@@ -164,6 +165,10 @@ stateDiagram-v2
 
 Boot はマス目テクスチャを作ったら Title へ進む。Game からタイトルへ戻るときは
 確認パネルを挟み、盤面は遊びかけとして保存される（[つづきから](UsersGuide.md#つづきから)）。
+Clear の「続ける」は `GameScene.continuePlay()` で止めた Game を動かし、Clear を閉じる。
+「もう一度」「記録」「タイトルへ」は止めてある Game を `scene.stop()` で閉じてから移る
+（閉じないと下で止まったまま残る）。「もう一度」だけは遊びかけを捨て、
+「記録」「タイトルへ」は完成した盤面を遊びかけとして残す。
 
 ### registry のキー
 
@@ -215,8 +220,8 @@ Boot はマス目テクスチャを作ったら Title へ進む。Game からタ
 | **パネル**（panel） | 盤やトレイの外側の枠（`boardPanel` / `trayPanel`）。`src/ui.js` の `createPanel` が描く |
 | **ゴースト**（ghost） | ドラッグ中、置ける場所に出る薄い影 |
 | **おまかせ**（auto） | ボタンの 1 つ。**押すたびに 1 個だけ**、全解のデータから選んだ手を盤へ置く。使うと最短時間には入らず、記録には印が残る |
-| **ヒント表示**（hint） | ボタンの 1 つ。入にすると、置く・外すたびに残りのピースで最後まで置けるかを調べて HUD に出す。解けるときは、切り離された 5 マスの空きが残りのピースと同じ形なら自動で置く（`forcedPlacements()`。履歴を積まないので、一手戻すと直前の手とまとめて戻る）。こちらも使うと最短時間には入らない |
-| **HUD**（hud） | 上端の帯。1 段目に経過時間・残り数・解の有無、その下にボタンが並ぶ。ボタンは 6 個で、横画面は 1 段、縦画面は 3 個ずつ 2 段に折り返す。ボタンは文字でなくアイコン（`src/icons.js`）で、何のボタンかは**説明**に出す |
+| **ヒント表示**（hint） | ボタンの 1 つ。入にすると、置く・外すたびに残りのピースで最後まで置けるかを調べて HUD に出す。解けるときは、切り離された 5 マスの空きが残りのピースと同じ形なら自動で置く（`forcedPlacements()`。履歴を積まないので、一手戻すと直前の手とまとめて戻る）。自動で置くのはピースを置いたとき（おまかせを含む）と入にしたときだけで、外す・一手戻す・向きを変えるときは置かない（外したピースが埋め戻されて完成した盤を変えられなくなるため。TODO-072）。こちらも使うと最短時間には入らない |
+| **HUD**（hud） | 上端の帯。1 段目に経過時間・残り数・解の有無（盤が完成しているときは、同じ位置に「新しい解」「記録を更新」「記録済み」の知らせ）、その下にボタンが並ぶ。ボタンは 6 個で、横画面は 1 段、縦画面は 3 個ずつ 2 段に折り返す。ボタンは文字でなくアイコン（`src/icons.js`）で、何のボタンかは**説明**に出す |
 | **説明**（tooltip） | HUD のボタンの下に出る短い文字（「一手戻す」など）。画面の下端のボタン（記録の画面の下段）では、はみ出さないようボタンの上に出す。マウスでは載せて少し待つと出て、離すか押すと消える。タッチでは押したとき（動作はそのまま）に少しの間だけ出る。押せないボタンでも出す。`src/ui.js` の `createTooltip()` が 1 シーンに 1 つ作る |
 
 記録の画面（`src/scenes/records.js`）で使う呼び名:
@@ -288,7 +293,7 @@ python3 -m http.server 8765
 | 用途 | キー（8×8 の場合） | 値の形 |
 |---|---|---|
 | 最短時間 | `pentomino-puzzle/best-ms` | ミリ秒の数値を文字列にしたもの |
-| クリア履歴 | `pentomino-puzzle/history/v2/8x8` | JSON の配列（最大 `HISTORY_LIMIT`（50）件、新しい順） |
+| クリア履歴 | `pentomino-puzzle/history/v2/8x8` | JSON の配列（最大 `HISTORY_LIMIT`（50）件、新しい順。1 つの解に 1 件） |
 | 見つけた解の番号 | `pentomino-puzzle/found/8x8` | JSON の数値配列（昇順） |
 | おまかせで出した解の番号 | `pentomino-puzzle/auto/8x8` | JSON の数値配列（昇順） |
 | 遊びかけの盤面 | `pentomino-puzzle/progress/8x8` | JSON のオブジェクト |
@@ -333,14 +338,26 @@ python3 -m http.server 8765
 盤の縦横は 1 件には持たせない。保存先のキーが盤ごとに分かれているので、
 どの盤の記録かはキーで決まる。
 
+**履歴は 1 つの解に 1 件**（TODO-072）。 完成するたびに本編が `recordCompletion()` を呼ぶ。
+その中の `recordClear()` が、その番号が無ければ先頭へ足し（`'new'`）、あって今回の成績がよければその件を
+外して今回の件を先頭へ足し（`'improved'`。履歴を日時の新しい順に保つため）、
+そうでなければ何も書かない（`'kept'`）。成績は `isBetterClear()` で比べ、
+印（`a` か `h`）が無いほうを先に立て、印の有無が同じなら `ms` の短いほうをよいと
+する（`a` と `h` の違いは見ない。`shouldRecordBest()` と同じ区切り）。
+前の版で同じ番号が複数残っていても、`loadHistory()` が読むたびに
+`dedupeHistory()` で一番よい 1 件にまとめる（読むだけでは保存し直さず、次に
+書く操作で保存される）。
+
 遊びかけ:
 
 ```javascript
-{ ms: 42000, usedAuto: false, usedHint: false, pieces: [ /* 12 個 */ ] }
+{ ms: 42000, usedAuto: false, usedHint: false, solved: [6], pieces: [ /* 12 個 */ ] }
 ```
 
 `pieces` の 1 個は `{ name, cells, location, row, col }`。`location` は
-`'tray'`（未使用）か `'board'`（盤上）。
+`'tray'`（未使用）か `'board'`（盤上）。`solved` はそのプレーで完成させた解の
+番号の配列（完成したあとも続けて遊べるので、どの解を作ったかを続きへ持ち越す）。
+`solved` を持たない前の形は空の配列として読む。
 
 - **盤面そのもの（60 マスの配列）は保存しない。** ピースの位置から組み直せるし、
   両方持つと手で書き換えられたときに「盤面とピースが食い違う」状態をどう扱うかを
@@ -353,7 +370,7 @@ python3 -m http.server 8765
 **失敗しても遊べる。** localStorage への操作は**すべて `try` で包み、例外を
 握りつぶす**。呼ぶ側（シーン）は「記録が無い」と「読めなかった」を区別しない。
 書く側はもう一段あり、**保存に失敗しても、保存できたはずの値を戻り値で返す**
-（`saveBest()` など）。クリア画面はその場の表示を戻り値のまま出せる。
+（`saveBest()` など）。本編はその戻り値をクリアの表示へ渡し、そのまま出せる。
 
 **読んだ値は 1 件ずつ検証する。** localStorage の中身は外部入力なので、
 `JSON.parse()` が通っただけでは信用しない。型・範囲・整合性を見て、通らな
@@ -365,8 +382,9 @@ python3 -m http.server 8765
   1 つの盤面なので、一部だけ通すと遊べない盤面（同じマスに 2 個、存在しない
   向き）ができてしまう。次を見る: 12 種がそれぞれ 1 個ずつあること、各ピースの
   `cells` が正当な向きのどれかであること（`orientations()` と照合）、盤に
-  置いてある分を順に置いていって重ならないこと（`canPlace()`）、12 個とも
-  盤に載っている状態ではないこと（それは完成形であって「続き」が無い）
+  置いてある分を順に置いていって重ならないこと（`canPlace()`）。12 個とも
+  盤に載った（完成した）盤面も通す。完成したあとも続けて遊び、ピースを
+  入れ替えて別の解を作れるようにしたため
 
 検証を通った件は組み立て直して返す。元のオブジェクトをそのまま通さず必要な
 鍵だけ拾い直すので、知らない鍵や中途半端な値が保存へ書き戻されることがない。
@@ -385,7 +403,7 @@ localStorage に一切触らない純関数で、localStorage を触るのは `l
 - **読み替える（マイグレーション）** — 以前の履歴は、完成形を 60 文字の
   文字列（`cells`）で持っていた。全解をデータとして持つようになってからは
   解の番号さえあれば完成形を引き直せるので、番号だけを持つ形に変えた。読むときに
-  番号へ読み替え（`migrateHistory()`）、次に `addHistory()` で書き戻すときに
+  番号へ読み替え（`migrateHistory()`）、次に `recordClear()` などで書き戻すときに
   新しい形で保存される
 - **キーを変える（読み捨て）** — 履歴の印の文字を `h` / `c` から `a` / `h` へ
   付け替えたときは、キーそのものを変えた。`h` の**指すものが入れ替わった**
@@ -401,8 +419,8 @@ localStorage に一切触らない純関数で、localStorage を触るのは `l
 |---|---|
 | 盤の状態が変わるたび／シーンを離れるとき | `saveProgress()`（1 個も置いていなければ代わりに `clearProgress()`） |
 | おまかせで解を出したとき | `addAuto()` |
-| クリアしたとき | `saveBest()`（自力のときだけ）・`addHistory()`・`addFound()` |
-| 解き切ったとき・やり直したとき | `clearProgress()` |
+| 完成したとき（続けて作った解も） | `recordCompletion()`（中で `saveBest()`（自力のときだけ）・`recordClear()`・`addFound()`）・`saveProgress()` |
+| やり直したとき・クリアの表示で「もう一度」 | `clearProgress()` |
 | チェックした記録を消したとき | `removeRecords()`（一部なら `removeHistoryMany()` + `removeFound()` + `removeAuto()`、その盤の記録が残らなければ `removeHistoryMany()` + `clearFound()` + `clearAuto()`） |
 
 記録と遊びかけを書き込むのは Game・Clear・Records の 3 つのシーンだけ
@@ -413,18 +431,20 @@ flowchart LR
   subgraph Game
     G1["置く・外す・<br>シーンを離れる"] --> P["saveProgress()<br>（空なら clearProgress()）"]
     G2["おまかせ"] --> A["addAuto()"]
-    G3["やり直し・完成"] --> C["clearProgress()"]
+    G3["やり直し"] --> C["clearProgress()"]
+    G4["完成"] --> RC["recordCompletion()"]
+    RC --> B["saveBest()<br>（自力のときだけ）"]
+    RC --> H["recordClear()<br>addFound()"]
+    G4 --> P
   end
   subgraph Clear
-    K["クリアの表示"] --> B["saveBest()<br>（自力のときだけ）"]
-    K --> H["addHistory()<br>addFound()"]
+    K["もう一度"] --> C2["clearProgress()"]
   end
   subgraph Records
     R1["チェックした回を<br>ゴミ箱で消す"] --> RM["removeRecords()"]
     RM -- "一部" --> RP["removeHistoryMany()<br>removeFound()<br>removeAuto()"]
     RM -- "残らない" --> CL["removeHistoryMany()<br>clearFound()<br>clearAuto()"]
   end
-  G3 -- "完成" --> K
 ```
 
 記録の一部を消すときは、`found` と `auto` からも同じ番号を外す。そうしないと

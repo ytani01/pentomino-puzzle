@@ -202,6 +202,12 @@ export const COLORS = {
   buttonTextDisabled: 0x5b6480,
 };
 
+/**
+ * 確認ダイアログやクリア表示の下に敷き、後ろの画面を暗くする幕。
+ * 本編・記録・クリア表示の 3 か所で同じ見え方にするため、ここに 1 つだけ置く（TODO-072）。
+ */
+export const BACKDROP = { color: 0x000000, alpha: 0.55 };
+
 /** テキストの色は Phaser の指定が文字列なので、`COLORS` から作り直しておく。 */
 export const TEXT_COLORS = {
   normal: '#e8ecf4',
