@@ -16,6 +16,9 @@
  * 置いたら全解のデータで「解ける／解なし」を調べる。深さ優先は解なしならすぐ
  * 外すが、ランダムは外さずに置き続け、置ける場所が無くなって初めて
  * 「解ける」に戻るまで戻す（TODO-059。人が行き詰まってから考え直すのに近づける）。
+ * ただし、ピースより小さい閉じた空きができたときだけは、どちらの探し方も
+ * 行き詰まりを待たずにその場で外す（`logic.js`。TODO-060）。外す手が連なる
+ * ときは、待たずに 1 フレームずつ続けて戻す（`advance()` の先読み。TODO-060）。
  * 解を見つけたら `DEMO.pauseMs` だけ止まって次へ進む。タイトルへ戻るまで
  * 止まらない（TODO-052）。次の解は盤を片づけて空の盤から探し直し、置いては
  * 外す様子を毎回はじめから見せる（TODO-054）。
@@ -74,6 +77,9 @@ export default class DemoScene extends GameScene {
     this.waited = 0;
     // 次の 1 手までの待ち時間に掛ける倍率。ランダムのときだけ 1 以外になる（TODO-059）。
     this.waitScale = 1;
+    // 1 手先読みした generator の結果（TODO-060）。外す手が連なるときだけ
+    // 待たせないため、置いた／外した直後に先読みして持っておく。
+    this.peeked = null;
 
     this.drawBoard();
     this.drawTray();
@@ -118,6 +124,9 @@ export default class DemoScene extends GameScene {
    * ランダムのときだけ揺らして機械的な等間隔を崩す。深さ優先は一定
    * （もともと機械的な動きでよいものなので）。最速（`intervalMs: 0`）は
    * 何を掛けても 0 なので、毎フレーム進む今の動きのまま。
+   * 外す手が連なるとき（今の手も次に先読みした手も `remove`）は、
+   * `advance()` がこれを呼ばずに 0 にする。連なりを待たずに続けて動かすため
+   * （TODO-060）。`place → remove` はここで引いた値で待つ（置いた手を画面に出すため）。
    */
   pickWaitScale(moveType) {
     if (this.strategy !== 'random') return 1;
@@ -130,9 +139,12 @@ export default class DemoScene extends GameScene {
    * そこで止める。滑らせて音を鳴らすのは `animate` の速さだけ。
    * generator が尽きたら黙って空の盤から探し直す（どちらの探し方もデモでは
    * 解のたびに作り直すので、尽きるところまで来ない。万一の備え）。
+   * 先読み（`this.peeked`）があればそれを使い、無ければここで 1 手引く
+   * （初回や `startSearch()` 直後）。
    */
   advance() {
-    const { value, done } = this.steps.next();
+    const { value, done } = this.peeked ?? this.steps.next();
+    this.peeked = null;
     if (done) {
       this.startSearch();
       return;
@@ -170,7 +182,15 @@ export default class DemoScene extends GameScene {
     // ボタンは状態が変わったときだけ（`onSolved()`・`startSearch()`）。毎手
     // 塗り直すと、値が同じでも Phaser が文字を描き直してしまうため。
     this.refreshStatus();
-    this.waitScale = this.pickWaitScale(value.type);
+    // 次の手を先読みし、今の手も次の手も remove（外す手が連なる）ときだけ
+    // 待たせない（TODO-060）。`place → remove` は今までどおり
+    // `pickWaitScale('place')` の間隔で待つ（置いたピースが Tween で盤に
+    // 届く前に `remove` 側の `killTweensOf()` に止められると、置いた手が
+    // 画面にほぼ出ないため。`DEMO.speeds` の JSDoc の設計を保つ）。
+    this.peeked = this.steps.next();
+    const nextIsRemove = !this.peeked.done && this.peeked.value.type === 'remove';
+    const skipWait = value.type === 'remove' && nextIsRemove;
+    this.waitScale = skipWait ? 0 : this.pickWaitScale(value.type);
   }
 
   onSolved() {
@@ -282,6 +302,9 @@ export default class DemoScene extends GameScene {
     this.hintState = 'ok';
     this.waited = 0;
     this.waitScale = 1;
+    // 前の generator の先読みを持ち越さない（探し方の切り替え・解のあとの
+    // 探し直しでは新しい generator の最初の手から読むため。TODO-060）。
+    this.peeked = null;
     this.messageText.setText('');
     this.refreshHud();
   }

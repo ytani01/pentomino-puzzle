@@ -1090,6 +1090,11 @@ function randomSteps(spec, random, canContinue, limit) {
   return steps;
 }
 
+/** ピースより小さい（埋めようが無い）閉じた空きが盤にあるか（TODO-060）。 */
+function hasSmallClosedRegion(board) {
+  return emptyRegionSizes(board).some((size) => size < PIECE_SIZE);
+}
+
 group('src/logic.js — ランダムの探索（solveStepsRandom, TODO-057）');
 
 for (const spec of BOARD_LIST) {
@@ -1136,20 +1141,32 @@ for (const spec of BOARD_LIST) {
       assert(checked > 0, 'place が 1 度も出なかった（limit を見直すこと）');
     });
 
-    test(`置ける手が尽きて 1 手ずつ外す並び（remove の連なり）は、最後の 1 手だけが ok:true か盤が空になっており、途中の remove は ok:false（${label}, ${spec.label}）`, () => {
+    test(`置ける手が尽きて 1 手ずつ外す並び（remove の連なり）は、最後の 1 手だけが ok:true か盤が空になっており、途中の remove は ok:false（小さな空きで即座に外れる 1 手は除く。${label}, ${spec.label}）`, () => {
       // 1 回の while ループ（1 つの連なり）の終わりは ok:true か盤が空のどちらか。
       // ok:true で終わった直後でも、外へ出た先でまた置ける手が無ければ、
       // place を挟まずに次の連なりがすぐ始まる。そのため「次が place かどうか」
       // では連なりの区切りを判定できず、1 手ずつ ok と盤の状態で区切る。
+      // 置いた直後に小さな閉じた空きができたときの remove は、置ける手が尽きた
+      // 連なりとは別物（ok の真偽に関わらずその場で 1 手だけ外れる。TODO-060）。
       const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), canContinue, 3000);
       let board = createBoard(spec);
       let sawRun = false;
+      let sawImmediate = false;
       let i = 0;
       while (i < steps.length) {
         const step = steps[i];
         if (step.type === 'place') {
           board = place(board, step.name, step.cells, step.row, step.col);
+          const immediate = hasSmallClosedRegion(board);
           i += 1;
+          if (immediate) {
+            if (i >= steps.length) break; // limit で打ち切った末尾。次の手は分からない
+            assert(steps[i] && steps[i].type === 'remove' && steps[i].name === step.name,
+              `${step.name} を置いて小さな空きができたのに、次が同じ名前の remove でない`);
+            board = remove(board, steps[i].name);
+            i += 1;
+            sawImmediate = true; // 置ける手が尽きた連なりとは別物なので sawRun には数えない
+          }
           continue;
         }
         // 1 つの連なりの始まり。ok:true か盤が空になるまで 1 手ずつ確かめる。
@@ -1159,31 +1176,41 @@ for (const spec of BOARD_LIST) {
           i += 1;
           if (isRunEnd) { sawRun = true; break; }
           assertSame(steps[i - 1].ok, false, `連なりの途中の ${steps[i - 1].name} の remove の ok が false でない`);
+          if (i >= steps.length) break; // limit で打ち切った末尾。連なりが本当に終わったかは分からない
           assert(steps[i] && steps[i].type === 'remove',
             `${steps[i - 1].name} の remove（ok:false、盤に残りあり）の直後が remove でない`);
         }
       }
       assert(sawRun, '選んだシード・手数で remove の連なりが一度も終わらなかった');
+      assert(sawImmediate, '選んだシード・手数で小さな空きによる即座の remove が一度も起きなかった');
     });
   }
 
-  test(`常に偽を返す判定だと、置ける手が尽きるたびに、盤のピースがすべて外れるまで remove が続く（${spec.label}）`, () => {
+  test(`常に偽を返す判定だと、置ける手が尽きるたびに、盤のピースがすべて外れるまで remove が続く（小さな空きで即座に外れる 1 手は除く。${spec.label}）`, () => {
     // canContinue が常に偽なので、置ける手が尽きたときの remove の while ループは
     // 一度も ok:true で break せず、stack が空になるまで（＝盤のピースが
-    // すべて外れるまで）続く。
+    // すべて外れるまで）続く。ただし、置いた直後に小さな閉じた空きができて
+    // その場で 1 手だけ外れる場合は、置ける手が尽きたことによる連なりでは
+    // ないので、盤が空になっている必要は無い（TODO-060）。
     const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), () => false, 3000);
     let board = createBoard(spec);
     let sawRemoveRun = false;
+    let immediatePending = false;
     for (let i = 0; i < steps.length; i += 1) {
       const step = steps[i];
       if (step.type === 'place') {
         board = place(board, step.name, step.cells, step.row, step.col);
+        immediatePending = hasSmallClosedRegion(board);
         continue;
       }
       board = remove(board, step.name);
       assertSame(step.ok, false, `${step.name} の remove の ok が false でない`);
+      const wasImmediate = immediatePending;
+      immediatePending = false;
+      if (wasImmediate) continue;
       const next = steps[i + 1];
-      if (!next || next.type === 'place') {
+      if (!next) break; // limit で打ち切った末尾。連なりが本当に終わったかは分からない
+      if (next.type === 'place') {
         sawRemoveRun = true;
         assertSame(placedNames(board).length, 0,
           '常に偽の判定なのに remove の連なりの終わりで盤にピースが残っている');
@@ -1308,6 +1335,79 @@ for (const spec of BOARD_LIST) {
       }
     }
     assert(checkedRunEnds > 0, '選んだシード・手数で確かめられる場面が一度も無かった（見直すこと）');
+  });
+
+  /**
+   * 盤に残っている（置いていない）ピースのうち、この盤面でまだ控えていない
+   * 置き方が 1 つでもあるか（TODO-057 の「外す連なりが ok:true で…」と同じ判定）。
+   */
+  function hasUnfailedMove(board, failedHere) {
+    const remaining = NAMES.filter((name) => !placedNames(board).includes(name));
+    for (const name of remaining) {
+      for (const shape of orientations(cellsOf(name))) {
+        for (let row = 0; row < spec.rows; row += 1) {
+          for (let col = 0; col < spec.cols; col += 1) {
+            if (canPlace(board, shape, row, col).ok
+              && !failedHere.has(`${name}:${JSON.stringify(shape)}:${row}:${col}`)) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  test(`ピースと同じ 5 マスの閉じた空きは、他に置ける手が残っていれば即座には外さない（TODO-060, ${spec.label}）`, () => {
+    // 即座に外すのは PIECE_SIZE 未満（1〜4 マス）だけ。ちょうど 5 マスの空きは
+    // 1 ピースで埋まる見込みがあるので、行き詰まるまで残しておく。
+    //
+    // 「置ける手が尽きて外す」連なりの最初の 1 手も、必ず直前に置いた手そのもの
+    // （外すのはスタックの最後＝直前に置いた手）になるので、「次が同じ名前の
+    // remove かどうか」だけでは、小さな空きによる即座の remove と区別できない。
+    // 本当に「置ける手が尽きた」のかを、盤面ごとの控え（failed）を手元でも
+    // 同じやり方で再現して判定し、まだ控えていない置き方が残っている場面に
+    // 絞ることで、置ける手が尽きたことによる remove ではないと言える。
+    const STEPS = 6000;
+    const sigOf = (step) => `${step.name}:${JSON.stringify(step.cells)}:${step.row}:${step.col}`;
+    const failedByBoard = new Map();
+    const failedOf = (key) => {
+      if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
+      return failedByBoard.get(key);
+    };
+    const activeStack = [];
+    const steps = [];
+    let taken = 0;
+    for (const step of solveStepsRandom(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces)) {
+      taken += 1;
+      if (taken > STEPS) break;
+      steps.push(step);
+    }
+
+    let board = createBoard(spec);
+    let sawExact = false;
+    for (let i = 0; i < steps.length; i += 1) {
+      const step = steps[i];
+      if (step.type === 'place') {
+        board = place(board, step.name, step.cells, step.row, step.col);
+        activeStack.push({ sig: sigOf(step), name: step.name });
+        const sizes = emptyRegionSizes(board);
+        const hasExactOnly = sizes.some((size) => size === PIECE_SIZE) && !sizes.some((size) => size < PIECE_SIZE);
+        if (hasExactOnly && hasUnfailedMove(board, failedOf(boardKey(board)))) {
+          sawExact = true;
+          const next = steps[i + 1];
+          if (next) {
+            assert(!(next.type === 'remove' && next.name === step.name),
+              `${step.name} を置いて 5 マスちょうどの閉じた空きができ、他に置ける手も残っているのに、即座に remove された`);
+          }
+        }
+        continue;
+      }
+      board = remove(board, step.name);
+      const popped = activeStack.pop();
+      failedOf(boardKey(board)).add(popped.sig);
+    }
+    assert(sawExact, '選んだシード・手数で確かめられる場面が一度も無かった（見直すこと）');
   });
 }
 

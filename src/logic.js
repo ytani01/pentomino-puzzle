@@ -498,10 +498,13 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  * なる。人はまず端や既に置いたものへ寄せて置くため）。
  *
  * 置いた直後に `canContinue(board)` が偽（そこから先は解が無い盤面）でも
- * **その場では外さない**。人も置いた瞬間には気づかず、後で行き詰まって
- * 初めて戻るため。置ける手が尽きたら、`canContinue(board)` が真になるまで
- * 最後に置いた手から順に 1 手ずつ外す（スタックが空になったら諦めて止める。
- * `canContinue` が常に偽を返す盤でも無限に外し続けないため）。
+ * **その場では外さない**（置ける手が尽きたら、`canContinue(board)` が真になるまで
+ * 最後に置いた手から順に 1 手ずつ外す。スタックが空になったら諦めて止める。
+ * `canContinue` が常に偽を返す盤でも無限に外し続けないため）。ただし、
+ * 小さな閉じた空き（ピースより小さい。埋めようが無く必ず解無しになる）だけは
+ * 置いた瞬間に気づいて外す（TODO-060）。人も置いた瞬間に気づくのはこの手の
+ * 明らかな詰みだけで、7 や 12 マスのような大きい空きは今までどおり行き詰まって
+ * から戻す。
  *
  * 外した手は、盤面ごとに `failed` に控えて選び直さない（同じ失敗を
  * 繰り返すと試行錯誤に見えないため）。盤面ごとにするのは、失敗は盤面によって
@@ -533,6 +536,14 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
   const pickOne = (items) => items[Math.floor(random() * items.length)];
   const fill = (move, value) => {
     for (const [dr, dc] of move.shape) grid[(move.row + dr) * cols + (move.col + dc)] = value;
+  };
+  // 最後に置いた手を 1 つ外し、盤面ごとの控えに足して yield する形をそのまま返す（TODO-060）。
+  const undoLast = () => {
+    const last = stack.pop();
+    fill(last, null);
+    unused.push(last.name);
+    failedOf(boardKey(board)).add(last.key);
+    return { type: 'remove', name: last.name, ok: canContinue(board) };
   };
 
   while (true) {
@@ -567,13 +578,9 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
       // 置ける手が無くなった。canContinue が真になるまで、または戻る手が
       // 無くなるまで 1 手ずつ外す。
       while (stack.length > 0) {
-        const last = stack.pop();
-        fill(last, null);
-        unused.push(last.name);
-        failedOf(boardKey(board)).add(last.key);
-        const ok = canContinue(board);
-        yield { type: 'remove', name: last.name, ok };
-        if (ok) break;
+        const step = undoLast();
+        yield step;
+        if (step.ok) break;
       }
       continue;
     }
@@ -589,6 +596,11 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     yield {
       type: 'place', name: move.name, cells: move.shape, row: move.row, col: move.col, ok,
     };
+    // 小さな閉じた空き（ピースより小さい）は詰みが確定しているので、
+    // 行き詰まりを待たずにその場で外す（TODO-060）。
+    if (emptyRegionSizes(board).some((size) => size < PIECE_SIZE)) {
+      yield undoLast();
+    }
   }
 }
 
