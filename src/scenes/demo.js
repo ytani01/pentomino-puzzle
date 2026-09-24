@@ -10,9 +10,12 @@
  * 通らないので、遊びかけを控える shutdown の処理も登録されない。
  *
  * 探索は `logic.js` の `solveSteps()`（深さ優先）か `solveStepsRandom()`
- * （ランダム）の generator で、`update()` が速さに応じた間隔で 1 手ずつ進める。
+ * （ランダム）の generator で、`update()` が速さに応じた間隔で 1 手ずつ進める
+ * （ランダムは手ごとに間隔を揺らす。`pickWaitScale()`。TODO-059）。
  * 1 フレームに 1 手までなので画面は止まらない。
- * 置いたら全解のデータで「解ける／解なし」を調べ、解なしならすぐ外す。
+ * 置いたら全解のデータで「解ける／解なし」を調べる。深さ優先は解なしならすぐ
+ * 外すが、ランダムは外さずに置き続け、置ける場所が無くなって初めて
+ * 「解ける」に戻るまで戻す（TODO-059。人が行き詰まってから考え直すのに近づける）。
  * 解を見つけたら `DEMO.pauseMs` だけ止まって次へ進む。タイトルへ戻るまで
  * 止まらない（TODO-052）。次の解は盤を片づけて空の盤から探し直し、置いては
  * 外す様子を毎回はじめから見せる（TODO-054）。
@@ -69,6 +72,8 @@ export default class DemoScene extends GameScene {
     this.tried = 0;
     this.solvedCount = 0;
     this.waited = 0;
+    // 次の 1 手までの待ち時間に掛ける倍率。ランダムのときだけ 1 以外になる（TODO-059）。
+    this.waitScale = 1;
 
     this.drawBoard();
     this.drawTray();
@@ -101,9 +106,23 @@ export default class DemoScene extends GameScene {
       return;
     }
     // 追いつくために何手もまとめて進めない。1 手ずつ見せるのが目的なので。
-    if (this.waited < DEMO.speeds[this.speed].intervalMs) return;
+    if (this.waited < DEMO.speeds[this.speed].intervalMs * this.waitScale) return;
     this.waited = 0;
     this.advance();
+  }
+
+  /**
+   * 次の 1 手までの待ち時間の倍率を、1 手ごとに 1 回だけ引く（TODO-059）。
+   * `update()` で毎フレーム引き直すと、早く下回った値で進んでしまい平均が縮む。
+   * 間隔そのものでなく倍率で持つのは、途中で速さを変えてもすぐ効くようにするため。
+   * ランダムのときだけ揺らして機械的な等間隔を崩す。深さ優先は一定
+   * （もともと機械的な動きでよいものなので）。最速（`intervalMs: 0`）は
+   * 何を掛けても 0 なので、毎フレーム進む今の動きのまま。
+   */
+  pickWaitScale(moveType) {
+    if (this.strategy !== 'random') return 1;
+    const jitter = 1 + (Math.random() * 2 - 1) * DEMO.randomJitter;
+    return moveType === 'remove' ? DEMO.randomRemoveMultiplier * jitter : jitter;
   }
 
   /**
@@ -132,23 +151,26 @@ export default class DemoScene extends GameScene {
       piece.col = value.col;
       if (animate) audio.drop();
       const hintState = value.ok ? 'ok' : 'dead';
-      // 本編と同じく、解なしに変わった瞬間に鳴らす。解なしの手はすぐ外して
-      // 「解ける」に戻るので、解なしの手を置くたびに鳴る（本編でヒント表示を
-      // 入にして解なしの手を置いたときと同じ）。
+      // 本編と同じく、解なしに変わった瞬間に鳴らす（本編でヒント表示を入に
+      // して解なしの手を置いたときと同じ）。深さ優先は解なしの手をすぐ外して
+      // 「解ける」に戻るので置くたびに鳴る。ランダムは解なしのまま置き続けるので、
+      // 一度鳴ったら、戻って「解ける」に戻るまでは鳴らない（TODO-059）。
       if (animate && hintState === 'dead' && this.hintState !== 'dead') audio.invalid();
       this.hintState = hintState;
     } else {
       // 向きは最後に試したまま、自分のスロットへ戻す。
       piece.location = 'tray';
       if (animate) audio.lift();
-      // 外した先は、探索が「解ける」と見て潜った盤面（空の盤も解ける）。
-      this.hintState = 'ok';
+      // ランダムは外した後の盤面の `canContinue` を運ぶ（TODO-059）。深さ優先の
+      // `remove` には `ok` が無く、外した先は必ず「解ける」に潜った盤面なので 'ok'。
+      this.hintState = value.ok === false ? 'dead' : 'ok';
     }
     this.refreshPiece(piece);
     this.settlePiece(piece, animate);
     // ボタンは状態が変わったときだけ（`onSolved()`・`startSearch()`）。毎手
     // 塗り直すと、値が同じでも Phaser が文字を描き直してしまうため。
     this.refreshStatus();
+    this.waitScale = this.pickWaitScale(value.type);
   }
 
   onSolved() {
@@ -259,6 +281,7 @@ export default class DemoScene extends GameScene {
     this.tried = 0;
     this.hintState = 'ok';
     this.waited = 0;
+    this.waitScale = 1;
     this.messageText.setText('');
     this.refreshHud();
   }

@@ -368,6 +368,46 @@ export function regionsFitPieces(board) {
   return emptyRegionSizes(board).every((size) => size % PIECE_SIZE === 0);
 }
 
+/**
+ * 置いたときに、盤の外・穴・置き済みのマスへ接する辺の数を返す（TODO-059）。
+ * ランダム探索の置き場所の重み付けに使う。`cellAt()` は盤外・穴とも
+ * `HOLE`（`null` ではない値）を返すので、`null` 以外を「接している」とみなせば
+ * 3 つを区別せずに数えられる。ピース自身の内側の辺（隣り合う自分のマス）は
+ * 接しているとは数えない。
+ */
+export function touchingEdges(board, cells, row, col) {
+  const shape = new Set(cells.map(([dr, dc]) => `${dr},${dc}`));
+  let count = 0;
+  for (const [dr, dc] of cells) {
+    for (const [ndr, ndc] of [[dr - 1, dc], [dr + 1, dc], [dr, dc - 1], [dr, dc + 1]]) {
+      if (shape.has(`${ndr},${ndc}`)) continue;
+      if (cellAt(board, row + ndr, col + ndc) !== null) count += 1;
+    }
+  }
+  return count;
+}
+
+/**
+ * `touchingEdges()` の数を抽選の重みにする（TODO-059）。隅や置いたピースの隣
+ * ほど選ばれやすくしたいので 2 乗して差を広げる。接する辺が 0（盤の真ん中に
+ * 独立して置く手）でも重み 0 にはしないよう +1 する（重みが全部 0 だと
+ * 抽選できないうえ、そういう置き方も人はときどきする）。
+ */
+function touchWeight(count) {
+  return (count + 1) ** 2;
+}
+
+/** 重み付き抽選。`weights` は `items` と同じ長さ・並びで、`random` だけで決める。 */
+function pickWeighted(items, weights, random) {
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  let r = random() * total;
+  for (let i = 0; i < items.length; i += 1) {
+    r -= weights[i];
+    if (r < 0) return items[i];
+  }
+  return items[items.length - 1];
+}
+
 /** Fisher–Yates で並びを入れ替える（渡した配列をそのまま入れ替えて返す）。 */
 function shuffle(items, random) {
   for (let i = items.length - 1; i > 0; i -= 1) {
@@ -451,23 +491,30 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
 /**
  * `solveSteps()` のランダム版（デモで探し方を選べるようにするため。TODO-057）。
  *
- * 速く解くためではなく、ランダムに置いては「解なし」で外す様子を人間らしく
- * 見せるため。1 枚のピースの置き方を順に試し切ると機械的に見えるので、
- * 1 手ごとにピースも置き方も `random` で選び直す。
+ * 速く解くためではなく、人が試行錯誤しながら置いていく様子を見せるため。
+ * ピースは残りから `random` で一様に選ぶが、置き方は一様に選ばない。
+ * `touchingEdges()` で数えた「盤の外・穴・置き済みのマスに接する辺の数」を
+ * `touchWeight()` で重みにして抽選する（隅や、置いたピースの隣に置きやすく
+ * なる。人はまず端や既に置いたものへ寄せて置くため）。
  *
- * 「解なし」だった置き方は、盤面ごとに `failed` に控えて選ばない（同じ失敗を
+ * 置いた直後に `canContinue(board)` が偽（そこから先は解が無い盤面）でも
+ * **その場では外さない**。人も置いた瞬間には気づかず、後で行き詰まって
+ * 初めて戻るため。置ける手が尽きたら、`canContinue(board)` が真になるまで
+ * 最後に置いた手から順に 1 手ずつ外す（スタックが空になったら諦めて止める。
+ * `canContinue` が常に偽を返す盤でも無限に外し続けないため）。
+ *
+ * 外した手は、盤面ごとに `failed` に控えて選び直さない（同じ失敗を
  * 繰り返すと試行錯誤に見えないため）。盤面ごとにするのは、失敗は盤面によって
  * 変わるうえ、外して戻った先の盤面でも前の失敗をまた試さないため。
- * どのピースにも置き方が残っていなければ、最後に置いたピースを外して戻り、
- * その手も戻った先の盤面の失敗に数える（行き詰まる手をすぐまた置かないため。
- * 人が行き詰まったときと同じ）。空の盤で全部だめになったときだけ、空の盤の
- * 控えを消して選び直す。
+ * 空の盤で全部だめになったときだけ、空の盤の控えを消して選び直す。
  *
  * 最初の solved で終わる（`solveSteps()` と違い次の解は探さない。デモは解の
  * たびに作り直すため）。
  *
  * 返す手、`random`・`canContinue` の受け方、盤をその場で書き換えることは
  * `solveSteps()` と同じ。乱数は `random` しか使わない（シードで手順を固定するため）。
+ * `remove` にも、外した後の盤面での `canContinue(board)` を `ok` として付ける
+ * （デモの HUD 表示に使う。外した直後は必ず解けるとは限らないため）。
  */
 export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) {
   const board = createBoard(spec);
@@ -475,8 +522,9 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
   const shapes = new Map(PIECES.map((piece) => [piece.name, orientations(piece.cells)]));
   const unused = PIECES.map((piece) => piece.name);
   const stack = [];
-  // ponytail: 控えに上限は無い。行き詰まるほど盤面の数だけ増える。デモの `hasSolution`
-  // では行き詰まらないので増えない。増えて困るなら、戻るときに深い盤面の控えを捨てる。
+  // ponytail: 控えに上限は無い。外した手の数だけ増える。デモの `hasSolution` でも
+  // 行き詰まるが、解のたびに作り直すので最初の解まで千件ほど（TODO-059 の実測）。
+  // 増えて困るなら、戻るときに深い盤面の控えを捨てる。
   const failedByBoard = new Map();
   const failedOf = (key) => {
     if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
@@ -512,33 +560,35 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     }
 
     if (choices.length === 0) {
-      const last = stack.pop();
-      if (!last) { // 空の盤で全部だめだったとき。控えを消して選び直す
+      if (stack.length === 0) { // 空の盤で全部だめだったとき。控えを消して選び直す
         failed.clear();
         continue;
       }
-      fill(last, null);
-      unused.push(last.name);
-      failedOf(boardKey(board)).add(last.key);
-      yield { type: 'remove', name: last.name };
+      // 置ける手が無くなった。canContinue が真になるまで、または戻る手が
+      // 無くなるまで 1 手ずつ外す。
+      while (stack.length > 0) {
+        const last = stack.pop();
+        fill(last, null);
+        unused.push(last.name);
+        failedOf(boardKey(board)).add(last.key);
+        const ok = canContinue(board);
+        yield { type: 'remove', name: last.name, ok };
+        if (ok) break;
+      }
       continue;
     }
 
-    const move = pickOne(pickOne(choices));
+    const movesForName = pickOne(choices);
+    // 重みは選んだピースの置き方の分だけ数える（全ピース分は要らない）。
+    const weights = movesForName.map((m) => touchWeight(touchingEdges(board, m.shape, m.row, m.col)));
+    const move = pickWeighted(movesForName, weights, random);
     fill(move, move.name);
     unused.splice(unused.indexOf(move.name), 1);
     const ok = canContinue(board);
+    stack.push(move);
     yield {
       type: 'place', name: move.name, cells: move.shape, row: move.row, col: move.col, ok,
     };
-    if (ok) {
-      stack.push(move);
-    } else {
-      fill(move, null);
-      unused.push(move.name);
-      failed.add(move.key);
-      yield { type: 'remove', name: move.name };
-    }
   }
 }
 

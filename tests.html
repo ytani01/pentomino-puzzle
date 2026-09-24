@@ -44,7 +44,7 @@ import {
   nextPlaceableTurn, snapSpot, shapeSize, outlineEdges,
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
-  forcedPlacements,
+  forcedPlacements, touchingEdges,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
   solveSteps, solveStepsRandom,
 } from './src/logic.js';
@@ -1119,43 +1119,97 @@ for (const spec of BOARD_LIST) {
       }
     });
 
-    test(`ok は渡した判定の結果と一致する（${label}, ${spec.label}）`, () => {
+    test(`ok は渡した判定の結果と一致する。remove の ok も外した後の盤面の判定と一致する（${label}, ${spec.label}）`, () => {
       const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), canContinue, 2000);
       let board = createBoard(spec);
       let checked = 0;
       for (const step of steps) {
         if (step.type === 'place') {
           board = place(board, step.name, step.cells, step.row, step.col);
-          assertSame(step.ok, canContinue(board), `${step.name} で ok が食い違う`);
+          assertSame(step.ok, canContinue(board), `${step.name} の place で ok が食い違う`);
           checked += 1;
         } else if (step.type === 'remove') {
           board = remove(board, step.name);
+          assertSame(step.ok, canContinue(board), `${step.name} の remove で ok が食い違う`);
         }
       }
       assert(checked > 0, 'place が 1 度も出なかった（limit を見直すこと）');
     });
+
+    test(`置ける手が尽きて 1 手ずつ外す並び（remove の連なり）は、最後の 1 手だけが ok:true か盤が空になっており、途中の remove は ok:false（${label}, ${spec.label}）`, () => {
+      // 1 回の while ループ（1 つの連なり）の終わりは ok:true か盤が空のどちらか。
+      // ok:true で終わった直後でも、外へ出た先でまた置ける手が無ければ、
+      // place を挟まずに次の連なりがすぐ始まる。そのため「次が place かどうか」
+      // では連なりの区切りを判定できず、1 手ずつ ok と盤の状態で区切る。
+      const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), canContinue, 3000);
+      let board = createBoard(spec);
+      let sawRun = false;
+      let i = 0;
+      while (i < steps.length) {
+        const step = steps[i];
+        if (step.type === 'place') {
+          board = place(board, step.name, step.cells, step.row, step.col);
+          i += 1;
+          continue;
+        }
+        // 1 つの連なりの始まり。ok:true か盤が空になるまで 1 手ずつ確かめる。
+        for (;;) {
+          board = remove(board, steps[i].name);
+          const isRunEnd = steps[i].ok || placedNames(board).length === 0;
+          i += 1;
+          if (isRunEnd) { sawRun = true; break; }
+          assertSame(steps[i - 1].ok, false, `連なりの途中の ${steps[i - 1].name} の remove の ok が false でない`);
+          assert(steps[i] && steps[i].type === 'remove',
+            `${steps[i - 1].name} の remove（ok:false、盤に残りあり）の直後が remove でない`);
+        }
+      }
+      assert(sawRun, '選んだシード・手数で remove の連なりが一度も終わらなかった');
+    });
   }
 
-  test(`常に偽を返す判定だと、すべての place の直後が同じピースの remove（${spec.label}）`, () => {
-    const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), () => false, 2000);
-    let placeCount = 0;
+  test(`常に偽を返す判定だと、置ける手が尽きるたびに、盤のピースがすべて外れるまで remove が続く（${spec.label}）`, () => {
+    // canContinue が常に偽なので、置ける手が尽きたときの remove の while ループは
+    // 一度も ok:true で break せず、stack が空になるまで（＝盤のピースが
+    // すべて外れるまで）続く。
+    const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), () => false, 3000);
+    let board = createBoard(spec);
+    let sawRemoveRun = false;
     for (let i = 0; i < steps.length; i += 1) {
       const step = steps[i];
       if (step.type === 'place') {
-        placeCount += 1;
-        const next = steps[i + 1];
-        assert(next && next.type === 'remove' && next.name === step.name,
-          `${step.name} を置いた直後が同じピースの remove でない`);
+        board = place(board, step.name, step.cells, step.row, step.col);
+        continue;
+      }
+      board = remove(board, step.name);
+      assertSame(step.ok, false, `${step.name} の remove の ok が false でない`);
+      const next = steps[i + 1];
+      if (!next || next.type === 'place') {
+        sawRemoveRun = true;
+        assertSame(placedNames(board).length, 0,
+          '常に偽の判定なのに remove の連なりの終わりで盤にピースが残っている');
       }
     }
-    assert(placeCount > 0, 'place が 1 度も出なかった（limit を見直すこと）');
+    assert(sawRemoveRun, '選んだシード・手数で remove の連なりが一度も終わらなかった');
+  });
+
+  test(`ok:false の place の直後に、別の place が続くことがある（即座には外さない、${spec.label}）`, () => {
+    const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces, 3000);
+    let sawPlaceAfterFalsePlace = false;
+    for (let i = 0; i < steps.length - 1; i += 1) {
+      if (steps[i].type === 'place' && steps[i].ok === false && steps[i + 1].type === 'place') {
+        sawPlaceAfterFalsePlace = true;
+        break;
+      }
+    }
+    assert(sawPlaceAfterFalsePlace,
+      '選んだシード・手数で、ok:false の place の直後に別の place が一度も出なかった');
   });
 
   test(`「解なし」だった置き方は盤面ごとに覚え、同じ盤面で同じ置き方をもう一度 place しない（${spec.label}）`, () => {
-    // ok:false になった直後の place も、行き詰まって戻った（remove の直後に
-    // 別の place が続かない）ときに戻る先の盤面へ控える置き方も、どちらも
-    // solveStepsRandom() の内部の控え（failedByBoard）と同じやり方で手元に
-    // 再現する。控えた（盤面, 置き方）の組がもう一度 place として出てきたら失敗。
+    // 置いた手は ok の真偽によらずいったん stack に積まれ（即座には外さない）、
+    // 外すときにだけ、外した後の盤面へその置き方を控える。手元でも同じやり方で
+    // 控え（failedByBoard）を再現し、控えた（盤面, 置き方）の組がもう一度
+    // place として出てきたら失敗とみなす。
     const STEPS = 8000;
     const sigOf = (step) => `${step.name}:${JSON.stringify(step.cells)}:${step.row}:${step.col}`;
     const failedByBoard = new Map(); // boardKey(盤面) -> Set(置き方の組)
@@ -1167,8 +1221,7 @@ for (const spec of BOARD_LIST) {
 
     let board = createBoard(spec);
     let checked = 0;
-    let sawBacktrack = false;
-    let pendingFalseName = null; // 直前が ok:false の place だったときの名前
+    let removed = 0;
     let taken = 0;
     for (const step of solveStepsRandom(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces)) {
       taken += 1;
@@ -1177,33 +1230,154 @@ for (const spec of BOARD_LIST) {
         const beforeKey = boardKey(board);
         const sig = sigOf(step);
         assert(!failedOf(beforeKey).has(sig),
-          `${step.name} を、以前 ok:false だった同じ盤面・同じ置き方でもう一度 place した`);
+          `${step.name} を、以前 remove した同じ盤面・同じ置き方でもう一度 place した`);
         checked += 1;
         board = place(board, step.name, step.cells, step.row, step.col);
-        if (step.ok) {
-          activeStack.push({ sig, name: step.name });
-          pendingFalseName = null;
-        } else {
-          failedOf(beforeKey).add(sig);
-          pendingFalseName = step.name;
-        }
+        activeStack.push({ sig, name: step.name });
       } else if (step.type === 'remove') {
         board = remove(board, step.name);
-        if (pendingFalseName === step.name) {
-          pendingFalseName = null; // ok:false な place の後始末。控えはもう済んでいる
-        } else {
-          // 行き詰まって戻った remove。控えのスタックから対応する手を外し、
-          // 戻った先の盤面にその手を控える（solveStepsRandom がやるのと同じ）。
-          sawBacktrack = true;
-          const popped = activeStack.pop();
-          assert(popped && popped.name === step.name,
-            `${step.name} の remove が、控えのスタックの先頭と合わない`);
-          failedOf(boardKey(board)).add(popped.sig);
-        }
+        removed += 1;
+        const popped = activeStack.pop();
+        assert(popped && popped.name === step.name,
+          `${step.name} の remove が、控えのスタックの先頭と合わない`);
+        failedOf(boardKey(board)).add(popped.sig);
       }
     }
     assert(checked > 0, 'place が 1 度も出なかった（手数を見直すこと）');
-    assert(sawBacktrack, '選んだシード・手数で行き詰まって戻る動きが一度も起きなかった');
+    assert(removed > 0, 'remove が一度も起きなかった（手数を見直すこと）');
+  });
+
+  test(`外す連なりが ok:true で止まったとき、まだ（控えていない）置ける手が残っていれば、次は必ず place になる（${spec.label}）`, () => {
+    // 「ok:true になったら break する」ことは、置ける手が本当に無いのに外し
+    // 続けている（＝ break を忘れた）ことでは検知しづらい場面がある
+    // （ok:true の直後に、盤面ごとの控えのせいで本当に置ける手が無く、
+    // すぐ次の連なりが始まることが実際にある）。そこで「まだ置ける手が
+    // 残っている場面」に絞り、そのときは必ず次が place になることを見る。
+    const STEPS = 4000;
+    const sigOf = (step) => `${step.name}:${JSON.stringify(step.cells)}:${step.row}:${step.col}`;
+    const failedByBoard = new Map();
+    const failedOf = (key) => {
+      if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
+      return failedByBoard.get(key);
+    };
+    const activeStack = [];
+    const steps = [];
+    let taken = 0;
+    for (const step of solveStepsRandom(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces)) {
+      taken += 1;
+      if (taken > STEPS) break;
+      steps.push(step);
+    }
+
+    /** 盤に残っていないピースのうち、この盤面でまだ控えていない置き方が 1 つでもあるか。 */
+    function hasUnfailedMove(board, failedHere) {
+      const remaining = NAMES.filter((name) => !placedNames(board).includes(name));
+      for (const name of remaining) {
+        for (const shape of orientations(cellsOf(name))) {
+          for (let row = 0; row < spec.rows; row += 1) {
+            for (let col = 0; col < spec.cols; col += 1) {
+              if (canPlace(board, shape, row, col).ok
+                && !failedHere.has(`${name}:${JSON.stringify(shape)}:${row}:${col}`)) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    let board = createBoard(spec);
+    let checkedRunEnds = 0;
+    for (let i = 0; i < steps.length; i += 1) {
+      const step = steps[i];
+      if (step.type === 'place') {
+        board = place(board, step.name, step.cells, step.row, step.col);
+        activeStack.push({ sig: sigOf(step), name: step.name });
+        continue;
+      }
+      board = remove(board, step.name);
+      const popped = activeStack.pop();
+      failedOf(boardKey(board)).add(popped.sig);
+      if (step.ok && placedNames(board).length > 0
+        && hasUnfailedMove(board, failedOf(boardKey(board)))) {
+        checkedRunEnds += 1;
+        const next = steps[i + 1];
+        assert(next && next.type === 'place',
+          `${step.name} の remove で ok:true になり、まだ置ける手が残っているのに次が place でない`);
+      }
+    }
+    assert(checkedRunEnds > 0, '選んだシード・手数で確かめられる場面が一度も無かった（見直すこと）');
+  });
+}
+
+// ---- logic：touchingEdges（TODO-059）--------------------------------------
+//
+// solveStepsRandom() の重み付けに使う値そのものを、手で数えた期待値と
+// 突き合わせる。
+
+group('src/logic.js — touchingEdges（TODO-059）');
+
+for (const spec of BOARD_LIST) {
+  test(`空の盤の角に置いた形は、盤の外に接する辺の数になる（${spec.label}）`, () => {
+    // X（十字）を (0,0) に置くと、上と左の腕の先がそれぞれ盤の外に 1 辺ずつ
+    // 接する（他の 3 本の腕・中心は盤の中の空きマスにしか接しない）ので 2。
+    const board = createBoard(spec);
+    assertSame(touchingEdges(board, cellsOf('X'), 0, 0), 2);
+  });
+
+  test(`盤の外にも穴にも置き済みのマスにも接しない形は 0（${spec.label}）`, () => {
+    const board = createBoard(spec);
+    // 8×8 は中央の穴に近いので、穴からも端からも十分離れた場所を選ぶ。
+    const [name, row, col] = spec.key === '8x8' ? ['I', 1, 1] : ['F', 1, 1];
+    assertSame(touchingEdges(board, cellsOf(name), row, col), 0);
+  });
+
+  test(`置き済みのピースの隣に置いた形は、そのぶん接する辺が増える（${spec.label}）`, () => {
+    // I（縦棒 5 マス）を (0,0) に置いたあと、同じ形を隣の列 (0,1) に置くと、
+    // 左側の 5 マスすべてが先に置いた I に接し、さらに上端が盤の外に 1 辺
+    // 接するので 6。
+    const board = place(createBoard(spec), 'I', cellsOf('I'), 0, 0);
+    assertSame(touchingEdges(board, cellsOf('I'), 0, 1), 6);
+  });
+}
+
+// ---- logic：置き方の重み付け（TODO-059）-----------------------------------
+
+group('src/logic.js — 置き方の重み付け（solveStepsRandom, TODO-059）');
+
+/** 空の盤で、あるピースのすべての置き方（向き×位置）の touchingEdges の一様平均。 */
+function uniformMeanTouchingEdges(spec, board, name) {
+  let sum = 0;
+  let count = 0;
+  for (const shape of orientations(cellsOf(name))) {
+    for (let row = 0; row < spec.rows; row += 1) {
+      for (let col = 0; col < spec.cols; col += 1) {
+        if (canPlace(board, shape, row, col).ok) {
+          sum += touchingEdges(board, shape, row, col);
+          count += 1;
+        }
+      }
+    }
+  }
+  return sum / count;
+}
+
+for (const spec of BOARD_LIST) {
+  test(`最初の place は、一様に選ぶより touchingEdges が大きい置き方に偏る（${spec.label}）`, () => {
+    // シード 1〜30（多くのシードで確かめて、たまたまの偏りでないことを見る）。
+    // ピースは一様に選ぶので、比べる相手は「同じピースの全置き方の一様平均」。
+    const SEEDS = 30;
+    let chosenSum = 0;
+    let uniformSum = 0;
+    for (let seed = 1; seed <= SEEDS; seed += 1) {
+      const board = createBoard(spec);
+      const first = solveStepsRandom(spec, mulberry32(seed), regionsFitPieces).next().value;
+      chosenSum += touchingEdges(board, first.cells, first.row, first.col);
+      uniformSum += uniformMeanTouchingEdges(spec, board, first.name);
+    }
+    assert(chosenSum / SEEDS > uniformSum / SEEDS,
+      '最初の place の touchingEdges の平均が、一様平均より大きくなっていない');
   });
 }
 
