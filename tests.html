@@ -1090,9 +1090,9 @@ function randomSteps(spec, random, canContinue, limit) {
   return steps;
 }
 
-/** ピースより小さい（埋めようが無い）閉じた空きが盤にあるか（TODO-060）。 */
-function hasSmallClosedRegion(board) {
-  return emptyRegionSizes(board).some((size) => size < PIECE_SIZE);
+/** 5 の倍数でない（ピースで埋め切れない）閉じた空きが盤にあるか（TODO-060・068）。 */
+function hasUnfitClosedRegion(board) {
+  return !regionsFitPieces(board);
 }
 
 /**
@@ -1142,6 +1142,8 @@ function makeFailAfterForcedFill() {
 group('src/logic.js — ランダムの探索（solveStepsRandom, TODO-057）');
 
 for (const spec of BOARD_LIST) {
+  const solutionsForSpec = boardStates.find((state) => state.spec.key === spec.key).solutions;
+
   test(`同じシードなら最初の 300 手がまったく同じ、違うシードなら食い違う（${spec.label}）`, () => {
     const a = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces, 300);
     const b = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces, 300);
@@ -1185,34 +1187,46 @@ for (const spec of BOARD_LIST) {
       assert(checked > 0, 'place が 1 度も出なかった（limit を見直すこと）');
     });
 
-    test(`置ける手が尽きて 1 手ずつ外す並び（remove の連なり）は、最後の 1 手だけが ok:true か盤が空になっており、途中の remove は ok:false（小さな空きで即座に外れる 1 手は除く。${label}, ${spec.label}）`, () => {
+    test(`置ける手が尽きて 1 手ずつ外す並び（remove の連なり）は、最後の 1 手だけが ok:true か盤が空になっており、途中の remove は ok:false（5 の倍数でない空きで即座に外れる 1 手は除く。${label}, ${spec.label}）`, () => {
       // 1 回の while ループ（1 つの連なり）の終わりは ok:true か盤が空のどちらか。
       // ok:true で終わった直後でも、外へ出た先でまた置ける手が無ければ、
       // place を挟まずに次の連なりがすぐ始まる。そのため「次が place かどうか」
       // では連なりの区切りを判定できず、1 手ずつ ok と盤の状態で区切る。
-      // 置いた直後に小さな閉じた空きができたときの remove は、置ける手が尽きた
-      // 連なりとは別物（ok の真偽に関わらずその場で 1 手だけ外れる。TODO-060）。
-      const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), canContinue, 3000);
+      // 置いた直後に 5 の倍数でない閉じた空きができたときの remove は、置ける手が
+      // 尽きた連なりとは別物（ok の真偽に関わらずその場で 1 手だけ外れる。TODO-060・068）。
+      // 既定（regionsFitPieces）の判定は、ok:false の place がその場で必ず
+      // 外れてしまい、「ok:false の remove が続いたあと ok:true で止まる」
+      // という連なりの中身の流れが起きない（reviewer 報告 TODO-068 の指摘 2）。
+      // その流れを起こすため、既定の分だけ regionsFitPieces より厳しい
+      // hasSolution（実際の解と照合する）を使う。
+      const effectiveCanContinue = label === '既定'
+        ? (board) => hasSolution(solutionsForSpec, board)
+        : canContinue;
+      const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), effectiveCanContinue, 3000);
       let board = createBoard(spec);
       let sawRun = false;
       let sawForcedDoubleUndo = false;
-      let sawSmallRegionUndo = false;
+      let sawUnfitRegionUndo = false;
       let sawPlacedFormUndo = false;
       let i = 0;
       while (i < steps.length) {
         const step = steps[i];
+        // hasSolution（既定の代わり）は実際の解へ向かうので、limit の手前で
+        // 本当に完成することがある。完成は連なりでも置き方でもないので、
+        // そこで打ち切る（TODO-068・reviewer 報告の指摘 2 で既定に導入）。
+        if (step.type === 'solved') break;
         if (step.type === 'place') {
           const boardBeforePlace = board;
           board = place(board, step.name, step.cells, step.row, step.col);
           // forced な place が解なしだったときは、その手と直前の手をまとめて
-          // 外す（TODO-066）。小さな空き・置き済みピースの形の空きの即座の
-          // remove とは排他（else if）。
+          // 外す（TODO-066）。5 の倍数でない空き・置き済みピースの形の空きの
+          // 即座の remove とは排他（else if）。
           const forcedFail = step.ok === false && isForcedFillStep(boardBeforePlace, step);
-          const smallRegion = !forcedFail && hasSmallClosedRegion(board);
+          const unfitRegion = !forcedFail && hasUnfitClosedRegion(board);
           // 置き済みのピースと同じ形の 5 マスの空きも、行き詰まりを待たずに
-          // その場で 1 手だけ外れる（TODO-067）。小さな空きの即座の remove
-          // とは排他（else if）。
-          const placedFormRegion = !forcedFail && !smallRegion && hasPlacedFormClosedRegion(board);
+          // その場で 1 手だけ外れる（TODO-067）。5 の倍数でない空きの即座の
+          // remove とは排他（else if）。
+          const placedFormRegion = !forcedFail && !unfitRegion && hasPlacedFormClosedRegion(board);
           i += 1;
           if (forcedFail) {
             if (i >= steps.length) break; // limit で打ち切った末尾。次の手は分からない
@@ -1228,14 +1242,14 @@ for (const spec of BOARD_LIST) {
               i += 1;
             }
             sawForcedDoubleUndo = true; // 置ける手が尽きた連なりとは別物なので sawRun には数えない
-          } else if (smallRegion || placedFormRegion) {
+          } else if (unfitRegion || placedFormRegion) {
             if (i >= steps.length) break; // limit で打ち切った末尾。次の手は分からない
             assert(steps[i] && steps[i].type === 'remove' && steps[i].name === step.name,
-              `${step.name} を置いて${smallRegion ? '小さな空き' : '置き済みピースの形の空き'}ができたのに、次が同じ名前の remove でない`);
+              `${step.name} を置いて${unfitRegion ? '5 の倍数でない空き' : '置き済みピースの形の空き'}ができたのに、次が同じ名前の remove でない`);
             board = remove(board, steps[i].name);
             i += 1;
-            if (smallRegion) {
-              sawSmallRegionUndo = true; // 置ける手が尽きた連なりとは別物なので sawRun には数えない
+            if (unfitRegion) {
+              sawUnfitRegionUndo = true; // 置ける手が尽きた連なりとは別物なので sawRun には数えない
             } else {
               sawPlacedFormUndo = true;
             }
@@ -1255,23 +1269,23 @@ for (const spec of BOARD_LIST) {
         }
       }
       assert(sawRun, '選んだシード・手数で remove の連なりが一度も終わらなかった');
-      assert(sawSmallRegionUndo, '選んだシード・手数で小さな空きによる即座の remove が一度も起きなかった');
+      assert(sawUnfitRegionUndo, '選んだシード・手数で 5 の倍数でない空きによる即座の remove が一度も起きなかった');
       // forced な解なしの二重 remove の確認は、確実に起こす専用のテスト
       // （makeFailAfterForcedFill() を使うもの）に任せる。
       assert(sawPlacedFormUndo, '選んだシード・手数で置き済みピースの形の空きによる即座の remove が一度も起きなかった');
     });
   }
 
-  test(`常に偽を返す判定だと、置ける手が尽きるたびに、盤のピースがすべて外れるまで remove が続く（小さな空きで即座に外れる 1 手は除く。${spec.label}）`, () => {
+  test(`常に偽を返す判定だと、置ける手が尽きるたびに、盤のピースがすべて外れるまで remove が続く（5 の倍数でない空きで即座に外れる 1 手は除く。${spec.label}）`, () => {
     // canContinue が常に偽なので、置ける手が尽きたときの remove の while ループは
     // 一度も ok:true で break せず、stack が空になるまで（＝盤のピースが
-    // すべて外れるまで）続く。ただし、置いた直後に小さな閉じた空きができて
-    // その場で 1 手だけ外れる場合は、置ける手が尽きたことによる連なりでは
-    // ないので、盤が空になっている必要は無い（TODO-060）。
+    // すべて外れるまで）続く。ただし、置いた直後に 5 の倍数でない閉じた空きが
+    // できてその場で 1 手だけ外れる場合は、置ける手が尽きたことによる連なりでは
+    // ないので、盤が空になっている必要は無い（TODO-060・068）。
     const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), () => false, 3000);
     let board = createBoard(spec);
     let sawRemoveRun = false;
-    // 小さな空き・置き済みピースの形の空きの即座の remove（1 手）と、
+    // 5 の倍数でない空き・置き済みピースの形の空きの即座の remove（1 手）と、
     // forced な解なしの二重 remove（2 手）を、次に来る remove のうち
     // 除外する残り数で表す（TODO-066・TODO-067）。canContinue が常に偽
     // なので、forced な place は必ず解なしになる。
@@ -1283,7 +1297,7 @@ for (const spec of BOARD_LIST) {
         board = place(board, step.name, step.cells, step.row, step.col);
         if (isForcedFillStep(boardBeforePlace, step)) {
           pendingExempt = 2;
-        } else if (hasSmallClosedRegion(board) || hasPlacedFormClosedRegion(board)) {
+        } else if (hasUnfitClosedRegion(board) || hasPlacedFormClosedRegion(board)) {
           pendingExempt = 1;
         } else {
           pendingExempt = 0;
@@ -1310,7 +1324,13 @@ for (const spec of BOARD_LIST) {
   });
 
   test(`ok:false の place の直後に、別の place が続くことがある（即座には外さない、${spec.label}）`, () => {
-    const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces, 3000);
+    // regionsFitPieces を canContinue に渡すと、ok:false は必ず「5 の倍数でない
+    // 閉じた空き」を意味し、TODO-068 の分岐で直後に必ずその場で外れてしまう。
+    // 「行き詰まってから戻す」流れ（置ける手が尽きるまで ok:false の place が
+    // 続く）を起こすため、regionsFitPieces より厳しい hasSolution（実際の解と
+    // 照合する。上の「hasSolution を渡すと…」の節と同じ判定）を canContinue に渡す。
+    const canContinue = (board) => hasSolution(solutionsForSpec, board);
+    const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), canContinue, 3000);
     let sawPlaceAfterFalsePlace = false;
     for (let i = 0; i < steps.length - 1; i += 1) {
       if (steps[i].type === 'place' && steps[i].ok === false && steps[i + 1].type === 'place') {
@@ -1323,8 +1343,11 @@ for (const spec of BOARD_LIST) {
   });
 
   test(`「解なし」だった置き方は盤面ごとに覚え、同じ盤面で同じ置き方をもう一度 place しない（${spec.label}）`, () => {
-    // 置いた手は ok の真偽によらずいったん stack に積まれ（即座には外さない）、
-    // 外すときにだけ、外した後の盤面へその置き方を控える。手元でも同じやり方で
+    // 置いた手は ok の真偽によらずいったん stack に積まれ、place の yield として
+    // 出る（regionsFitPieces を渡すと、ok:false ならその直後の remove ですぐ
+    // 外れる。それでも「積んでから外す」という手順自体は変わらない。reviewer
+    // 報告 TODO-068 の指摘 4）。外すときにだけ、外した後の盤面へその置き方を
+    // 控える。手元でも同じやり方で
     // 控え（failedByBoard）を再現し、控えた（盤面, 置き方）の組がもう一度
     // place として出てきたら失敗とみなす。
     const STEPS = 8000;
@@ -1450,17 +1473,18 @@ for (const spec of BOARD_LIST) {
   }
 
   test(`残りのピースに合わない 5 マスの閉じた空きは、必ず置き済みのピースの形と一致し、即座に外れる（TODO-060/066/067, ${spec.label}）`, () => {
-    // 即座に外すのは PIECE_SIZE 未満（1〜4 マス）だけだった（TODO-060）。
     // 5 マスちょうどの空きは、ピースが 12 種の全ペントミノを 1 つずつ
     // 揃えているため、必ずどれか 1 種の形と一致する。残りのピースに合う
     // 形が無ければ、その一致は置き済みのピースの形とであり、もう埋まらない
     // ので、行き詰まりを待たずにその場で外れる（合う形が残りにあるほうは
     // forcedPlacements が次の place で自分から選ぶので、この節では
-    // 確かめない。TODO-066）。
+    // 確かめない。TODO-066）。他に 5 の倍数でない空き（7 マスなど）も
+    // 同時にできている盤面は、TODO-068 の分岐が先に外すので確かめない
+    // （`regionsFitPieces(board)` で絞る。reviewer 報告 TODO-068 の指摘 3）。
     //
     // 「置ける手が尽きて外す」連なりの最初の 1 手も、必ず直前に置いた手そのもの
     // （外すのはスタックの最後＝直前に置いた手）になるので、「次が同じ名前の
-    // remove かどうか」だけでは、小さな空きによる即座の remove と区別できない。
+    // remove かどうか」だけでは、5 の倍数でない空きによる即座の remove と区別できない。
     // 本当に「置ける手が尽きた」のかを、盤面ごとの控え（failed）を手元でも
     // 同じやり方で再現して判定し、まだ控えていない置き方が残っている場面に
     // 絞ることで、置ける手が尽きたことによる remove ではないと言える。
@@ -1494,7 +1518,7 @@ for (const spec of BOARD_LIST) {
         if (!forcedFail) {
           const unusedAfter = NAMES.filter((name) => !placedNames(board).includes(name));
           const sizes = emptyRegionSizes(board);
-          const hasExactOnly = sizes.some((size) => size === PIECE_SIZE) && !sizes.some((size) => size < PIECE_SIZE);
+          const hasExactOnly = sizes.some((size) => size === PIECE_SIZE) && regionsFitPieces(board);
           const noMatchingPiece = forcedPlacements(board, unusedAfter).length === 0;
           if (hasExactOnly && noMatchingPiece && hasUnfailedMove(board, failedOf(boardKey(board)))) {
             sawExact = true;
@@ -1697,10 +1721,16 @@ test('離れた 2 手は手で数えた最短のマンハッタン距離にな�
 // ---- logic：solveStepsRandom の近さの重み（TODO-062）----------------------
 
 /**
- * `solveStepsRandom()` の抽選で選ばれた place（forced を除く）の、直前に
- * 置いた手（stack の最後）からの距離の合計と件数。`DEMO.randomNearPower` は
- * 呼び出し側で一時的に書き換えて渡す。1 つのシードだけだと偏ることがあるので
- * 呼び出し側で複数シード分を積み上げて平均する。
+ * `solveStepsRandom()` の抽選で選ばれた place の、直前に置いた手（stack の最後）
+ * からの距離の合計と件数。`DEMO.randomNearPower` は呼び出し側で一時的に
+ * 書き換えて渡す。1 つのシードだけだと偏ることがあるので呼び出し側で複数
+ * シード分を積み上げて平均する。
+ *
+ * forced な手（TODO-066）に加え、置いた直後にその場で外れる手（5 の倍数でない
+ * 空き・置き済みピースの形の空き。TODO-068・067）も除く。すぐ外れる手は
+ * 「近さ」の抽選を経ていない（forced と同じく抽選より先に決まる／外れて
+ * やり直すノイズ）ため含めると差が埋もれ、シードの組によって逆転する
+ * （reviewer 報告 TODO-068 の指摘 1）。
  */
 function sumMoveDistanceFromLast(spec, seed, limit) {
   let board = createBoard(spec);
@@ -1714,11 +1744,14 @@ function sumMoveDistanceFromLast(spec, seed, limit) {
     if (step.type === 'place') {
       const move = { shape: step.cells, row: step.row, col: step.col };
       const last = stack[stack.length - 1];
-      if (last && !isForcedFillStep(board, step)) {
+      const boardBeforePlace = board;
+      board = place(board, step.name, step.cells, step.row, step.col);
+      const forcedFail = step.ok === false && isForcedFillStep(boardBeforePlace, step);
+      const immediateUndo = forcedFail || hasUnfitClosedRegion(board) || hasPlacedFormClosedRegion(board);
+      if (last && !immediateUndo) {
         sum += moveDistance(move, last);
         count += 1;
       }
-      board = place(board, step.name, step.cells, step.row, step.col);
       stack.push(move);
     } else {
       board = remove(board, step.name);
@@ -1732,15 +1765,19 @@ for (const spec of BOARD_LIST) {
   test(`直前の手に近い置き方ほど選ばれやすい（randomNearPower を 0 にしたときより平均距離が小さい、${spec.label}）`, () => {
     // 1 つのシードだけだとたまたまの偏りが出ることがある一方、既定の
     // randomNearPower（2）では差が小さく、逆転を避けるにはシードや手数を
-    // 増やすしかなく重くなる。そこでテストの中でだけ大きい値（8）に上げて
-    // 差をはっきりさせ、軽いシード数・手数で比べる。
+    // 増やすしかなく重くなる。そこでテストの中でだけ大きい値（4）に上げて
+    // 差をはっきりさせ、軽いシード数・手数で比べる。値を上げるだけでは
+    // 6×10 でシードの組によって逆転する（reviewer 報告 TODO-068 の指摘 1）ため、
+    // 置いた直後にその場で外れる手（TODO-068・067）も除いた
+    // （node でシードの組を 1-5・6-10・…・46-50 の 10 通りずらして、
+    // 8×8・6×10 とも全通り成り立つことを確かめた。実測、1 盤あたり 1 秒未満）。
     const SEEDS = 5;
     const savedPower = DEMO.randomNearPower;
     let withNear = { sum: 0, count: 0 };
     let withoutNear = { sum: 0, count: 0 };
     try {
       for (let seed = 1; seed <= SEEDS; seed += 1) {
-        DEMO.randomNearPower = 8;
+        DEMO.randomNearPower = 4;
         const a = sumMoveDistanceFromLast(spec, seed, 300);
         withNear.sum += a.sum;
         withNear.count += a.count;
@@ -1753,7 +1790,7 @@ for (const spec of BOARD_LIST) {
       DEMO.randomNearPower = savedPower;
     }
     assert(withNear.count > 0 && withoutNear.count > 0,
-      '選んだシード・手数で、比べられる place（forced を除く）が一度も無かった');
+      '選んだシード・手数で、比べられる place（forced・即座の remove を除く）が一度も無かった');
     const withNearAvg = withNear.sum / withNear.count;
     const withoutNearAvg = withoutNear.sum / withoutNear.count;
     assert(withNearAvg < withoutNearAvg,

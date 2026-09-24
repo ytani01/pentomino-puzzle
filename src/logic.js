@@ -524,10 +524,13 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  * 最後に置いた手から順に 1 手ずつ外す。スタックが空になったら諦めて止める。
  * `canContinue` が常に偽を返す盤でも無限に外し続けないため）。ただし、次の
  * 3 つは行き詰まりを待たずに置いた直後にその場で外す。人も置いた瞬間に
- * 明らかな詰みだと気づくのはこの 3 つだけで、7 や 12 マスのような大きい
- * 空きは今までどおり行き詰まってから戻す。
+ * 明らかな詰みだと気づくのはこの 3 つだけ。
+ * 既定の `regionsFitPieces` は 1 つ目と同じ判定なので、既定のままだと偽の手は
+ * 必ずその場で外れる（行き詰まってから戻す流れは、デモのように全解のデータで
+ * 判定を渡したときに起きる）。
  *
- * - 小さな閉じた空き（ピースより小さい。埋めようが無く必ず解無しになる。TODO-060）
+ * - 5 の倍数でない大きさの閉じた空き（ピースで埋め切れず必ず解無しになる。
+ *   1〜4・7・12 マスなど。TODO-060・068）
  * - 5 マスの穴に合う残りのピースで埋めた手が、その `canContinue` を偽にしたとき
  *   （その穴の形はもうそのピースでしか埋まらない以上「埋める前の盤面が
  *   すでに解なし」ということなので、埋めた手と、その前に置いた手をまとめて
@@ -649,9 +652,9 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
       // 盤面がすでに解なし。その手と、その前に置いた手をまとめて外す（TODO-066）。
       yield undoLast();
       if (stack.length > 0) yield undoLast();
-    } else if (emptyRegionSizes(board).some((size) => size < PIECE_SIZE)) {
-      // 小さな閉じた空き（ピースより小さい）は詰みが確定しているので、
-      // 行き詰まりを待たずにその場で外す（TODO-060）。
+    } else if (!regionsFitPieces(board)) {
+      // 5 の倍数でない閉じた空き（ピースで埋め切れず必ず解なしになる）は
+      // 詰みが確定しているので、行き詰まりを待たずにその場で外す（TODO-060・068）。
       yield undoLast();
     } else if (forcedPlacements(board, PIECES.map((p) => p.name).filter(
       (name) => !unused.includes(name),
