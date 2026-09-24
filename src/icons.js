@@ -162,20 +162,46 @@ export const ICONS = {
   },
 
   /**
-   * デモの探し方（TODO-050・TODO-057）。深さ優先は上の根から 1 本を下へ深く
-   * 進む点の並び、ランダムはサイコロ（5 の目）。
+   * デモの探し方（TODO-050・TODO-057・TODO-070）。深さ優先は歯車（機械的に
+   * 決まった順で埋める）、ランダムは太い「？」（考えながら探す）。
+   * 顔＋「？」だと HUD の大きさでは「♂」に近く見えたため、「？」1 文字だけの
+   * 線画にした（フォントではなく Graphics API。点と曲線の間を空け、小さくても
+   * 離れて読めるようにしてある）。
    */
   depthFirst(g, color) {
     begin(g, color);
-    g.lineBetween(0, -0.75 * U, 0, 0.75 * U);
-    for (const y of [-0.75, 0, 0.75]) g.fillCircle(0, y * U, 0.22 * U);
+    const r = 0.45 * U;
+    const toothLen = 0.28 * U;
+    const half = 0.13 * U;
+    const count = 8;
+    for (let i = 0; i < count; i += 1) {
+      const angle = (i / count) * Math.PI * 2;
+      const cx = Math.cos(angle) * (r + toothLen / 2);
+      const cy = Math.sin(angle) * (r + toothLen / 2);
+      const dx = Math.cos(angle) * (toothLen / 2);
+      const dy = Math.sin(angle) * (toothLen / 2);
+      const px = -Math.sin(angle) * half;
+      const py = Math.cos(angle) * half;
+      g.fillPoints([
+        { x: cx - dx + px, y: cy - dy + py },
+        { x: cx + dx + px, y: cy + dy + py },
+        { x: cx + dx - px, y: cy + dy - py },
+        { x: cx - dx - px, y: cy - dy - py },
+      ], true);
+    }
+    g.strokeCircle(0, 0, r);
+    g.strokeCircle(0, 0, 0.16 * U);
   },
   random(g, color) {
-    begin(g, color);
-    g.strokeRoundedRect(-0.8 * U, -0.8 * U, 1.6 * U, 1.6 * U, 0.3 * U);
-    for (const [x, y] of [[-0.4, -0.4], [0.4, -0.4], [0, 0], [-0.4, 0.4], [0.4, 0.4]]) {
-      g.fillCircle(x * U, y * U, 0.14 * U);
-    }
+    begin(g, color, ICON.lineWidth + 2);
+    // 鉤の先が真下（角度 90°）で終わるように半径・中心を選び、その下へ
+    // まっすぐ茎を伸ばす。点は茎と間を空けて置き、小さくても離れて見える
+    // ようにしてある。
+    g.beginPath();
+    g.arc(0, -0.3 * U, 0.42 * U, -Math.PI * 0.8, Math.PI * 0.5, false);
+    g.strokePath();
+    g.lineBetween(0, 0.12 * U, 0, 0.35 * U);
+    g.fillCircle(0, 0.62 * U, 0.15 * U);
   },
 };
 
