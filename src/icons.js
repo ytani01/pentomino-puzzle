@@ -30,6 +30,21 @@ function arrowHead(g, x, y, angle, length) {
   );
 }
 
+/** 探し方のアイコンの節と線。木と散らばりで節の数と大きさを揃え、結び方だけを違いにする。 */
+const NODE_RADIUS = 0.22;
+const TREE_NODES = [[0, -0.7], [-0.45, 0], [0.45, 0], [-0.75, 0.7], [-0.15, 0.7], [0.45, 0.7]];
+const TREE_EDGES = [[0, 1], [0, 2], [1, 3], [1, 4], [2, 5]];
+const SCATTER_NODES = [[-0.6, -0.6], [0.35, -0.7], [0.1, 0.2], [-0.7, 0.35], [0.7, 0.1], [0.4, 0.7]];
+const SCATTER_EDGES = [[0, 4], [1, 3], [3, 5], [5, 2], [2, 1]];
+
+function graph(g, color, nodes, edges) {
+  begin(g, color);
+  for (const [a, b] of edges) {
+    g.lineBetween(nodes[a][0] * U, nodes[a][1] * U, nodes[b][0] * U, nodes[b][1] * U);
+  }
+  for (const [x, y] of nodes) g.fillCircle(x * U, y * U, NODE_RADIUS * U);
+}
+
 function begin(g, color, width = ICON.lineWidth) {
   g.lineStyle(width, color, 1);
   g.fillStyle(color, 1);
@@ -162,36 +177,15 @@ export const ICONS = {
   },
 
   /**
-   * デモの探し方（TODO-050・TODO-057・TODO-070）。深さ優先は歯車（機械的に
-   * 決まった順で埋める）、ランダムは太い「？」（考えながら探す）。
-   * 顔＋「？」だと HUD の大きさでは「♂」に近く見えたため、「？」1 文字だけの
-   * 線画にした（フォントではなく Graphics API。点と曲線の間を空け、小さくても
-   * 離れて読めるようにしてある）。
+   * デモの探し方（TODO-050・TODO-057・TODO-075）。深さ優先は根から枝分かれする
+   * 木（決まった順で枝をたどる）、ランダムは散らした節を行き当たりばったりに
+   * 結んだもの（線が交差し、輪もできる）。2 つを並べたとき、整った枝分かれと
+   * 絡まった線で対になるようにしてある。
    */
   depthFirst(g, color) {
-    begin(g, color);
-    const r = 0.45 * U;
-    const toothLen = 0.28 * U;
-    const half = 0.13 * U;
-    const count = 8;
-    for (let i = 0; i < count; i += 1) {
-      const angle = (i / count) * Math.PI * 2;
-      const cx = Math.cos(angle) * (r + toothLen / 2);
-      const cy = Math.sin(angle) * (r + toothLen / 2);
-      const dx = Math.cos(angle) * (toothLen / 2);
-      const dy = Math.sin(angle) * (toothLen / 2);
-      const px = -Math.sin(angle) * half;
-      const py = Math.cos(angle) * half;
-      g.fillPoints([
-        { x: cx - dx + px, y: cy - dy + py },
-        { x: cx + dx + px, y: cy + dy + py },
-        { x: cx + dx - px, y: cy + dy - py },
-        { x: cx - dx - px, y: cy - dy - py },
-      ], true);
-    }
-    g.strokeCircle(0, 0, r);
-    g.strokeCircle(0, 0, 0.16 * U);
+    graph(g, color, TREE_NODES, TREE_EDGES);
   },
+
   /** チェックボックスの印（TODO-071）。 */
   check(g, color) {
     begin(g, color, ICON.lineWidth + 1);
@@ -227,15 +221,7 @@ export const ICONS = {
   },
 
   random(g, color) {
-    begin(g, color, ICON.lineWidth + 2);
-    // 鉤の先が真下（角度 90°）で終わるように半径・中心を選び、その下へ
-    // まっすぐ茎を伸ばす。点は茎と間を空けて置き、小さくても離れて見える
-    // ようにしてある。
-    g.beginPath();
-    g.arc(0, -0.3 * U, 0.42 * U, -Math.PI * 0.8, Math.PI * 0.5, false);
-    g.strokePath();
-    g.lineBetween(0, 0.12 * U, 0, 0.35 * U);
-    g.fillCircle(0, 0.62 * U, 0.15 * U);
+    graph(g, color, SCATTER_NODES, SCATTER_EDGES);
   },
 };
 

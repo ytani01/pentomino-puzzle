@@ -267,11 +267,12 @@ async function shot(page, name) {
   const page = await open(context);
   await go(page, 'Demo');
   await page.evaluate(() => { window.game.scene.getScene('Demo').selectSpeed('fast'); });
-  // 「解ける」の札が出ている瞬間で止める（解なしの手はすぐ外されるため）。
+  // 札が出ている瞬間で止める。既定のランダムは「解なし」のまま置き続けるので、
+  // 「解ける」を待つと長く待つことがある（TODO-075）。札が空になるのは解けたときだけ。
   await page.waitForTimeout(4000);
   await page.waitForFunction(() => {
     const s = window.game.scene.getScene('Demo');
-    if (s.hintState !== 'ok') return false;
+    if (s.hintState === null) return false;
     s.scene.pause();
     return true;
   }, null, { polling: 'raf' });

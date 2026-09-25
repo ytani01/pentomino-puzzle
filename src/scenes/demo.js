@@ -1,7 +1,7 @@
 /**
  * デモ（TODO-040）。コンピューターが探索でピースを置いたり外したり
  * しながら解に至る様子を、本編と同じ盤とトレイの上で見せる。探し方は
- * 深さ優先（既定）とランダムから HUD で選ぶ（TODO-050・TODO-057）。
+ * ランダム（既定。TODO-075）と深さ優先から HUD で選ぶ（TODO-050・TODO-057）。
  *
  * 盤・トレイ・ピースの描画は本編（`GameScene`）をそのまま使い回したいので
  * 継承する。`create()` は上書きして描画に要るものだけを組み、入力・ヒント・
@@ -76,7 +76,7 @@ export default class DemoScene extends GameScene {
     this.state = 'loading';
     this.steps = null;
     this.solutions = null;
-    this.strategy = 'depth';
+    this.strategy = 'random';
     // 直前に置いた手が解につながるか。null は表示を空にする（解けたとき）。
     this.hintState = 'ok';
     this.speed = DEMO.defaultSpeed;
