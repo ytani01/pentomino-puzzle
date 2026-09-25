@@ -273,8 +273,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 上部のメニューバー。縦画面では横幅が足りず、時間の表示とボタン 6 個が
-   * 1 段に並ばないので折り返す（`this.layout.hud`。TODO-011、TODO-013）。
+   * 上部のメニューバー。時間の表示とボタンは段を分け、ボタンは入りきらなければ
+   * 折り返す（`this.layout.hud`。TODO-011、TODO-013、TODO-076）。
    * 何個ずつ何段目からかは配置（`config.js`）が決めるので、向きをここで見る
    * 必要はない。
    */
@@ -309,20 +309,20 @@ export default class GameScene extends Phaser.Scene {
       color: TEXT_COLORS.accent,
     }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
 
-    // 前半 3 つが「解くのを助けるもの」、後半 3 つが「遊び方を変えるもの」。
-    // 縦画面ではこの 3 つずつがそのまま 1 段になる。
+    // タイトルへは画面を離れるボタンなので、他と分けて一番左に置く（TODO-076）。
+    // 続く 3 つが「解くのを助けるもの」、残りが「遊び方を変えるもの」。
     this.buttons = this.createHudButtons([
+      { icon: ICONS.title, tooltip: 'タイトルへ', onClick: () => this.confirmToTitle() },
       { icon: ICONS.undo, tooltip: '一手戻す', onClick: () => this.undo() },
       { icon: ICONS.auto, tooltip: 'おまかせ', onClick: () => this.useAuto() },
       { icon: ICONS.hint, tooltip: 'ヒント表示', onClick: () => this.toggleHint() },
       { icon: ICONS.restart, tooltip: 'やり直し', onClick: () => this.restart() },
       { ...this.muteFace(audio.isMuted()), onClick: () => this.toggleMute() },
-      { icon: ICONS.title, tooltip: 'タイトルへ', onClick: () => this.confirmToTitle() },
     ]);
-    this.undoButton = this.buttons[0];
-    this.autoButton = this.buttons[1];
-    this.hintButton = this.buttons[2];
-    this.muteButton = this.buttons[4];
+    this.undoButton = this.buttons[1];
+    this.autoButton = this.buttons[2];
+    this.hintButton = this.buttons[3];
+    this.muteButton = this.buttons[5];
   }
 
   /**

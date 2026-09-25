@@ -246,13 +246,15 @@ const MARGIN = 14;         // 画面の縁と枠の間
 const PANEL_PAD = 10;      // 枠と、その中身の間
 const GAP = 12;            // 枠どうしの間
 const HUD_TOP = 10;        // 画面の上端と HUD の間
-const HUD_ROW = 56;        // HUD 1 段ぶんの高さ
 const HUD_PAD = 20;        // HUD の枠と、その中身の間
 const HUD_GAP = 8;         // ボタンどうしの間
 const HUD_BUTTONS = 6;     // HUD に並ぶボタンの数（`createHudButtons()` に渡す数と合わせる）
 const DEMO_HUD_BUTTONS = 7; // デモの HUD のボタンの数。探し方の切り替えの分だけ多い（TODO-050）
-const HUD_BUTTON_MAX = 130; // ボタン 1 個の幅。場所が足りなければここから詰める
-const HUD_BUTTON_HEIGHT = 44;
+// ボタン 1 個の幅と高さ。アイコンだけのボタンなので幅は要らず、指で押しやすいよう
+// 高さを取る（TODO-076。130×44 から変えた）。場所が足りなければ幅をここから詰める。
+const HUD_BUTTON_MAX = 76;
+const HUD_BUTTON_HEIGHT = 56;
+const HUD_ROW = HUD_BUTTON_HEIGHT + 12; // HUD 1 段ぶんの高さ。ボタンの上下に 6 ずつ空ける
 const HUD_REMAIN_X = 140;  // 段の中身の左端から見た「残り n」の位置
 const HUD_STATUS_X = 250;  // 同じく、解の有無（TODO-013）の位置
 const MESSAGE_BAND = 40;   // 画面の下端に空ける、メッセージ 1 行ぶんの帯
@@ -338,19 +340,19 @@ function screenSize(portrait) {
 export function makeLayout({ portrait, board, buttons = HUD_BUTTONS }) {
   const { width, height } = screenSize(portrait);
 
-  // 縦画面は横幅が狭く、ボタン 6 個が 1 段に並ばないので 2 段に折り返す
-  // （TODO-013 でボタンが 6 個になり、幅を詰めても 1 段には収まらなくなった）。
-  // デモの 7 個（TODO-050）も 2 段に収め、盤とトレイを本編と同じ位置に保つ。
-  const buttonsPerRow = portrait ? Math.ceil(buttons / 2) : buttons;
-  const buttonRows = Math.ceil(buttons / buttonsPerRow);
+  // 上限の幅で 1 段に並ぶだけ並べ、はみ出す分は次の段へ折り返す（TODO-076）。
+  // 段数は多いほうのデモ（7 個）で決め、本編も同じ段数にする。本編だけ段が
+  // 少ないと、デモの盤とトレイだけが下へずれるため（`DEMO_LAYOUTS`）。
+  const hudWidth = width - MARGIN * 2;
+  const room = hudWidth - HUD_PAD;
+  const fit = Math.max(1, Math.floor((room + HUD_GAP) / (HUD_BUTTON_MAX + HUD_GAP)));
+  const buttonRows = Math.ceil(Math.max(buttons, DEMO_HUD_BUTTONS) / fit);
+  const buttonsPerRow = Math.ceil(buttons / buttonRows);
   // 文字（時間・残り・解の有無）とボタンは段を分ける。横画面は同じ段に並べて
   // いたが、TODO-026 で文字を大きくするとボタン 1 個が 85 では収まらなくなった。
   const hudRows = buttonRows + 1;
-  const hudWidth = width - MARGIN * 2;
-  const buttonsLeft = 0;
-  // 幅は上限から詰める。横画面の 6 個は 104 では文字とぶつかるので 85 まで縮む。
   const buttonWidth = Math.min(HUD_BUTTON_MAX, Math.floor(
-    ((hudWidth - HUD_PAD - buttonsLeft) - HUD_GAP * (buttonsPerRow - 1)) / buttonsPerRow,
+    (room - HUD_GAP * (buttonsPerRow - 1)) / buttonsPerRow,
   ));
   const hud = {
     x: MARGIN,
@@ -449,7 +451,7 @@ export function makeLayout({ portrait, board, buttons = HUD_BUTTONS }) {
     trayPanel,
     message: { x: width / 2, y: height - MESSAGE_BAND / 2 },
     confirm: {
-      width: 460, height: 200, buttonWidth: 150, buttonHeight: 48, gap: 20,
+      width: 460, height: 200, buttonWidth: 130, buttonHeight: 56, gap: 20,
     },
   };
 }
@@ -483,7 +485,7 @@ export const LAYOUTS = Object.fromEntries(
 /**
  * デモの配置（TODO-050）。HUD のボタンが本編より 1 つ多いので別に作る。
  * 本編の `LAYOUTS` を触らずに済ませ、本編の見た目を変えないため。
- * ボタンの段数は本編と同じなので、盤とトレイの位置・マスの大きさは本編と同じになる。
+ * ボタンの段数は `makeLayout()` が本編と揃えるので、盤とトレイの位置・マスの大きさは本編と同じになる。
  */
 export const DEMO_LAYOUTS = Object.fromEntries(
   Object.values(BOARDS).map((board) => [

@@ -210,7 +210,8 @@ async function shot(page, name) {
     { n: 'A', at: 's.timeText', text: '経過時間', side: 'top', dist: 14 },
     { n: 'B', at: 's.remainText', text: 'トレイの残り', side: 'top', dist: 14 },
     { n: 'C', at: BADGE, text: '解ける／解なし', side: 'right', dist: 16 },
-    ...[1, 2, 3, 4, 5, 6].map((n) => ({ n, at: `s.buttons[${n - 1}]` })),
+    // ボタンの幅を詰めてから（TODO-076）は丸がアイコンに重なるので、下へ出して指す。
+    ...[1, 2, 3, 4, 5, 6].map((n) => ({ n, at: `s.buttons[${n - 1}]`, side: 'bottom', dist: 14 })),
     { n: 'D', at: panel('boardPanel'), text: '盤', side: 'bottom', dist: 8 },
     { n: 'E', at: panel('trayPanel'), text: 'トレイ', side: 'bottom', dist: 8 },
     { n: 'F', at: 's.pieces.find((p) => p.location === "tray" && s.turnMarkKind(p) === "rotate").container',
@@ -255,7 +256,7 @@ async function shot(page, name) {
     { n: 1, at: 's.prevButton', side: 'bottom', dist: 12 },
     { n: 2, at: 's.nextButton', side: 'bottom', dist: 12 },
     { n: 3, at: 's.trashButton', side: 'bottom', dist: 12 },
-    { n: 4, at: 's.titleButton', side: 'bottom', dist: 12 },
+    { n: 4, at: 's.titleButton', side: 'right', dist: 12 },
   ]);
   await shot(page, 'records.png');
   await context.close();
@@ -279,7 +280,7 @@ async function shot(page, name) {
   await annotate(page, 'Demo', [
     { n: 'A', at: 's.statusText', text: '試した手・見つけた解', side: 'top', dist: 14 },
     { n: 'B', at: BADGE, text: '解ける／解なし', side: 'top', dist: 14 },
-    ...[1, 2, 3, 4, 5, 6, 7].map((n) => ({ n, at: `s.buttons[${n - 1}]` })),
+    ...[1, 2, 3, 4, 5, 6, 7].map((n) => ({ n, at: `s.buttons[${n - 1}]`, side: 'bottom', dist: 14 })),
   ]);
   await shot(page, 'demo.png');
   await context.close();

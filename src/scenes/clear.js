@@ -24,7 +24,7 @@ import {
 const STACK = [
   { key: 'title', height: 68, gap: 36 },
   { key: 'panel', height: 262, gap: 34 },
-  { key: 'buttons', height: 58, gap: 0 },
+  { key: 'buttons', height: 64, gap: 0 },
 ];
 
 /**
@@ -49,7 +49,7 @@ const TIME_FONT = 58;
  * 下端に並べるボタン。4 つ（TODO-032、TODO-072 で「続ける」を足した）なので、
  * 一番狭い縦画面の幅 640 から左右の余白を引いた 612 に収まる大きさにしてある。
  */
-const BUTTONS = { width: 140, height: 58, gap: 12 };
+const BUTTONS = { width: 140, height: 64, gap: 12 };
 
 /**
  * COMPLETE・情報の枠・ボタンをまとめて載せる外枠の、中身との間の余白（TODO-072）。

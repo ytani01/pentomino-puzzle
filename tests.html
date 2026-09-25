@@ -222,6 +222,28 @@ for (const portrait of [false, true]) {
   }
 }
 
+group('src/config.js — HUD のボタンの並び（makeLayout, TODO-076）');
+
+for (const portrait of [false, true]) {
+  const label = portrait ? '縦画面' : '横画面';
+  const spec = BOARDS['8x8'];
+  const game = makeLayout({ portrait, board: spec, buttons: 6 }).hud;
+  const demo = makeLayout({ portrait, board: spec, buttons: 7 }).hud;
+
+  test(`本編とデモで HUD の段数が同じ（${label}）`, () => {
+    // 段数が違うと、デモの盤とトレイだけが上下にずれる
+    assertSame(demo.rows, game.rows, 'HUD の段数');
+  });
+
+  test(`どの段のボタンも HUD の枠に収まる（${label}）`, () => {
+    for (const hud of [game, demo]) {
+      const total = hud.buttonsPerRow * hud.buttonWidth + (hud.buttonsPerRow - 1) * hud.gap;
+      assert(total <= hud.width - hud.padding, `1 段の幅 ${total} が枠からはみ出す`);
+      assert(hud.buttonHeight <= hud.rowHeight, 'ボタンが段より高い');
+    }
+  });
+}
+
 group('src/logic.js — 向きの生成');
 
 test('normalize は左上へ寄せ、行優先に並べ替える', () => {

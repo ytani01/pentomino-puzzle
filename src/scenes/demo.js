@@ -301,19 +301,19 @@ export default class DemoScene extends GameScene {
 
     const speedTips = { slow: 'ゆっくり', fast: '速い', fastest: '最速' };
     this.buttons = this.createHudButtons([
+      // 本編と同じく一番左（TODO-076）。失うものが無いので確認を出さずに戻る。
+      { icon: ICONS.title, tooltip: 'タイトルへ', onClick: () => this.goToTitle() },
       ...SPEEDS.map((speed) => ({
         icon: ICONS[speed], tooltip: speedTips[speed], onClick: () => this.selectSpeed(speed),
       })),
       { icon: ICONS.next, tooltip: '次の解を探す', onClick: () => this.searchNext() },
       { ...STRATEGIES[this.strategy], onClick: () => this.toggleStrategy() },
       { ...this.muteFace(audio.isMuted()), onClick: () => this.toggleMute() },
-      // 失うものが無いので確認を出さずに戻る。
-      { icon: ICONS.title, tooltip: 'タイトルへ', onClick: () => this.goToTitle() },
     ]);
-    this.speedButtons = this.buttons.slice(0, SPEEDS.length);
-    this.nextButton = this.buttons[3];
-    this.strategyButton = this.buttons[4];
-    this.muteButton = this.buttons[5];
+    this.speedButtons = this.buttons.slice(1, 1 + SPEEDS.length);
+    this.nextButton = this.buttons[4];
+    this.strategyButton = this.buttons[5];
+    this.muteButton = this.buttons[6];
   }
 
   refreshHud() {

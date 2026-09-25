@@ -25,19 +25,20 @@ import { boardIcon, paletteIcon } from '../icons.js';
  *
  * 記録の画面へ行く行（`records`）を足したぶん（TODO-008）、横画面では
  * 640 に収まらなくなるので、間隔を詰めてある。TODO-026 で文字を大きくして
- * さらに苦しくなったので、**合わせて 628 で下端に 12 ほどしか余らない**。
+ * さらに苦しくなったので、**合わせて 632 で下端に 8 ほどしか余らない**
+ * （TODO-076 でボタンを高くした分は、`subtitle` の下の間隔から削った）。
  * ここへ行を足すときは、まず間隔から削ること。
  */
 const STACK = [
   { key: 'title', height: 68, gap: 6 },
-  { key: 'subtitle', height: 36, gap: 24 },
+  { key: 'subtitle', height: 36, gap: 14 },
   { key: 'howTo', height: 186, gap: 8 },
   { key: 'size', height: 48, gap: 6 },
   { key: 'palette', height: 48, gap: 10 },
   { key: 'best', height: 30, gap: 12 },
-  { key: 'start', height: 58, gap: 6 },
+  { key: 'start', height: 64, gap: 6 },
   { key: 'keyHint', height: 24, gap: 10 },
-  { key: 'records', height: 48, gap: 0 },
+  { key: 'records', height: 56, gap: 0 },
 ];
 
 /**
@@ -51,13 +52,13 @@ const STACK_BIAS = SCREEN.portrait ? 0.5 : 0.7;
  * `はじめる` と `つづきから` の 1 個ぶん（TODO-030）。2 個を横に並べても
  * 縦画面（内部解像度 640）の左右の余白に収まる大きさにしてある。
  */
-const START = { width: 260, height: 58, gap: 20 };
+const START = { width: 224, height: 64, gap: 20 };
 
 /**
  * `記録` と `デモ`（TODO-040）の 1 個ぶん。行を足すと横画面の縦が足りない
  * （`STACK` の説明）ので、`はじめる` の行と同じく 2 個を横に並べる。
  */
-const SUB = { width: 190, height: 48, gap: 20 };
+const SUB = { width: 160, height: 56, gap: 20 };
 
 /**
  * 遊び方。1 行目は盤で変わるので、盤の `label` と `note` から組み立てる。

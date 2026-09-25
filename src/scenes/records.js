@@ -13,8 +13,8 @@
  * 収まるので、送る手数より作りの単純さを取った。
  *
  * 行にはいつもチェックボックスを出し、チェックした複数件をまとめて消せる
- * （TODO-071）。前へ・次へ・ゴミ箱・タイトルへは画面下の 1 段のアイコンに
- * まとめてあり、その分の縦の余白で一覧の行数を増やしてある（撮り比べて
+ * （TODO-071）。前へ・次へ・ゴミ箱は画面下の 1 段のアイコンに
+ * まとめてあり（タイトルへは左上。TODO-076）、その分の縦の余白で一覧の行数を増やしてある（撮り比べて
  * 利用者が選んだ配置。もう一つの案は消した）。
  */
 
@@ -61,8 +61,8 @@ const ROW_TEXT_WIDTH = { portrait: 570, landscape: 432 };
  * `stackTops()` ではなく向きごとに 1 組ずつ数を書いてある。
  *
  * 横画面は左に一覧・右に完成形、縦画面は上に一覧・下に完成形。前へ・次へ・
- * ゴミ箱・タイトルへは画面下の 1 段のアイコンにまとめてあり（`footY`・
- * `footSize`）、その分空いた縦の余白を一覧の行数（`rowsPerPage`）へ回してある
+ * ゴミ箱は画面下の 1 段のアイコンにまとめてあり（`footY`・`foot`）、その分空いた
+ * 縦の余白を一覧の行数（`rowsPerPage`）へ回してある
  * （TODO-071。撮り比べて利用者が選んだ配置）。
  *
  * 完成形の下に「この回を続ける」（`continueY`）を置くため、完成形の枠
@@ -82,7 +82,7 @@ const L = SCREEN.portrait
     continueY: 1008,
     achieveY: 1055,
     footY: 1100,
-    footSize: 46,
+    foot: { width: 42, height: 56 },
   }
   : {
     headingY: 40,
@@ -97,16 +97,19 @@ const L = SCREEN.portrait
     continueY: 510,
     achieveY: 556,
     footY: 600,
-    footSize: 38,
+    foot: { width: 36, height: 48 },
   };
 
 /**
  * 「この回を続ける」の大きさ（TODO-073）。下段の ▶（次へ）と取り違えないよう、
  * アイコンではなく文字のボタンにしてある。
  */
-const CONTINUE_BUTTON = { width: 220, height: 40 };
+const CONTINUE_BUTTON = { width: 190, height: 48 };
 
-/** 下段のアイコンボタンどうしの間隔。大きさは `L.footSize`。 */
+/**
+ * 下段のアイコンボタンどうしの間隔。大きさは `L.foot`。本編の HUD と同じく
+ * 幅を詰めて高さを取る（TODO-076）。タイトルへも同じ大きさで左上に置く。
+ */
 const FOOT_GAP = 14;
 
 /** 頁の数を出す文字の幅（下段の並びに使う）。 */
@@ -198,7 +201,7 @@ export default class RecordsScene extends Phaser.Scene {
     this.createFoot(cx);
 
     createVersionText(this);
-    // 下段のアイコンの説明。ほかの部品より後に作って手前に出し、確認の枠
+    // 下段と左上のアイコンの説明。ほかの部品より後に作って手前に出し、確認の枠
     // （depth 10）には隠れるようにする（本編の `DEPTH` と同じ重なり順）。
     this.tooltip = createTooltip(this);
     this.createConfirmDialog();
@@ -267,12 +270,13 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 下段。前へ・次へ・頁の数・ゴミ箱・タイトルへを 1 段のアイコンにまとめる
-   * （TODO-071）。
+   * 下段。前へ・次へ・頁の数・ゴミ箱を 1 段のアイコンにまとめる（TODO-071）。
+   * タイトルへは画面を離れるボタンなので、本編の HUD と同じく左に分けて
+   * 左上の見出しの高さに置く（TODO-076）。
    */
   createFoot(cx) {
-    const size = L.footSize;
-    const total = size * 4 + PAGE_TEXT_WIDTH + FOOT_GAP * 4;
+    const { width: size, height } = L.foot;
+    const total = size * 3 + PAGE_TEXT_WIDTH + FOOT_GAP * 3;
     let x = cx - total / 2;
     const next = (width) => {
       const center = x + width / 2;
@@ -281,7 +285,7 @@ export default class RecordsScene extends Phaser.Scene {
     };
 
     this.prevButton = createButton(this, {
-      x: next(size), y: L.footY, width: size, height: size,
+      x: next(size), y: L.footY, width: size, height,
       label: '', icon: ICONS.prevPage, tooltip: '前へ', onClick: () => this.turnPage(-1),
     });
     this.pageText = this.add.text(next(PAGE_TEXT_WIDTH), L.footY, '', {
@@ -290,18 +294,18 @@ export default class RecordsScene extends Phaser.Scene {
       color: TEXT_COLORS.dim,
     }).setOrigin(0.5);
     this.nextButton = createButton(this, {
-      x: next(size), y: L.footY, width: size, height: size,
+      x: next(size), y: L.footY, width: size, height,
       label: '', icon: ICONS.nextPage, tooltip: '次へ', onClick: () => this.turnPage(1),
     });
     this.trashButton = createButton(this, {
-      x: next(size), y: L.footY, width: size, height: size,
+      x: next(size), y: L.footY, width: size, height,
       label: '', icon: ICONS.trash, tooltip: 'チェックした回を消す', onClick: () => this.confirmTrash(),
     });
     // `tools/capture.mjs` が撮るときに吹き出しで指すため、他のボタンと同じく
     // プロパティに持たせておく（クリック先はタイトルへ戻るだけで、シーンの
     // 状態としては使わない）。
     this.titleButton = createButton(this, {
-      x: next(size), y: L.footY, width: size, height: size,
+      x: SCREEN.margin + size / 2, y: L.headingY, width: size, height,
       label: '', icon: ICONS.title, tooltip: 'タイトルへ',
       onClick: () => {
         audio.unlock();
