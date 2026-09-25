@@ -111,7 +111,8 @@ export const PIECE_SIZE = 5;
  * ピースの色の組（TODO-015）。
  *
  * 外周の縁取り（TODO-007）で塊を見分けられるので、**色で見分けなくてよい**。
- * そこで 12 個とも同じ色の「ガラス」を既定にし、12 色に塗り分ける組も選べる。
+ * そこで 12 個とも同じ色の「ガラス」も選べるようにし、12 色に塗り分ける組も置く。
+ * 既定はネオン（TODO-086）。
  *
  * - `mono` … 単色なら 12 種で共通の色、色を分けるなら `null`
  *   （`PIECES[].color` を使う）。テクスチャを 1 枚で済ませるかの判断も兼ねる
@@ -165,7 +166,7 @@ export const PALETTES = {
 };
 
 /** 一度も選んでいないときの色の組。 */
-export const DEFAULT_PALETTE_KEY = 'glass';
+export const DEFAULT_PALETTE_KEY = 'neon';
 
 /** 選んだ色の組を覚えておく `game.registry` のキー（`BOARD_REGISTRY_KEY` と同じ扱い）。 */
 export const PALETTE_REGISTRY_KEY = 'palette';

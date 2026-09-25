@@ -282,7 +282,7 @@ async function shot(page, name) {
     viewport: VIEWPORT, recordVideo: { dir, size: VIEWPORT },
   });
   // README のリンクと同じ URL で開く（押した先と同じ画面を見せるため）。
-  const page = await open(context, 'colorful', '?demo=random&board=8x8', 'Demo');
+  const page = await open(context, 'neon', '?demo=random&board=8x8', 'Demo');
   await page.waitForTimeout(12000);
   await context.close();
   const video = join(dir, readdirSync(dir).find((f) => f.endsWith('.webm')));
