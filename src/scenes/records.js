@@ -28,7 +28,8 @@ import {
 } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  createButton, createChoiceRow, createPanel, createTooltip, createVersionText, drawAcrylic,
+  createButton, createChoiceRow, createPanel, createTitleBar, createTooltip, createVersionText,
+  drawAcrylic,
 } from '../ui.js';
 import { darken, pieceColor } from './boot.js';
 
@@ -62,10 +63,14 @@ const ROW_TEXT_WIDTH = { portrait: 570, landscape: 432 };
  *
  * 完成形の下に「この回を続ける」（`continueY`）を置くため、完成形の枠
  * （`boardBox`）の高さを詰めてある（TODO-073）。
+ *
+ * 最上段にタイトル行（`titleY`）を足したぶん、横画面は見出しから一覧までを
+ * 下げ、一覧の最後の行と下段の間を詰めてある（TODO-089）。
  */
 const L = SCREEN.portrait
   ? {
-    headingY: 60,
+    titleY: 22,
+    headingY: 64,
     chooseY: 126,
     selectAllY: 166,
     listX: SCREEN.width / 2,
@@ -80,15 +85,16 @@ const L = SCREEN.portrait
     foot: { width: 42, height: 56 },
   }
   : {
-    headingY: 40,
-    chooseY: 96,
-    selectAllY: 134,
+    titleY: 16,
+    headingY: 48,
+    chooseY: 102,
+    selectAllY: 140,
     listX: 250,
-    listTop: 170,
+    listTop: 176,
     listWidth: ROW_TEXT_WIDTH.landscape + CHECKBOX.size + CHECKBOX.gap,
     rowsPerPage: 8,
     detailY: 455,
-    boardBox: { x: 500, y: 146, width: 424, height: 280 },
+    boardBox: { x: 500, y: 152, width: 424, height: 274 },
     continueY: 510,
     achieveY: 556,
     footY: 600,
@@ -179,6 +185,7 @@ export default class RecordsScene extends Phaser.Scene {
 
     const cx = SCREEN.width / 2;
 
+    createTitleBar(this, L.titleY, () => this.goToTitle());
     this.add.text(cx, L.headingY, '記録', {
       fontFamily: FONT.family,
       fontSize: `${FONT.heading}px`,
@@ -297,13 +304,14 @@ export default class RecordsScene extends Phaser.Scene {
     // プロパティに持たせる。
     this.titleButton = createButton(this, {
       x: SCREEN.margin + size / 2, y: L.headingY, width: size, height,
-      label: '', icon: ICONS.title, tooltip: 'タイトルへ',
-      onClick: () => {
-        audio.unlock();
-        audio.button();
-        this.scene.start('Title');
-      },
+      label: '', icon: ICONS.title, tooltip: 'タイトルへ', onClick: () => this.goToTitle(),
     });
+  }
+
+  goToTitle() {
+    audio.unlock();
+    audio.button();
+    this.scene.start('Title');
   }
 
   /** 選んだ 1 件の見出し、完成形を描く場所、達成度。 */

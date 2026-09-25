@@ -22,6 +22,32 @@ export function createVersionText(scene) {
 }
 
 /**
+ * 最上段の「PENTOMINO PUZZLE」の行。押すとタイトルへ戻る（TODO-089）。
+ * 本編・記録・デモが同じ見た目で出すのでここに置く。
+ *
+ * ボタンの枠を付けず文字だけにするのは、HUD のボタンと見分けるため。当たり
+ * 判定は文字の枠なので、`padding` で広げて指で押しやすくしてある。ボタン
+ * （`createButton()`）と同じく、ドラッグ中は受けず、押し始めた文字の上で
+ * 離したときだけ動く（ピースを離した位置がたまたまここでも戻らないように）。
+ */
+export function createTitleBar(scene, y, onClick) {
+  const text = scene.add.text(SCREEN.width / 2, y, 'PENTOMINO PUZZLE', {
+    fontFamily: FONT.family,
+    fontSize: `${FONT.small}px`,
+    color: TEXT_COLORS.accent,
+    padding: { x: 24, y: 6 },
+  }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+  let pressed = false;
+  text.on('pointerdown', () => { pressed = !scene.drag; });
+  text.on('pointerout', () => { pressed = false; });
+  text.on('pointerup', () => {
+    if (pressed && !scene.drag) onClick();
+    pressed = false;
+  });
+  return text;
+}
+
+/**
  * 縦に積む部品の上端 `y` をまとめて出す。
  *
  * 内部解像度が画面の向きで変わるので（TODO-011）、タイトルとクリアの画面は

@@ -26,7 +26,8 @@ import {
 } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  createButton, createHintBadge, createPanel, createTooltip, createVersionText, drawAcrylic,
+  createButton, createHintBadge, createPanel, createTitleBar, createTooltip, createVersionText,
+  drawAcrylic,
 } from '../ui.js';
 import { ICONS } from '../icons.js';
 import { darken, pieceColor, TEX } from './boot.js';
@@ -275,6 +276,8 @@ export default class GameScene extends Phaser.Scene {
    */
   createHud() {
     const hud = this.layout.hud;
+    // HUD の「タイトルへ」と同じく確認を出す（TODO-089）。
+    createTitleBar(this, this.layout.title.y, () => this.confirmToTitle()).setDepth(DEPTH.hud);
     createPanel(this, hud.x, hud.y, hud.width, hud.height).setDepth(DEPTH.hud);
     const rowY = (row) => hud.y + hud.rowHeight * (row + 0.5);
 

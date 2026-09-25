@@ -239,7 +239,8 @@ export const FONT = {
 const MARGIN = 14;         // 画面の縁と枠の間
 const PANEL_PAD = 10;      // 枠と、その中身の間
 const GAP = 12;            // 枠どうしの間
-const HUD_TOP = 10;        // 画面の上端と HUD の間
+const TITLE_BAND = 34;    // 画面の上端の「PENTOMINO PUZZLE」の行。HUD はこの下から（TODO-089）
+const NOTE_LINE = 26;     // デモだけ、タイトル行の下に探し方の一文を出す行（TODO-089）
 const HUD_PAD = 20;        // HUD の枠と、その中身の間
 const HUD_GAP = 8;         // ボタンどうしの間
 const HUD_BUTTONS = 6;     // HUD に並ぶボタンの数（`createHudButtons()` に渡す数と合わせる）
@@ -330,8 +331,9 @@ function screenSize(portrait) {
  *
  * スロットは `packTray()` が詰めて並べ、盤の側の端から置く（TODO-053）。
  */
-export function makeLayout({ portrait, board, buttons = HUD_BUTTONS }) {
+export function makeLayout({ portrait, board, buttons = HUD_BUTTONS, note = false }) {
   const { width, height } = screenSize(portrait);
+  const hudTop = TITLE_BAND + (note ? NOTE_LINE : 0);
 
   // 上限の幅で 1 段に並ぶだけ並べ、はみ出す分は次の段へ折り返す（TODO-076）。
   // 段数はボタンの多いデモ（7 個）で決め、本編も揃える。本編だけ段が
@@ -349,7 +351,7 @@ export function makeLayout({ portrait, board, buttons = HUD_BUTTONS }) {
   ));
   const hud = {
     x: MARGIN,
-    y: HUD_TOP,
+    y: hudTop,
     width: hudWidth,
     height: HUD_ROW * hudRows,
     rows: hudRows,
@@ -436,6 +438,8 @@ export function makeLayout({ portrait, board, buttons = HUD_BUTTONS }) {
     portrait,
     // タイトルとクリアの画面が、枠を画面幅いっぱいに広げないために読む。
     margin: MARGIN,
+    title: { y: TITLE_BAND / 2 },
+    note: { y: TITLE_BAND + NOTE_LINE / 2 },
     hud,
     board: { x: boardPanel.x + PANEL_PAD, y: boardPanel.y + PANEL_PAD, cell },
     boardPanel,
@@ -475,12 +479,14 @@ export const LAYOUTS = Object.fromEntries(
 
 /**
  * デモの配置（TODO-050）。HUD のボタンが本編より 1 つ多いので、本編の
- * `LAYOUTS` とは別に作る。ボタンの段数は `makeLayout()` が本編と揃えるので、
- * 盤とトレイの位置・マスの大きさは本編と同じになる。
+ * `LAYOUTS` とは別に作る。ボタンの段数は `makeLayout()` が本編と揃える。
+ * ただしタイトル行の下に探し方の一文（`note`）を足すので、盤とトレイは
+ * その 1 行ぶん本編より下がり、横画面ではマスも小さくなる。そのマスの
+ * テクスチャは Boot が焼く（TODO-089）。
  */
 export const DEMO_LAYOUTS = Object.fromEntries(
   Object.values(BOARDS).map((board) => [
-    board.key, makeLayout({ portrait: PORTRAIT, board, buttons: DEMO_HUD_BUTTONS }),
+    board.key, makeLayout({ portrait: PORTRAIT, board, buttons: DEMO_HUD_BUTTONS, note: true }),
   ]),
 );
 

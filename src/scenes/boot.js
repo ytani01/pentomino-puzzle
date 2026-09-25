@@ -7,7 +7,7 @@
  */
 
 import {
-  BOARD_REGISTRY_KEY, COLORS, DEFAULT_BOARD_KEY, GLASS, LAYOUTS, NEON, PALETTES,
+  BOARD_REGISTRY_KEY, COLORS, DEFAULT_BOARD_KEY, DEMO_LAYOUTS, GLASS, LAYOUTS, NEON, PALETTES,
   PALETTE_REGISTRY_KEY, PIECES, TILE,
 } from '../config.js';
 import { parseDemoParams } from '../logic.js';
@@ -55,11 +55,14 @@ export default class BootScene extends Phaser.Scene {
   create() {
     // 選べる盤と色の組のぶんをまとめて焼く。タイトルで選び直したときに
     // 待たせないため（1 枚は数十 px 四方で、全部でも 30 枚ほど）。
-    for (const layout of Object.values(LAYOUTS)) {
-      this.makeBoardTiles(layout.board.cell);
-      for (const palette of Object.values(PALETTES)) {
-        this.makePieceTiles(palette, layout.board.cell);
-      }
+    // デモは横画面でマスが本編より小さいので、その大きさも焼く（TODO-089）。
+    // 同じ大きさを二度焼くとキーがぶつかるので、Set で重ねない。
+    const cells = new Set(
+      [...Object.values(LAYOUTS), ...Object.values(DEMO_LAYOUTS)].map((layout) => layout.board.cell),
+    );
+    for (const cell of cells) {
+      this.makeBoardTiles(cell);
+      for (const palette of Object.values(PALETTES)) this.makePieceTiles(palette, cell);
     }
     this.registry.set(BOARD_REGISTRY_KEY, DEFAULT_BOARD_KEY);
     // 色の組は前に選んだものを使う（盤と違い、遊ぶたびに選び直すものではない）。
