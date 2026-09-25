@@ -46,7 +46,7 @@ import {
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
   clampSelection, selectionAfterRemoval,
-  forcedPlacements, touchingEdges, moveDistance, countCellMoves,
+  forcedPlacements, hasUncoverableCell, touchingEdges, moveDistance, countCellMoves,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
   solveSteps, solveStepsRandom,
 } from './src/logic.js';
@@ -798,7 +798,41 @@ for (const spec of BOARD_LIST) {
     const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
     assert(!regionsFitPieces(board), '1 マスの取り残しを見逃した');
   });
+
+  test(`hasUncoverableCell は空の盤で 12 種すべて渡すと偽（${spec.label}）`, () => {
+    assert(!hasUncoverableCell(createBoard(spec), NAMES), '空の盤で真になった');
+  });
+
+  test(`hasUncoverableCell は 1 マスだけの取り残しを覆えないと見る（${spec.label}）`, () => {
+    // F を左上へ置くと (0,0) が 1 マスだけ切り離される（regionsFitPieces の
+    // テストと同じ盤面）。5 マス未満の空きはどのピースでも覆えない。
+    // 実装（solveStepsRandom）と同じく、置き済みの F を除いた残りを渡す。
+    const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
+    const unused = NAMES.filter((name) => name !== 'F');
+    assert(hasUncoverableCell(board, unused), '1 マスの取り残しを見逃した');
+  });
 }
+
+test('hasUncoverableCell は、空き領域が 5 マスちょうどでも、形が合わなければ真（TODO-077）', () => {
+  // L ペントミノとぴったり同じ形（縦棒 4 マス＋右下に 1 マス）だけを空けた、
+  // このテストだけの盤（HOLE で他を塞ぐ。既存の盤の spec とは無関係）。
+  // regionsFitPieces は大きさ（5 の倍数か）しか見ないので真のままだが、
+  // 直線 5 マスの I はこの形に入らない。
+  const board = {
+    rows: 4,
+    cols: 2,
+    grid: [
+      null, HOLE,
+      null, HOLE,
+      null, HOLE,
+      null, null,
+    ],
+  };
+  assertSame(cellsOf('L'), [[0, 0], [1, 0], [2, 0], [3, 0], [3, 1]], '空きの形が L の定義とずれている');
+  assert(regionsFitPieces(board), '前提が崩れている（5 の倍数でなくなった）');
+  assert(hasUncoverableCell(board, ['I']), 'I しか残っていないのに埋まる扱いになった');
+  assert(!hasUncoverableCell(board, ['L']), 'L があれば埋まるはずなのに埋まらない扱いになった');
+});
 
 test('formatTime は mm:ss、1 時間を超えたら h:mm:ss', () => {
   assertSame(formatTime(0), '00:00');
@@ -1326,6 +1360,16 @@ function hasPlacedFormClosedRegion(board) {
 }
 
 /**
+ * 残りのどのピースの置き方でも覆えない空きマスが盤にあるか（TODO-077）。
+ * 置き済みのピースと同じ形の 5 マスの空き（`hasPlacedFormClosedRegion`）も
+ * 覆えないマスを含むので、これに含まれる。
+ */
+function hasUncoverableCellOnBoard(board) {
+  const unused = NAMES.filter((name) => !placedNames(board).includes(name));
+  return hasUncoverableCell(board, unused);
+}
+
+/**
  * place の直前の盤面 `board` で、この place が `forcedPlacements()`（TODO-044）の
  * 候補のどれかと一致するか（TODO-066）。一致すれば、`solveStepsRandom()` は
  * 抽選より先にこれを選んでいる。
@@ -1430,6 +1474,7 @@ for (const spec of BOARD_LIST) {
       let sawForcedDoubleUndo = false;
       let sawUnfitRegionUndo = false;
       let sawPlacedFormUndo = false;
+      let sawUncoverableRegionUndo = false;
       let i = 0;
       while (i < steps.length) {
         const step = steps[i];
@@ -1445,10 +1490,16 @@ for (const spec of BOARD_LIST) {
           // 即座の remove とは排他（else if）。
           const forcedFail = step.ok === false && isForcedFillStep(boardBeforePlace, step);
           const unfitRegion = !forcedFail && hasUnfitClosedRegion(board);
-          // 置き済みのピースと同じ形の 5 マスの空きも、行き詰まりを待たずに
-          // その場で 1 手だけ外れる（TODO-067）。5 の倍数でない空きの即座の
-          // remove とは排他（else if）。
+          // 残りのどのピースでも覆えない空きマスも、行き詰まりを待たずに
+          // その場で 1 手だけ外れる（TODO-077）。5 の倍数でない空きの即座の
+          // remove とは排他（else if）。置き済みのピースと同じ形の 5 マスの
+          // 空き（TODO-067）もここに含まれる。
+          const uncoverableRegion = !forcedFail && !unfitRegion && hasUncoverableCellOnBoard(board);
           const placedFormRegion = !forcedFail && !unfitRegion && hasPlacedFormClosedRegion(board);
+          if (placedFormRegion) {
+            assert(uncoverableRegion,
+              `${step.name} を置いて置き済みピースの形の空きができたのに、覆えないマスとして見ていない`);
+          }
           i += 1;
           if (forcedFail) {
             if (i >= steps.length) break; // limit で打ち切った末尾。次の手は分からない
@@ -1464,16 +1515,19 @@ for (const spec of BOARD_LIST) {
               i += 1;
             }
             sawForcedDoubleUndo = true; // 置ける手が尽きた連なりとは別物なので sawRun には数えない
-          } else if (unfitRegion || placedFormRegion) {
+          } else if (unfitRegion || uncoverableRegion) {
             if (i >= steps.length) break; // limit で打ち切った末尾。次の手は分からない
+            const reason = unfitRegion ? '5 の倍数でない空き'
+              : placedFormRegion ? '置き済みピースの形の空き' : '覆えない空きマス';
             assert(steps[i] && steps[i].type === 'remove' && steps[i].name === step.name,
-              `${step.name} を置いて${unfitRegion ? '5 の倍数でない空き' : '置き済みピースの形の空き'}ができたのに、次が同じ名前の remove でない`);
+              `${step.name} を置いて${reason}ができたのに、次が同じ名前の remove でない`);
             board = remove(board, steps[i].name);
             i += 1;
             if (unfitRegion) {
               sawUnfitRegionUndo = true; // 置ける手が尽きた連なりとは別物なので sawRun には数えない
             } else {
-              sawPlacedFormUndo = true;
+              sawUncoverableRegionUndo = true;
+              if (placedFormRegion) sawPlacedFormUndo = true;
             }
           }
           continue;
@@ -1495,6 +1549,7 @@ for (const spec of BOARD_LIST) {
       // forced な解なしの二重 remove の確認は、確実に起こす専用のテスト
       // （makeFailAfterForcedFill() を使うもの）に任せる。
       assert(sawPlacedFormUndo, '選んだシード・手数で置き済みピースの形の空きによる即座の remove が一度も起きなかった');
+      assert(sawUncoverableRegionUndo, '選んだシード・手数で覆えない空きマスによる即座の remove が一度も起きなかった');
     });
   }
 
@@ -1507,9 +1562,9 @@ for (const spec of BOARD_LIST) {
     const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), () => false, 3000);
     let board = createBoard(spec);
     let sawRemoveRun = false;
-    // 5 の倍数でない空き・置き済みピースの形の空きの即座の remove（1 手）と、
-    // forced な解なしの二重 remove（2 手）を、次に来る remove のうち
-    // 除外する残り数で表す（TODO-066・TODO-067）。canContinue が常に偽
+    // 5 の倍数でない空き・覆えない空きマス（置き済みピースの形の空きを含む）の
+    // 即座の remove（1 手）と、forced な解なしの二重 remove（2 手）を、次に来る
+    // remove のうち除外する残り数で表す（TODO-066・TODO-077）。canContinue が常に偽
     // なので、forced な place は必ず解なしになる。
     let pendingExempt = 0;
     for (let i = 0; i < steps.length; i += 1) {
@@ -1519,7 +1574,7 @@ for (const spec of BOARD_LIST) {
         board = place(board, step.name, step.cells, step.row, step.col);
         if (isForcedFillStep(boardBeforePlace, step)) {
           pendingExempt = 2;
-        } else if (hasUnfitClosedRegion(board) || hasPlacedFormClosedRegion(board)) {
+        } else if (hasUnfitClosedRegion(board) || hasUncoverableCellOnBoard(board)) {
           pendingExempt = 1;
         } else {
           pendingExempt = 0;
@@ -1621,9 +1676,9 @@ for (const spec of BOARD_LIST) {
     // なら続けて DEMO.randomCollapseMoves 手を remove として崩す（TODO-063）。
     // 崩しの続きの remove は「次は必ず place」に当てはまらないので、手元でも
     // 同じ規則（maybeCollapse()）で崩しの発生を再現し、崩しの間は確かめない。
-    // 置いた直後のその場外し（TODO-060/066〜068）は崩しに数えないので、
+    // 置いた直後のその場外し（TODO-060/066〜068・077）は崩しに数えないので、
     // 行き詰まりの連なりかどうかを、置いた直後の判定（isForcedFillStep・
-    // hasUnfitClosedRegion・hasPlacedFormClosedRegion）で見分ける（上の
+    // hasUnfitClosedRegion・hasUncoverableCellOnBoard）で見分ける（上の
     // 「置ける手が尽きて 1 手ずつ外す並び…」のテストと同じ分け方）。
     const STEPS = 4000;
     const sigOf = (step) => `${step.name}:${JSON.stringify(step.cells)}:${step.row}:${step.col}`;
@@ -1677,7 +1732,7 @@ for (const spec of BOARD_LIST) {
         activeStack.push({ sig: sigOf(step), name: step.name });
         const forcedFail = step.ok === false && isForcedFillStep(boardBeforePlace, step);
         const unfitRegion = !forcedFail && hasUnfitClosedRegion(board);
-        const placedFormRegion = !forcedFail && !unfitRegion && hasPlacedFormClosedRegion(board);
+        const uncoverableRegion = !forcedFail && !unfitRegion && hasUncoverableCellOnBoard(board);
         i += 1;
         if (forcedFail) {
           if (i >= steps.length) break; // limit で打ち切った末尾
@@ -1688,7 +1743,7 @@ for (const spec of BOARD_LIST) {
             doRemove(steps[i].name);
             i += 1;
           }
-        } else if (unfitRegion || placedFormRegion) {
+        } else if (unfitRegion || uncoverableRegion) {
           if (i >= steps.length) break;
           doRemove(steps[i].name);
           i += 1;
@@ -1827,6 +1882,10 @@ for (const spec of BOARD_LIST) {
             // （ペントミノは 12 種で全種類が尽くされているため）。
             assert(hasPlacedFormClosedRegion(board),
               `${step.name} を置いて残りのピースに合わない 5 マスの空きができたのに、置き済みのピースの形とも一致しない`);
+            // 外すのは TODO-077 の分岐（覆えない空きマス）。置き済みの形の空きは
+            // それに含まれる。
+            assert(hasUncoverableCellOnBoard(board),
+              `${step.name} を置いて置き済みのピースの形の空きができたのに、覆えないマスとして見ていない`);
             const next = steps[i + 1];
             if (next) {
               assert(next.type === 'remove' && next.name === step.name,
@@ -1841,6 +1900,39 @@ for (const spec of BOARD_LIST) {
       failedOf(boardKey(board)).add(popped.sig);
     }
     assert(sawExact, '選んだシード・手数で確かめられる場面が一度も無かった（見直すこと）');
+  });
+
+  test(`残りのどのピースでも覆えない空きマスができたら、行き詰まりを待たずにその場で外す（TODO-077, ${spec.label}）`, () => {
+    // TODO-060（5 の倍数でない塊）には当てはまらないのに、残りのピースの
+    // どの置き方でも覆えないマスがある盤面（細い袋小路・置き済みの形の空きなど）を
+    // 探し、その直後の remove が同じ名前かを見る。
+    const STEPS = 6000;
+    const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces, STEPS);
+    let board = createBoard(spec);
+    let sawUncoverable = false;
+    for (let i = 0; i < steps.length; i += 1) {
+      const step = steps[i];
+      if (step.type === 'place') {
+        const boardBeforePlace = board;
+        const forcedFail = step.ok === false && isForcedFillStep(boardBeforePlace, step);
+        board = place(board, step.name, step.cells, step.row, step.col);
+        if (!forcedFail) {
+          if (!hasUnfitClosedRegion(board)) {
+            if (hasUncoverableCellOnBoard(board)) {
+              sawUncoverable = true;
+              const next = steps[i + 1];
+              if (next) {
+                assert(next.type === 'remove' && next.name === step.name,
+                  `${step.name} を置いて残りのどのピースでも覆えない空きマスができたのに、次が同じ名前の remove でない`);
+              }
+            }
+          }
+        }
+        continue;
+      }
+      board = remove(board, step.name);
+    }
+    assert(sawUncoverable, '選んだシード・手数で覆えないマスが一度も出なかった（見直すこと）');
   });
 
   test(`残りのピースで埋められる 5 マスの閉じた空きがあれば、次の place は必ずそれになる（TODO-066, ${spec.label}）`, () => {
@@ -2069,7 +2161,7 @@ function sumMoveDistanceFromLast(spec, seed, limit) {
       const boardBeforePlace = board;
       board = place(board, step.name, step.cells, step.row, step.col);
       const forcedFail = step.ok === false && isForcedFillStep(boardBeforePlace, step);
-      const immediateUndo = forcedFail || hasUnfitClosedRegion(board) || hasPlacedFormClosedRegion(board);
+      const immediateUndo = forcedFail || hasUnfitClosedRegion(board) || hasUncoverableCellOnBoard(board);
       if (last && !immediateUndo) {
         sum += moveDistance(move, last);
         count += 1;

@@ -457,6 +457,28 @@ export function forcedPlacements(board, names) {
   return found;
 }
 
+/**
+ * 残りのピース `names` のどの置き方でも覆えない空きマスがあるか（TODO-077）。
+ * そういうマスがあれば、その盤面から先は必ず解なし。空き領域の大きさ
+ * （`regionsFitPieces()`）だけでは見えない、細い袋小路や角に残る 1 マスを拾う。
+ * 置ける手を全部当てるので、`regionsFitPieces()` より重い。
+ */
+export function hasUncoverableCell(board, names) {
+  const covered = new Uint8Array(board.grid.length);
+  for (const piece of PIECES) {
+    if (!names.includes(piece.name)) continue;
+    for (const shape of orientations(piece.cells)) {
+      for (let row = 0; row < board.rows; row += 1) {
+        for (let col = 0; col < board.cols; col += 1) {
+          if (!canPlace(board, shape, row, col).ok) continue;
+          for (const [dr, dc] of shape) covered[(row + dr) * board.cols + (col + dc)] = 1;
+        }
+      }
+    }
+  }
+  return board.grid.some((value, index) => value === null && !covered[index]);
+}
+
 /** 空き領域の大きさがすべて 5 の倍数か。`emptyRegionSizes()` の判定部分。 */
 export function regionsFitPieces(board) {
   return emptyRegionSizes(board).every((size) => size % PIECE_SIZE === 0);
@@ -674,8 +696,9 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  *   （その穴の形はもうそのピースでしか埋まらない以上「埋める前の盤面が
  *   すでに解なし」ということなので、埋めた手と、その前に置いた手をまとめて
  *   外す。TODO-066）
- * - 置いた直後に、盤に置き済みのピースと同じ形の 5 マスの閉じた空きができたとき
- *   （ピースは 1 種 1 つなので、その空きはもう埋められず必ず解なしになる。TODO-067）
+ * - 残りのピースのどの置き方でも覆えない空きマスができたとき
+ *   （`hasUncoverableCell()`。細い袋小路や、置き済みのピースと同じ形の 5 マスの
+ *   閉じた空きなど。ピースは 1 種 1 つなので必ず解なしになる。TODO-067・077）
  *
  * 外した手は、盤面ごとに `failed` に控えて選び直さない（同じ失敗を
  * 繰り返すと試行錯誤に見えないため）。盤面ごとにするのは、失敗は盤面によって
@@ -686,8 +709,8 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  * まとめて外す（TODO-063。人は同じ所で詰まり続けると「やり直そう」と
  * 大きく崩すため）。「詰まり」に数えるのは、置ける手が尽きて `ok` が真に
  * なるまで戻る**行き詰まりの一続きだけ**。置いた直後にその場で外す手
- * （5 の倍数でない空き・5 マスの穴に合う手をまとめて外す 2 手・置き済みの
- * ピースと同じ形の空きのいずれも。TODO-060・066〜068）は、置いた側の
+ * （5 の倍数でない空き・5 マスの穴に合う手をまとめて外す 2 手・覆えない
+ * 空きマスのいずれも。TODO-060・066〜068・077）は、置いた側の
  * 判断が明らかに間違っていただけで「試行錯誤して詰まった」わけではないので
  * 数えない。行き詰まりの一続きが終わるたびに、そのときの `stack.length` を
  * 深さとして回数を数える。回数が `DEMO.randomCollapseAfter` に達したら、
@@ -839,11 +862,10 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
       // 詰みが確定しているので、行き詰まりを待たずにその場で外す（TODO-060・068）。
       // 置いた直後のその場外しは「詰まり」に数えない（TODO-063）。
       yield undoLast();
-    } else if (forcedPlacements(board, PIECES.map((p) => p.name).filter(
-      (name) => !unused.includes(name),
-    )).length > 0) {
-      // 置き済みのピースと同じ形の 5 マスの空きができたら、そのピースは
-      // もう無いので必ず解なし。行き詰まりを待たずにその場で外す（TODO-067）。
+    } else if (hasUncoverableCell(board, unused)) {
+      // 残りのどのピースでも覆えない空きマスがあれば必ず解なし。これも
+      // 行き詰まりを待たずにその場で外す。置き済みのピースと同じ形の 5 マスの
+      // 空き（TODO-067）もここに含まれる（TODO-077）。
       // 置いた直後のその場外しは「詰まり」に数えない（TODO-063）。
       yield undoLast();
     }
