@@ -60,6 +60,11 @@ jobs:
           cp index.html dist/
           cp -r src dist/
 
+      # Pages は 10 分キャッシュさせるので、読み込みの URL を版ごとに変える（TODO-096）。
+      # 付け漏れがあるとスクリプトが失敗する。
+      - name: 読み込みに版を付ける
+        run: node tools/stamp-version.mjs dist "${GITHUB_REF_NAME}"
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3

@@ -77,6 +77,7 @@ Chromium を動かして撮る。TODO-034）。
 | `tools/enumerate.mjs` | 全解の数え上げ（開発時のみ。元は `src/solver.js`） |
 | `tools/gen-solutions.mjs` | `src/data/*.js` を作る／突き合わせる（開発時のみ） |
 | `tools/capture.mjs` | `docs/images/` のキャプチャを撮り直す。Playwright は依存に足さず、npx の置き場から借りる（開発時のみ。TODO-056） |
+| `tools/stamp-version.mjs` | 公開するコピーの読み込みに `?v=<タグ名>` を付ける（Pages の 10 分のキャッシュで古い版が出ないように。公開のワークフローで使う。TODO-096） |
 | `tools/window-shim.mjs` | Node から `src/` を読むためのダミーの `window`（開発時のみ） |
 | `tests.html` | 計算のテスト（ブラウザで開くだけ） |
 | `docs/UsersGuide.md` | 遊び方の詳細（操作、HUD のボタン、記録、つづきから、デモ） |

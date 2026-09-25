@@ -61,11 +61,12 @@ src/
     clear.js          クリア表示
     records.js        クリア記録の一覧
     demo.js           コンピューターが解を探す様子を見せるデモ
-tools/                開発時にだけ使う（公開しない）
+tools/                開発と公開の作業で使う（どれも公開するファイルには含めない）
   enumerate.mjs       全解の数え上げ
   gen-solutions.mjs   src/data/*.js を作る／突き合わせる
   window-shim.mjs     Node から src/ を読むためのダミーの window
   capture.mjs         docs/images/ のキャプチャを撮り直す
+  stamp-version.mjs   公開するコピーの読み込みに版を付ける（公開のワークフローが使う）
 tests.html            計算のテスト
 docs/
   UsersGuide.md       遊び方の詳細（操作、HUD、記録、デモ）
@@ -614,6 +615,15 @@ git push origin develop v0.2.0
 公開時、ワークフローが `src/config.js` の `VERSION`（既定は `'dev'`）を
 タグ名へ書き換える。ローカルで直接開いた画面は `dev` のまま表示される
 （公開前後で見た目が異なるのは意図した挙動）。
+
+続けて `tools/stamp-version.mjs` が、公開するコピー（`dist/`）の読み込みの後ろに
+`?v=<タグ名>` を付ける（`index.html` の `src/main.js`、`src/` の中の静的・動的な
+相対 import のすべて）。GitHub Pages は `cache-control: max-age=600` を返すので、
+URL が版ごとに変わらないと、公開から 10 分はリロードしても古い JS が使われる
+（スマホではキャッシュを消す手段も限られる）。手元のコードは書き換えない。
+付けられなかった読み込み（二重引用符の import など、決めた形から外れた書き方）が
+残るとジョブが失敗するので、import は `from './x.js'` の形で書くこと。
+手元で試すときは、`dist/` を作ってから `node tools/stamp-version.mjs dist v0.0.0` を走らせる。
 
 ### 日常的なデプロイの手順
 
