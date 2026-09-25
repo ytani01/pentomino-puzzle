@@ -28,14 +28,14 @@ const BADGE = 's.children.list.find((c) => c.text === "解ける" || c.text === 
 
 const browser = await chromium.launch();
 
-async function open(context, palette = 'glass') {
+async function open(context, palette = 'glass', query = '', scene = 'Title') {
   const page = await context.newPage();
   await page.addInitScript((key) => {
     // 色の組は保存した値から読まれる（`loadPalette()`）ので、起動前に入れておく。
     window.localStorage.setItem('pentomino-puzzle/palette', key);
   }, palette);
-  await page.goto(BASE);
-  await page.waitForFunction(() => window.game?.scene.isActive('Title'));
+  await page.goto(BASE + query);
+  await page.waitForFunction((k) => window.game?.scene.isActive(k), scene);
   return page;
 }
 
@@ -166,17 +166,6 @@ async function shot(page, name) {
   console.log(`docs/images/${name}`);
 }
 
-// ---- README: 遊んでいる途中の盤 ----------------------------------------
-{
-  const context = await browser.newContext({ viewport: VIEWPORT });
-  const page = await open(context, 'colorful');
-  await go(page, 'Game');
-  await autoPlace(page, 7);
-  await clearMessage(page, 'Game');
-  await shot(page, 'play.png');
-  await context.close();
-}
-
 // ---- UsersGuide: タイトル ----------------------------------------------
 {
   const context = await browser.newContext({ viewport: VIEWPORT });
@@ -292,8 +281,8 @@ async function shot(page, name) {
   const context = await browser.newContext({
     viewport: VIEWPORT, recordVideo: { dir, size: VIEWPORT },
   });
-  const page = await open(context, 'colorful');
-  await go(page, 'Demo');
+  // README のリンクと同じ URL で開く（押した先と同じ画面を見せるため）。
+  const page = await open(context, 'colorful', '?demo=random&board=8x8', 'Demo');
   await page.waitForTimeout(12000);
   await context.close();
   const video = join(dir, readdirSync(dir).find((f) => f.endsWith('.webm')));
