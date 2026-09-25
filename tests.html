@@ -46,7 +46,7 @@ import {
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
   clampSelection, selectionAfterRemoval,
-  forcedPlacements, hasUncoverableCell, touchingEdges, moveDistance, countCellMoves,
+  forcedPlacements, hasUncoverableCell, touchingEdges, moveDistance, countCellMoves, singlePieceCell,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
   solveSteps, solveStepsRandom,
 } from './src/logic.js';
@@ -1468,6 +1468,11 @@ for (const spec of BOARD_LIST) {
       const effectiveCanContinue = label === '既定'
         ? (board) => hasSolution(solutionsForSpec, board)
         : canContinue;
+      // 6×10・既定は、singlePieceCell（TODO-082）で置き済みピースの形の空きへ
+      // 向かう手が減り、FAST_SEED だと解に着くまでに一度も起きない。置き済み
+      // ピースの形の空きが 3000 手以内に起きる別の種（4）に替える
+      // （このテストだけのローカルな種。FAST_SEED は他のテストと共有のため変えない）。
+      const seed = (label === '既定' && spec.key === '6x10') ? 4 : FAST_SEED[spec.key];
       // 常に偽だと DEMO.randomDeadLimit 手置くたびに盤が空まで戻り、置き済みピースの
       // 形の空きができるほど深く進まない。ここで見たいのはその場で外す手なので、
       // 上限を外して走らせる（上限そのものは TODO-081 のテストで確かめる）。
@@ -1475,7 +1480,7 @@ for (const spec of BOARD_LIST) {
       let steps;
       try {
         if (label === '常に偽') DEMO.randomDeadLimit = Infinity;
-        steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), effectiveCanContinue, 3000);
+        steps = randomSteps(spec, mulberry32(seed), effectiveCanContinue, 3000);
       } finally {
         DEMO.randomDeadLimit = savedDeadLimit;
       }
@@ -2313,8 +2318,11 @@ for (const spec of BOARD_LIST) {
           const unused = NAMES.filter((name) => !placedNames(before).includes(name));
           const failedHere = failedOf(boardKey(before));
           const choices = computeChoices(spec, before, unused, failedHere);
+          // 1 種類しか入らないマスがあれば singlePieceCell（TODO-082）が狭い所より
+          // 先に効き、この絞り込みとは無関係な理由でそこを覆う。その場面は除く。
+          const single = singlePieceCell(choices, () => 0);
           const tightCells = tightCellsOf(choices);
-          if (tightCells.length === 1) {
+          if (!single && tightCells.length === 1) {
             const [tightCell] = tightCells;
             const pieceMoves = choices.find((moves) => moves[0].name === step.name) || [];
             const pieceCanCoverTight = pieceMoves.some((m) => m.shape
@@ -2365,9 +2373,13 @@ function sumTightCoverage(spec, seed, limit) {
         const unused = NAMES.filter((name) => !placedNames(before).includes(name));
         const failedHere = failedOf(boardKey(before));
         const choices = computeChoices(spec, before, unused, failedHere);
-        const tightCells = tightCellsOf(choices);
-        total += 1;
-        if (step.cells.some(([dr, dc]) => tightCells.includes(`${step.row + dr},${step.col + dc}`))) covered += 1;
+        // singlePieceCell（TODO-082）が当たる場面は、狭い所の重みと無関係に
+        // 置く手が絞られるので、割合には数えない（reviewer 報告の検討 2）。
+        if (!singlePieceCell(choices, () => 0)) {
+          const tightCells = tightCellsOf(choices);
+          total += 1;
+          if (step.cells.some(([dr, dc]) => tightCells.includes(`${step.row + dr},${step.col + dc}`))) covered += 1;
+        }
       }
       board = place(board, step.name, step.cells, step.row, step.col);
       activeStack.push({ sig: `${step.name}:${JSON.stringify(step.cells)}:${step.row}:${step.col}`, name: step.name });
@@ -2410,6 +2422,128 @@ for (const spec of BOARD_LIST) {
     assert(rateWith > rateWithout,
       `DEMO.randomTightWeight を効かせたときの割合（${rateWith}）が、`
       + `1 にしたとき（${rateWithout}）より大きくなっていない`);
+  });
+}
+
+// ---- logic：1 種類しか入らないマス（singlePieceCell, solveStepsRandom, TODO-082）----
+
+group('src/logic.js — 1 種類しか入らないマス（singlePieceCell, TODO-082）');
+
+test('2 種類目のピースが同じマスを覆うと、そのマスは候補から外れる（choices が空でも null）', () => {
+  const choices = [
+    [{ row: 0, col: 0, shape: [[0, 0]] }], // ピース0 が (0,0) を覆う
+    [{ row: 0, col: 0, shape: [[0, 0]] }], // ピース1 も (0,0) を覆う → 2 種類目で外れる
+  ];
+  assertSame(singlePieceCell(choices, () => 0), null, '2 種類目が出たマスしか無いのに null でない');
+  assertSame(singlePieceCell([], () => 0), null, 'choices が空なのに null でない');
+});
+
+test('同じピースの手が何手そのマスを覆っても 1 種類のまま数が増えるだけで、count が一番少ないマスが選ばれる', () => {
+  const choices = [
+    // ピース0: (0,0) を覆う手が 3 つ（同じマスに何度重なっても 1 種類のまま）
+    [
+      { row: 0, col: 0, shape: [[0, 0]] },
+      { row: 0, col: 0, shape: [[0, 0]] },
+      { row: 0, col: 0, shape: [[0, 0]] },
+    ],
+    // ピース1: (1,1) を覆う手が 1 つだけ（count が一番少ない）
+    [{ row: 1, col: 1, shape: [[0, 0]] }],
+  ];
+  const result = singlePieceCell(choices, () => 0);
+  assertSame(result, { pick: 1, cellKey: '1,1' }, '数が一番少ないマス（1,1・ピース1）を選んでいない');
+});
+
+test('同数のマスが複数あれば random で選び、pick は choices での添字（unused の添字ではない）', () => {
+  const choices = [
+    [{ row: 0, col: 0, shape: [[0, 0]] }], // choices[0]: (0,0) を覆う手が 1 つ
+    [{ row: 1, col: 1, shape: [[0, 0]] }], // choices[1]: (1,1) を覆う手が 1 つ（同数タイ）
+  ];
+  assertSame(singlePieceCell(choices, () => 0), { pick: 0, cellKey: '0,0' },
+    'random が 0 を返すのに先のマスを選んでいない');
+  assertSame(singlePieceCell(choices, () => 0.99), { pick: 1, cellKey: '1,1' },
+    'random が大きい値を返すのに後のマスを選んでいない');
+});
+
+test('どのマスも 2 種類以上のピースで覆えるなら null', () => {
+  const choices = [
+    [{ row: 0, col: 0, shape: [[0, 0], [0, 1]] }],
+    [{ row: 0, col: 0, shape: [[0, 0]] }, { row: 0, col: 1, shape: [[0, 0]] }],
+  ];
+  assertSame(singlePieceCell(choices, () => 0), null, 'マスが無いのに null でない');
+});
+
+/**
+ * `singlePieceCell()` と同じやり方で、覆える手が 1 種類のピースにしか無い
+ * 空きマスをすべて集め、count が一番少ないマス（同数の全部）を返す。
+ * `tightCellsOf()` と同じ理由で、タイが複数ピースにまたがると
+ * `solveStepsRandom()` 内部の `random()` でどのピースが選ばれるか外からは
+ * 追えないので、その場合は null にして確かめる対象から除く。
+ */
+function singlePieceCandidates(choices) {
+  const cells = new Map();
+  choices.forEach((moves, pick) => {
+    for (const move of moves) {
+      for (const [dr, dc] of move.shape) {
+        const key = `${move.row + dr},${move.col + dc}`;
+        const cell = cells.get(key);
+        if (!cell) {
+          cells.set(key, { pick, count: 1 });
+        } else {
+          if (cell.pick !== pick) cell.pick = -1;
+          cell.count += 1;
+        }
+      }
+    }
+  });
+  const singles = [...cells].filter(([, c]) => c.pick >= 0);
+  if (singles.length === 0) return null;
+  const min = Math.min(...singles.map(([, c]) => c.count));
+  const candidates = singles.filter(([, c]) => c.count === min);
+  const picks = new Set(candidates.map(([, c]) => c.pick));
+  if (picks.size !== 1) return null;
+  return { pick: candidates[0][1].pick, cells: candidates.map(([key]) => key) };
+}
+
+for (const spec of BOARD_LIST) {
+  test(`1 種類しか入らないマスがある場面の place（forced を除く）は、そのピースで、候補のマスのどれかを覆う（${spec.label}）`, () => {
+    // 候補のマス（1 種類しか入らないマスのうち count が一番少ない同数タイ）が
+    // 複数ピースにまたがる場面は、上の「狭い所を…唯一絞れる場面では…」と同じ
+    // 理由で除く（singlePieceCandidates() が null を返す）。
+    const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces, 1500);
+    const failedByBoard = new Map();
+    const failedOf = (key) => {
+      if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
+      return failedByBoard.get(key);
+    };
+    const activeStack = [];
+    let board = createBoard(spec);
+    let checked = 0;
+    for (const step of steps) {
+      if (step.type === 'place') {
+        const before = board;
+        if (!isForcedFillStep(before, step)) {
+          const unused = NAMES.filter((name) => !placedNames(before).includes(name));
+          const failedHere = failedOf(boardKey(before));
+          const choices = computeChoices(spec, before, unused, failedHere);
+          const candidates = singlePieceCandidates(choices);
+          if (candidates) {
+            checked += 1;
+            const pieceName = choices[candidates.pick][0].name;
+            assertSame(step.name, pieceName,
+              '1 種類しか入らないマスがあるのに、置いたピースが違う');
+            const covered = step.cells.some(([dr, dc]) => candidates.cells.includes(`${step.row + dr},${step.col + dc}`));
+            assert(covered, `${step.name} は候補のマスのどれも覆っていない`);
+          }
+        }
+        board = place(board, step.name, step.cells, step.row, step.col);
+        activeStack.push({ sig: `${step.name}:${JSON.stringify(step.cells)}:${step.row}:${step.col}`, name: step.name });
+      } else {
+        board = remove(board, step.name);
+        const popped = activeStack.pop();
+        failedOf(boardKey(board)).add(popped.sig);
+      }
+    }
+    assert(checked > 0, '選んだシード・手数で、1 種類しか入らないマスが唯一のピースに絞れる場面が一度も無かった');
   });
 }
 

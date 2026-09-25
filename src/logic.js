@@ -537,13 +537,50 @@ export function countCellMoves(choices) {
   return counts;
 }
 
+/**
+ * `choices`（`countCellMoves()` と同じ形）から、覆える手が 1 種類のピースに
+ * しか無い空きマスを探し、そのピースの添字（`choices` での位置）とマスを返す。
+ * 無ければ `null`。人は「この隙間に入るのはこれしか無い」と分かれば迷わず
+ * それを入れるため（TODO-082）。該当するマスが複数あれば、覆える手が一番
+ * 少ないマスを選ぶ（同数なら `random` で選ぶ）。`tests.html` から確かめられる
+ * よう export する。
+ *
+ * `solveStepsRandom()` が渡す `choices` は控え（`failed`）を除いた手なので、
+ * 別のピースをそこで試してだめだったから 1 種類に見える、というマスも当たる。
+ * 人も試してだめだったピースは候補から外して考えるので、除いたまま数える。
+ */
+export function singlePieceCell(choices, random) {
+  const cells = new Map(); // "row,col" → { pick, count }。pick は 2 種類目が出たら -1
+  choices.forEach((moves, pick) => {
+    for (const move of moves) {
+      for (const [dr, dc] of move.shape) {
+        const key = `${move.row + dr},${move.col + dc}`;
+        const cell = cells.get(key);
+        if (!cell) {
+          cells.set(key, { pick, count: 1 });
+        } else {
+          if (cell.pick !== pick) cell.pick = -1;
+          cell.count += 1;
+        }
+      }
+    }
+  });
+  const counts = new Map();
+  for (const [key, { pick, count }] of cells) {
+    if (pick >= 0) counts.set(key, count);
+  }
+  if (counts.size === 0) return null;
+  const cellKey = pickTightCell(counts, random);
+  return { pick: cells.get(cellKey).pick, cellKey };
+}
+
 /** `move` が空きマス `cellKey`（`"row,col"`）を覆うか。 */
 function moveCoversCell(move, cellKey) {
   return move.shape.some(([dr, dc]) => `${move.row + dr},${move.col + dc}` === cellKey);
 }
 
 /**
- * `counts`（`countCellMoves()` の戻り値）から、数が一番少ないマスを 1 つ選ぶ
+ * `counts`（`countCellMoves()` の戻り値か、同じ形の `"row,col"` → 数の Map）から、数が一番少ないマスを 1 つ選ぶ
  * （同数なら `random` で選ぶ）。`counts` は覆われたマスしか持たないので、数は
  * 必ず 1 以上。置ける手があるとき（`counts` が空でないとき）だけ呼ぶ。
  */
@@ -657,8 +694,11 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  *
  * 速く解くためではなく、人が試行錯誤しながら置いていく様子を見せるため。
  * 5 マスの穴に残りのピースがちょうど合う手があれば必ずそれを置く
- * （`forcedPlacements()`）。無ければ、まず「狭い所」（残りの手で覆える数が
- * 一番少ない空きマス。`countCellMoves()`）を探し、そこを覆える手を持つ
+ * （`forcedPlacements()`）。次に、覆えるピースが 1 種類しか無い空きマスが
+ * あれば、そのピースでそのマスを覆う手に絞る（`singlePieceCell()`。TODO-082。
+ * 閉じた 5 マスでなくても、人は入るピースが 1 つしか無いと分かるため）。
+ * どちらも無ければ、まず「狭い所」（残りの手で覆える数が一番少ない空きマス。
+ * `countCellMoves()`）を探し、そこを覆える手を持つ
  * ピースを `DEMO.randomTightWeight` で選ばれやすくして抽選する（TODO-061。
  * 人は「この隙間に入るのはどれか」と考えてピースを選ぶため）。選んだピースが
  * 狭い所を覆えるなら、置き方はそこを覆う手だけに絞る。置き方は一様に選ばず、
@@ -817,16 +857,23 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     if (forced.length > 0) {
       move = pickOne(forced);
     } else {
-      // 「狭い所」（覆える手が一番少ない空きマス）を覆えるピースを選ばれやすくし、
-      // 選んだら狭い所を覆う置き方に絞る（TODO-061）。
-      const tightCell = pickTightCell(countCellMoves(choices), random);
-      const covering = choices.map((moves) => moves.filter((m) => moveCoversCell(m, tightCell)));
-      const pick = pickWeighted(
-        choices.map((_, i) => i),
-        covering.map((moves) => (moves.length > 0 ? DEMO.randomTightWeight : 1)),
-        random,
-      );
-      const movesForName = covering[pick].length > 0 ? covering[pick] : choices[pick];
+      let movesForName;
+      const single = singlePieceCell(choices, random);
+      if (single) {
+        // 1 種類のピースしか入らないマスがあれば、そのピースでそこを覆う（TODO-082）。
+        movesForName = choices[single.pick].filter((m) => moveCoversCell(m, single.cellKey));
+      } else {
+        // 「狭い所」（覆える手が一番少ない空きマス）を覆えるピースを選ばれやすくし、
+        // 選んだら狭い所を覆う置き方に絞る（TODO-061）。
+        const tightCell = pickTightCell(countCellMoves(choices), random);
+        const covering = choices.map((moves) => moves.filter((m) => moveCoversCell(m, tightCell)));
+        const pick = pickWeighted(
+          choices.map((_, i) => i),
+          covering.map((moves) => (moves.length > 0 ? DEMO.randomTightWeight : 1)),
+          random,
+        );
+        movesForName = covering[pick].length > 0 ? covering[pick] : choices[pick];
+      }
       // 重みは選んだピースの置き方の分だけ数える。直前に置いた手（stack の最後）
       // からの近さも掛け、近くから順に埋めていく（TODO-062）。最初の手
       // （スタックが空）なら距離の項は掛けない。
