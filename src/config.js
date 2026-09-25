@@ -687,23 +687,22 @@ export const ICON = {
 };
 
 /**
- * タイトルの盤・色の選択肢に描く図（`src/icons.js`。TODO-046）。
+ * タイトルの盤・色の選択肢に描く図（`src/icons.js`。TODO-046・TODO-087）。
  *
  * - `boardCell` / `boardGap` … 盤の図の 1 マスと、マスの間の隙間。8 マスで
- *   ボタンの高さ（46）に余白が残る大きさ
- * - `domino` … 色の見本の小片（2×1）の 1 マス
- * - `dominoGap` … 小片どうしの間
- * - `dominoStagger` … 小片を 1 つおきに上下へずらす量。一列に揃えると
- *   帯に見えて、別々の小片に見えないため
- * - `pieces` … 見本に使うピース。12 色の並びから色相の離れたものを選ぶ
+ *   ボタンの高さ（58。`ui.js` の `CHOICE_ICON_HEIGHT`）に余白が残る大きさ
+ * - `pieceCell` … 色の見本のピースの 1 マス。3 マス四方のピースを 3 つ並べて
+ *   ボタンの幅（150）に収まる大きさ
+ * - `pieceGap` … 見本のピースどうしの間
+ * - `pieces` … 見本に使うピース。12 色の並びから色相の離れたもので、形も
+ *   見分けやすい F・W・X（どれも 3 マス四方）
  */
 export const CHOICE_ICON = {
-  boardCell: 4.8,
+  boardCell: 6,
   boardGap: 1,
-  domino: 13,
-  dominoGap: 10,
-  dominoStagger: 4,
-  pieces: ['F', 'P', 'V'],
+  pieceCell: 12,
+  pieceGap: 9,
+  pieces: ['F', 'W', 'X'],
 };
 
 /**
@@ -800,6 +799,18 @@ export const DEMO = {
   randomCollapseMoves: 3,
   randomDeadLimit: 8,
   randomTurnStepMs: 150,
+};
+
+/**
+ * タイトルの動く盤（TODO-087）。デモのランダムな探索を小さな盤で回す飾り。
+ *
+ * - `intervalMs` … 1 手の間隔。デモの「速い」（`DEMO.speeds.fast`）と同じ
+ * - `pauseMs` … 解けてから空の盤で探し直すまで。デモ（`DEMO.pauseMs`）より
+ *   短いのは、見せたいのが解ではなく置いては外す動きのため
+ */
+export const TITLE_DEMO = {
+  intervalMs: 200,
+  pauseMs: 3000,
 };
 
 /**

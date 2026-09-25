@@ -170,6 +170,11 @@ async function shot(page, name) {
 {
   const context = await browser.newContext({ viewport: VIEWPORT });
   const page = await open(context);
+  // 動く盤（TODO-087）が空のままだと動くことが伝わらないので、ピースが 4 個
+  // （20 マス）載るまで待ち、止めてから撮る。
+  await page.waitForFunction(() => window.game.scene.getScene('Title').previewBoard?.grid
+    .filter((c) => c !== null && c !== '#').length >= 20);
+  await page.evaluate(() => window.game.scene.pause('Title'));
   await annotate(page, 'Title', [
     { n: 1, at: 's.boardButtons', text: '盤を選ぶ', side: 'left', frame: true, dist: 50 },
     { n: 2, at: 's.paletteButtons', text: '色の組を選ぶ', side: 'left', frame: true, dist: 50 },

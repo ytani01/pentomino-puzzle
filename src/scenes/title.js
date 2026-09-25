@@ -1,42 +1,73 @@
 /**
  * タイトル。遊び方の要点と、これまでの最短時間を出す。
  *
+ * 題字の下（横画面では遊び方の枠の左）で、デモと同じランダムな探索を小さな盤で
+ * 動かす（TODO-087）。
+ * 飾りなので押しても何も起きず、音も鳴らさない。見せる盤は選んでいる盤。
+ *
  * `audio.unlock()` はここのボタンで呼ぶ。ブラウザは操作をきっかけにしないと
  * 音を鳴らさないので、最初に必ず通る場所で済ませておく。
  */
 
 import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, PALETTES, PALETTE_REGISTRY_KEY,
-  SCREEN, TEXT_COLORS,
+  SCREEN, TEXT_COLORS, TITLE_DEMO,
 } from '../config.js';
-import { formatTime } from '../logic.js';
+import {
+  createBoard, formatTime, place, remove, solveStepsRandom,
+} from '../logic.js';
+import { ensureSolutions, hasSolution } from '../solutions.js';
 import { loadBest, loadProgress, savePalette } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  createButton, createChoiceRow, createPanel, createTooltip, createVersionText, stackTops,
+  CHOICE_ICON_HEIGHT, createButton, createChoiceRow, createPanel, createTooltip,
+  createVersionText, drawMiniBoard, stackTops,
 } from '../ui.js';
 import { boardIcon, paletteIcon } from '../icons.js';
 
+/** 盤・色の行の高さ。ボタンの上下に 1 ずつ空ける（高くする前の 46 のボタンと 48 の行と同じ）。 */
+const CHOICE_ROW = CHOICE_ICON_HEIGHT + 2;
+
 /**
- * 上から順に積む部品。`height` は部品の高さ、`gap` は次の部品までの間隔で、
- * どちらも横画面での見え方を写した値（TODO-011）。縦画面では画面が高くなる
- * ぶんだけ、この塊ごと下へずれる。
+ * 上から順に積む部品。`height` は部品の高さ、`gap` は次の部品までの間隔。
+ * 縦画面では画面が高くなるぶんだけ、この塊ごと下へずれる（TODO-011）。
  *
- * 横画面（高さ 640）に収めるため間隔を詰めてあり、**合わせて 632 で下端に
- * 8 ほどしか余らない**（TODO-008・TODO-026・TODO-076）。
- * ここへ行を足すときは、まず間隔から削ること。
+ * 横画面（高さ 640）は、動く盤を遊び方の枠の左に並べ（`PREVIEW`）、
+ * 盤・色のボタンを高くした（TODO-087）ぶん間隔を詰めてあり、**合わせて 634 で
+ * 下端に 6 ほどしか余らない**（TODO-008・TODO-026・TODO-076）。
+ * ここへ行を足すときは、まず間隔から削ること。縦画面は余りが大きいので、
+ * 動く盤を題字の下に 1 行として置き、間隔も広げてある。
  */
-const STACK = [
+const STACK = SCREEN.portrait ? [
   { key: 'title', height: 68, gap: 6 },
-  { key: 'subtitle', height: 36, gap: 14 },
-  { key: 'howTo', height: 186, gap: 8 },
-  { key: 'size', height: 48, gap: 6 },
-  { key: 'palette', height: 48, gap: 10 },
+  { key: 'subtitle', height: 36, gap: 16 },
+  { key: 'preview', height: 240, gap: 16 },
+  { key: 'howTo', height: 186, gap: 12 },
+  { key: 'size', height: CHOICE_ROW, gap: 10 },
+  { key: 'palette', height: CHOICE_ROW, gap: 14 },
   { key: 'best', height: 30, gap: 12 },
+  { key: 'start', height: 64, gap: 8 },
+  { key: 'keyHint', height: 24, gap: 12 },
+  { key: 'records', height: 56, gap: 0 },
+] : [
+  { key: 'title', height: 68, gap: 4 },
+  { key: 'subtitle', height: 36, gap: 8 },
+  { key: 'howTo', height: 186, gap: 6 },
+  { key: 'size', height: CHOICE_ROW, gap: 6 },
+  { key: 'palette', height: CHOICE_ROW, gap: 8 },
+  { key: 'best', height: 30, gap: 6 },
   { key: 'start', height: 64, gap: 6 },
-  { key: 'keyHint', height: 24, gap: 10 },
+  { key: 'keyHint', height: 24, gap: 6 },
   { key: 'records', height: 56, gap: 0 },
 ];
+
+/**
+ * 動く盤を描く場所（TODO-087）。縦画面は `STACK` の `preview` の行に幅
+ * `width` で置く。横画面は縦が足りないので遊び方の枠の左に置き、枠の幅を
+ * そのぶん詰める（高さは枠と同じ）。マスは盤ごとに、この中へ収まる大きさ
+ * （`drawMiniBoard()`）。
+ */
+const PREVIEW = { width: SCREEN.portrait ? 400 : 200, gap: 16 };
 
 /**
  * 余りのうち上へ回す割合。縦画面は余りが 3 倍以上に増え、横画面と同じ 0.7 だと
@@ -90,7 +121,21 @@ export default class TitleScene extends Phaser.Scene {
     const topOf = (key) => tops[indexOf(key)];
     const centerOf = (key) => topOf(key) + STACK[indexOf(key)].height / 2;
     // 遊び方の枠は縦画面では画面幅に収まらないので、はみ出す前に詰める。
-    const panelWidth = Math.min(720, SCREEN.width - SCREEN.margin * 2);
+    // 横画面は左に動く盤を並べるので、そのぶん詰めて 2 つを中央に寄せる。
+    const panelWidth = SCREEN.portrait
+      ? Math.min(720, SCREEN.width - SCREEN.margin * 2)
+      : Math.min(720, SCREEN.width - SCREEN.margin * 2 - PREVIEW.width - PREVIEW.gap);
+    const panelX = SCREEN.portrait
+      ? cx - panelWidth / 2
+      : cx + (PREVIEW.width + PREVIEW.gap - panelWidth) / 2;
+    this.previewBox = SCREEN.portrait
+      ? { x: cx - PREVIEW.width / 2, y: topOf('preview'), width: PREVIEW.width,
+          height: STACK[indexOf('preview')].height }
+      : { x: panelX - PREVIEW.gap - PREVIEW.width, y: topOf('howTo'), width: PREVIEW.width,
+          height: STACK[indexOf('howTo')].height };
+    this.previewGraphics = this.add.graphics();
+    // シーンに入り直すと前回のタイマーは Phaser が捨てている。触らないよう空にする。
+    this.previewTimer = null;
 
     this.add.text(cx, centerOf('title'), 'PENTOMINO', {
       fontFamily: FONT.family,
@@ -103,9 +148,8 @@ export default class TitleScene extends Phaser.Scene {
       color: TEXT_COLORS.accent,
     }).setOrigin(0.5);
 
-    createPanel(this, cx - panelWidth / 2, topOf('howTo'),
-                panelWidth, STACK[indexOf('howTo')].height);
-    this.howToText = this.add.text(cx, centerOf('howTo'), '', {
+    createPanel(this, panelX, topOf('howTo'), panelWidth, STACK[indexOf('howTo')].height);
+    this.howToText = this.add.text(panelX + panelWidth / 2, centerOf('howTo'), '', {
       fontFamily: FONT.family,
       fontSize: `${FONT.body}px`,
       color: TEXT_COLORS.dim,
@@ -126,9 +170,11 @@ export default class TitleScene extends Phaser.Scene {
       ...palette, icon: paletteIcon(palette), tooltip: palette.label,
     }));
     this.boardButtons = createChoiceRow(this, cx, centerOf('size'), '盤', boardChoices,
-                                        (choice) => this.selectBoard(choice.key));
+                                        (choice) => this.selectBoard(choice.key),
+                                        CHOICE_ICON_HEIGHT);
     this.paletteButtons = createChoiceRow(this, cx, centerOf('palette'), '色', paletteChoices,
-                                          (choice) => this.selectPalette(choice.key));
+                                          (choice) => this.selectPalette(choice.key),
+                                          CHOICE_ICON_HEIGHT);
 
     this.bestText = this.add.text(cx, centerOf('best'), '', {
       fontFamily: FONT.family,
@@ -235,9 +281,10 @@ export default class TitleScene extends Phaser.Scene {
     this.refreshPalette();
   }
 
-  /** 選んでいる色の組をボタンへ反映する。 */
+  /** 選んでいる色の組をボタンと動く盤へ反映する。 */
   refreshPalette() {
     this.paletteButtons.forEach((button) => button.setSelected(button.choiceKey === this.paletteKey));
+    this.drawPreview();
   }
 
   /** 選んでいる盤に合わせて、ボタン・遊び方・最短時間を出し直す。 */
@@ -250,6 +297,61 @@ export default class TitleScene extends Phaser.Scene {
     this.bestText.setColor(best === null ? TEXT_COLORS.dim : TEXT_COLORS.accent);
     // 遊びかけは盤ごとに分かれているので、盤を選び直すたびに見直す（TODO-030）。
     this.resumeButton.setEnabled(loadProgress(this.boardKey) !== null);
+    this.startPreview();
+  }
+
+  // ---- 動く盤（TODO-087） ---------------------------------------------
+
+  /**
+   * 選んでいる盤で、空の盤から探索を始め直す。探し方はデモのランダム
+   * （`solveStepsRandom()`）で、全解のデータが届いてから動かす（デモと同じく
+   * 「解ける／解なし」をデータで調べるため）。届くまでは空の盤を出しておく。
+   *
+   * データは盤を選び直したあとや、シーンを離れたあとに届くことがある。
+   * 呼ぶたびに `previewToken` を作り直し、最後に頼んだ分だけを使う
+   * （古い分で動かすと、盤の形と探索の盤面が食い違う）。
+   */
+  startPreview() {
+    const token = {};
+    this.previewToken = token;
+    this.previewTimer?.remove(false);
+    this.previewTimer = null;
+    const spec = BOARDS[this.boardKey];
+    this.previewBoard = createBoard(spec);
+    this.drawPreview();
+    ensureSolutions(this.registry, spec).then((solutions) => {
+      if (!this.scene.isActive() || token !== this.previewToken) return;
+      this.previewSteps = solveStepsRandom(
+        spec, Math.random, (board) => hasSolution(solutions, board),
+      );
+      this.previewTimer = this.time.addEvent({
+        delay: TITLE_DEMO.intervalMs, loop: true, callback: this.stepPreview, callbackScope: this,
+      });
+    });
+  }
+
+  /**
+   * 1 手進める。盤面は generator の中にあるので、置いた・外したピースを
+   * こちらの盤面（`previewBoard`）へ写して描き直す。解けたら少し止めて、
+   * 空の盤から探し直す（デモと同じ。TODO-054）。
+   */
+  stepPreview() {
+    const { value, done } = this.previewSteps.next();
+    if (done || value.type === 'solved') {
+      this.previewTimer.remove(false);
+      this.previewTimer = this.time.delayedCall(TITLE_DEMO.pauseMs, () => this.startPreview());
+      return;
+    }
+    this.previewBoard = value.type === 'place'
+      ? place(this.previewBoard, value.name, value.cells, value.row, value.col)
+      : remove(this.previewBoard, value.name);
+    this.drawPreview();
+  }
+
+  drawPreview() {
+    this.previewGraphics.clear();
+    drawMiniBoard(this.previewGraphics, BOARDS[this.boardKey], this.previewBoard.grid,
+                  PALETTES[this.paletteKey], this.previewBox);
   }
 
   start() {

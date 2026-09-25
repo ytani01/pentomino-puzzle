@@ -6,8 +6,10 @@
  */
 
 import {
-  ACRYLIC, COLORS, FONT, HINT_BADGE, SCREEN, TEXT_COLORS, TILE, TOOLTIP, VERSION,
+  ACRYLIC, COLORS, FONT, HINT_BADGE, HOLE, NEON, PIECES, SCREEN, TEXT_COLORS, TILE, TOOLTIP,
+  VERSION,
 } from './config.js';
+import { darken, pieceColor } from './scenes/boot.js';
 
 /**
  * 右下にバージョンを出す。問い合わせのときにどの版かを画面から読めるよう、
@@ -174,12 +176,100 @@ export function createHintBadge(scene, x, y, originX = 0) {
 }
 
 /**
+ * 縮小した盤のピースの境目の太さ。マスが 20〜56px ほどまで縮むので、盤の
+ * `OUTLINE.width`（2）では輪郭として細すぎる。
+ */
+const MINI_EDGE = 3;
+
+/** ピース名から定義を引く表。盤の 1 マスずつ引く。 */
+const PIECE_BY_NAME = new Map(PIECES.map((piece) => [piece.name, piece]));
+
+/**
+ * 盤を縮小して `box` の中央に描く。記録の完成形（TODO-008）とタイトルの
+ * 動く盤（TODO-087）が使う。`cells` は 1 マス 1 要素（ピース名・`HOLE`・空きは
+ * `null`）で、完成形の文字列でも探索の盤面の配列でもよい。
+ *
+ * `boot.js` のテクスチャを貼らずに塗るのは、テクスチャが盤とトレイの大きさで
+ * 焼いてあり、縮めて貼ると立体の帯や光の筋がつぶれて、かえって境目が
+ * 分かりにくくなるため。**ピースの境目が見分けられること**だけを目当てに、
+ * 塗りと、隣が別のピースになる辺の線だけで描く。空きのマスは 1px ずつ縮めて
+ * 塗り、マス目が見えるようにする。
+ */
+export function drawMiniBoard(g, board, cells, palette, box) {
+  const cell = Math.min(
+    Math.floor(box.width / board.cols),
+    Math.floor(box.height / board.rows),
+  );
+  const originX = box.x + Math.round((box.width - cell * board.cols) / 2);
+  const originY = box.y + Math.round((box.height - cell * board.rows) / 2);
+  const at = (row, col) => (
+    row < 0 || col < 0 || row >= board.rows || col >= board.cols
+      ? null
+      : cells[row * board.cols + col]
+  );
+
+  for (let row = 0; row < board.rows; row += 1) {
+    for (let col = 0; col < board.cols; col += 1) {
+      const ch = at(row, col);
+      // 穴は塗らず、あとでアクリルの板を重ねる（TODO-051）。
+      if (ch === HOLE) continue;
+      const piece = PIECE_BY_NAME.get(ch);
+      const x = originX + col * cell;
+      const y = originY + row * cell;
+      if (!piece) {
+        g.fillStyle(COLORS.boardCell, 1);
+        g.fillRect(x + 1, y + 1, cell - 2, cell - 2);
+        continue;
+      }
+      // ネオンは本編と同じく地を沈め、外周だけを明るく残す（TODO-039）。
+      const color = pieceColor(palette, piece);
+      g.fillStyle(palette.neon ? darken(color, NEON.fillDarken) : color, 1);
+      g.fillRect(x, y, cell, cell);
+    }
+  }
+
+  // 境目は塗り終えてから引く。先に引くと、隣のマスの塗りで消える。
+  // 内側へ半分寄せて引く。外へはみ出すと隣のピースの塗りにかぶる。
+  const half = MINI_EDGE / 2;
+  for (let row = 0; row < board.rows; row += 1) {
+    for (let col = 0; col < board.cols; col += 1) {
+      const ch = at(row, col);
+      const piece = PIECE_BY_NAME.get(ch);
+      if (!piece) continue;
+      g.lineStyle(MINI_EDGE, darken(pieceColor(palette, piece), palette.outlineDarken), 1);
+      const x = originX + col * cell;
+      const y = originY + row * cell;
+      if (at(row - 1, col) !== ch) g.lineBetween(x, y + half, x + cell, y + half);
+      if (at(row + 1, col) !== ch) g.lineBetween(x, y + cell - half, x + cell, y + cell - half);
+      if (at(row, col - 1) !== ch) g.lineBetween(x + half, y, x + half, y + cell);
+      if (at(row, col + 1) !== ch) g.lineBetween(x + cell - half, y, x + cell - half, y + cell);
+    }
+  }
+
+  if (board.hole) {
+    const { hole } = board;
+    drawAcrylic(g, originX + hole.col * cell, originY + hole.row * cell,
+                hole.cols * cell, hole.rows * cell);
+  }
+
+  g.lineStyle(2, COLORS.panelEdge, 1);
+  g.strokeRect(originX, originY, cell * board.cols, cell * board.rows);
+}
+
+/**
  * 選ぶボタン 1 個の大きさと間隔、行の頭に置くラベルの幅。
  * ラベルの幅は 1 文字ぶんに間隔を足した値。
  */
 const CHOICE_BUTTON = {
   width: 150, height: 46, gap: 16, labelWidth: 48,
 };
+
+/**
+ * タイトルの盤・色のボタンの高さ（TODO-087）。図で見分けるので、文字だけの
+ * 記録の画面（`CHOICE_BUTTON.height`）より高くして図を大きく描く。
+ * 横画面は縦に余りが無い（`title.js` の `STACK`）ので、この値で止めてある。
+ */
+export const CHOICE_ICON_HEIGHT = 58;
 
 /**
  * ラベル 1 つと、選択肢ぶんのボタンを 1 行に並べる。中心を `(cx, y)` に置く。
@@ -190,8 +280,10 @@ const CHOICE_BUTTON = {
  *
  * 選択肢に `icon` があれば文字の代わりに図を描き、`tooltip` があれば説明を出す
  * （タイトルの盤・色。TODO-046）。図にするなら名前を説明に回すこと。
+ * 図は大きく描くので、`height` でボタンを高くできる（TODO-087）。
  */
-export function createChoiceRow(scene, cx, y, label, choices, onSelect) {
+export function createChoiceRow(scene, cx, y, label, choices, onSelect,
+                                height = CHOICE_BUTTON.height) {
   const buttons = choices.length * CHOICE_BUTTON.width
     + (choices.length - 1) * CHOICE_BUTTON.gap;
   const left = cx - (CHOICE_BUTTON.labelWidth + buttons) / 2;
@@ -206,7 +298,7 @@ export function createChoiceRow(scene, cx, y, label, choices, onSelect) {
         + index * (CHOICE_BUTTON.width + CHOICE_BUTTON.gap),
       y,
       width: CHOICE_BUTTON.width,
-      height: CHOICE_BUTTON.height,
+      height,
       label: choice.label,
       icon: choice.icon,
       tooltip: choice.tooltip,

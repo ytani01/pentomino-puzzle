@@ -243,7 +243,7 @@ export function boardIcon(board) {
 }
 
 /**
- * タイトルで選ぶ色の組の見本（TODO-046）。2×1 の小片を 3 つ描く。
+ * タイトルで選ぶ色の組の見本（TODO-046）。ピース F・W・X を並べて描く（TODO-087）。
  * 塗り・マスの区切り・外周の色と太さは、盤のマス目（`boot.js`）とピースの
  * 外周（`game.js`）に揃える。外周は本編と同じく線の太さの半分だけ内側へ寄せる。
  * 12 色の立体感、ガラスの光の筋、ネオンのにじみは、この大きさでは潰れるので描かない。
@@ -253,24 +253,40 @@ export function boardIcon(board) {
  * 枠の強調色で分かる）。
  */
 export function paletteIcon(palette) {
-  const { domino: cell, dominoGap: gap, dominoStagger: stagger, pieces } = CHOICE_ICON;
-  const step = cell * 2 + gap;
-  const inset = palette.outlineWidth / 2;
+  const { pieceCell: cell, pieceGap: gap, pieces } = CHOICE_ICON;
+  const size = cell * 3;
+  const half = palette.outlineWidth / 2;
   return (g) => {
     pieces.forEach((name, i) => {
-      const color = pieceColor(palette, PIECES.find((piece) => piece.name === name));
-      const x = (i - (pieces.length - 1) / 2) * step - cell;
-      const y = (i % 2 ? -stagger : stagger) - cell / 2;
-      const alpha = palette.glass ? GLASS.fillAlpha : 1;
-      const fill = palette.neon ? darken(color, NEON.fillDarken) : color;
-      g.fillStyle(fill, alpha);
-      g.fillRect(x, y, cell * 2, cell);
+      const piece = PIECES.find((p) => p.name === name);
+      const color = pieceColor(palette, piece);
+      const left = (i - (pieces.length - 1) / 2) * (size + gap) - size / 2;
+      const top = -size / 2;
+      const has = (row, col) => piece.cells.some(([r, c]) => r === row && c === col);
+      g.fillStyle(palette.neon ? darken(color, NEON.fillDarken) : color,
+                  palette.glass ? GLASS.fillAlpha : 1);
+      for (const [row, col] of piece.cells) g.fillRect(left + col * cell, top + row * cell, cell, cell);
+
       if (palette.glass) g.lineStyle(TILE.border, GLASS.gridColor, GLASS.gridAlpha);
       else if (palette.neon) g.lineStyle(TILE.border, color, NEON.gridAlpha);
       else g.lineStyle(TILE.border, darken(color, TILE.edgeDarken), 1);
-      g.lineBetween(x + cell, y, x + cell, y + cell);
+      // マスの区切りは、右と下が同じピースの辺だけ（外周は次で引く）。
+      for (const [row, col] of piece.cells) {
+        const x = left + col * cell;
+        const y = top + row * cell;
+        if (has(row, col + 1)) g.lineBetween(x + cell, y, x + cell, y + cell);
+        if (has(row + 1, col)) g.lineBetween(x, y + cell, x + cell, y + cell);
+      }
+
       g.lineStyle(palette.outlineWidth, darken(color, palette.outlineDarken), 1);
-      g.strokeRect(x + inset, y + inset, cell * 2 - inset * 2, cell - inset * 2);
+      for (const [row, col] of piece.cells) {
+        const x = left + col * cell;
+        const y = top + row * cell;
+        if (!has(row - 1, col)) g.lineBetween(x, y + half, x + cell, y + half);
+        if (!has(row + 1, col)) g.lineBetween(x, y + cell - half, x + cell, y + cell - half);
+        if (!has(row, col - 1)) g.lineBetween(x + half, y, x + half, y + cell);
+        if (!has(row, col + 1)) g.lineBetween(x + cell - half, y, x + cell - half, y + cell);
+      }
     });
   };
 }

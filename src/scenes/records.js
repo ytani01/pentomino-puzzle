@@ -17,8 +17,8 @@
  */
 
 import {
-  BACKDROP, BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, HOLE, LAYOUTS, NEON, PALETTES,
-  PALETTE_REGISTRY_KEY, PIECES, SCREEN, TEXT_COLORS,
+  BACKDROP, BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, LAYOUTS, PALETTES,
+  PALETTE_REGISTRY_KEY, SCREEN, TEXT_COLORS,
 } from '../config.js';
 import { ICONS } from '../icons.js';
 import { formatTime, selectionAfterRemoval } from '../logic.js';
@@ -29,9 +29,8 @@ import {
 import * as audio from '../audio.js';
 import {
   createButton, createChoiceRow, createPanel, createTitleBar, createTooltip, createVersionText,
-  drawAcrylic,
+  drawMiniBoard,
 } from '../ui.js';
-import { darken, pieceColor } from './boot.js';
 
 /**
  * 一覧の 1 行の高さと、行どうしの間。文字を大きくしたぶん、行も高くしてある
@@ -121,15 +120,6 @@ const PAGE_TEXT_WIDTH = 64;
  * 固定する（この画面は盤を切り替えても組み直さないため）。
  */
 const CONFIRM = LAYOUTS[BOARDS['8x8'].key].confirm;
-
-/**
- * 完成形のピースの境目の太さ。マスが 44px ほどまで縮むので、盤の
- * `OUTLINE.width`（2）では輪郭として細すぎる。
- */
-const MINI_EDGE = 3;
-
-/** ピース名から定義を引く表。完成形の 60 マスを 1 文字ずつ引く。 */
-const PIECE_BY_NAME = new Map(PIECES.map((piece) => [piece.name, piece]));
 
 /**
  * 行の右端へ出す印（TODO-027）。何に頼って解いた回かを、履歴 1 件の
@@ -639,13 +629,7 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 選んだ回の完成形を縮小して描く。
-   *
-   * `boot.js` のテクスチャを貼らずに `Graphics` で塗るのは、テクスチャが盤と
-   * トレイの大きさで焼いてあり、この画面のマス（44〜56px）に合う 1 枚が
-   * 無いため。縮小して貼ると立体の帯や光の筋がつぶれ、かえって境目が
-   * 分かりにくくなる。**ピースの境目が見分けられること**だけを目当てに、
-   * 塗りと、隣が別のピースになる辺の線だけで描く。
+   * 選んだ回の完成形を縮小して描く（描き方は `drawMiniBoard()`）。
    *
    * 盤面は**番号から引く**（TODO-022）。履歴は 60 マスぶんの文字列を持たない
    * ので、データが届くまでは描けない。
@@ -655,65 +639,6 @@ export default class RecordsScene extends Phaser.Scene {
     if (!entry || this.solutions === null) return;
     const cells = solutionCells(this.solutions, entry.no);
     if (cells === null) return;
-    const board = BOARDS[this.boardKey];
-    const box = L.boardBox;
-    const cell = Math.min(
-      Math.floor(box.width / board.cols),
-      Math.floor(box.height / board.rows),
-    );
-    const originX = box.x + Math.round((box.width - cell * board.cols) / 2);
-    const originY = box.y + Math.round((box.height - cell * board.rows) / 2);
-    const at = (row, col) => (
-      row < 0 || col < 0 || row >= board.rows || col >= board.cols
-        ? null
-        : cells[row * board.cols + col]
-    );
-
-    for (let row = 0; row < board.rows; row += 1) {
-      for (let col = 0; col < board.cols; col += 1) {
-        const ch = at(row, col);
-        const piece = PIECE_BY_NAME.get(ch);
-        // 穴は塗らず、あとでアクリルの板を重ねる（TODO-051）。
-        if (ch === HOLE) continue;
-        let color = COLORS.boardCell;
-        if (piece) color = pieceColor(this.palette, piece);
-        // ネオンは本編と同じく地を沈め、外周だけを明るく残す（TODO-039）。
-        if (piece && this.palette.neon) color = darken(color, NEON.fillDarken);
-        this.mini.fillStyle(color, 1);
-        this.mini.fillRect(originX + col * cell, originY + row * cell, cell, cell);
-      }
-    }
-
-    // 境目は塗り終えてから引く。先に引くと、隣のマスの塗りで消える。
-    for (let row = 0; row < board.rows; row += 1) {
-      for (let col = 0; col < board.cols; col += 1) {
-        const ch = at(row, col);
-        const piece = PIECE_BY_NAME.get(ch);
-        if (!piece) continue;
-        const edge = darken(pieceColor(this.palette, piece), this.palette.outlineDarken);
-        this.mini.lineStyle(MINI_EDGE, edge, 1);
-        const x = originX + col * cell;
-        const y = originY + row * cell;
-        // 内側へ半分寄せて引く。外へはみ出すと隣のピースの塗りにかぶる。
-        const half = MINI_EDGE / 2;
-        if (at(row - 1, col) !== ch) this.mini.lineBetween(x, y + half, x + cell, y + half);
-        if (at(row + 1, col) !== ch) {
-          this.mini.lineBetween(x, y + cell - half, x + cell, y + cell - half);
-        }
-        if (at(row, col - 1) !== ch) this.mini.lineBetween(x + half, y, x + half, y + cell);
-        if (at(row, col + 1) !== ch) {
-          this.mini.lineBetween(x + cell - half, y, x + cell - half, y + cell);
-        }
-      }
-    }
-
-    if (board.hole) {
-      const { hole } = board;
-      drawAcrylic(this.mini, originX + hole.col * cell, originY + hole.row * cell,
-                  hole.cols * cell, hole.rows * cell);
-    }
-
-    this.mini.lineStyle(2, COLORS.panelEdge, 1);
-    this.mini.strokeRect(originX, originY, cell * board.cols, cell * board.rows);
+    drawMiniBoard(this.mini, BOARDS[this.boardKey], cells, this.palette, L.boardBox);
   }
 }
