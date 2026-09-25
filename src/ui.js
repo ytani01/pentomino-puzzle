@@ -79,15 +79,22 @@ export function drawAcrylic(g, x, y, width, height) {
     g.fillPoints(points, true);
   }
 
-  // 右と下の厚み。上と左が明るく下と右が暗い、ピースのマス（`TILE`）に揃える。
-  const th = ACRYLIC.thickness;
-  g.fillStyle(TILE.shadow, ACRYLIC.thicknessAlpha);
-  g.fillRect(x, y + height - th, width, th);
-  g.fillRect(x + width - th, y, th, height - th);
+  // 縁の面取り。上と左を明るく、下と右を暗くして、板が盤から浮き出て見えるように
+  // する（TODO-090）。ピースのマス（`TILE`）と光の向きを揃える。影を外へ落とすと
+  // 周りのマスにかかるので、明暗は板の内側だけに収める。
+  // 幅は板の大きさに比例させる。記録の完成形は盤が小さく、固定の幅では面取りが板を覆う。
+  const b = Math.min(width, height) * ACRYLIC.bevel;
+  const right = x + width;
+  const bottom = y + height;
+  g.fillStyle(ACRYLIC.edge, ACRYLIC.bevelLightAlpha);
+  g.fillPoints([{ x, y }, { x: right, y }, { x: right - b, y: y + b }, { x: x + b, y: y + b }], true);
+  g.fillPoints([{ x, y }, { x: x + b, y: y + b }, { x: x + b, y: bottom - b }, { x, y: bottom }], true);
+  g.fillStyle(TILE.shadow, ACRYLIC.bevelDarkAlpha);
+  g.fillPoints([{ x, y: bottom }, { x: x + b, y: bottom - b }, { x: right - b, y: bottom - b }, { x: right, y: bottom }], true);
+  g.fillPoints([{ x: right, y }, { x: right, y: bottom }, { x: right - b, y: bottom - b }, { x: right - b, y: y + b }], true);
 
-  const inset = ACRYLIC.innerInset;
   g.lineStyle(ACRYLIC.innerWidth, ACRYLIC.edge, ACRYLIC.innerAlpha);
-  g.strokeRect(x + inset, y + inset, width - inset * 2, height - inset * 2);
+  g.strokeRect(x + b, y + b, width - b * 2, height - b * 2);
   const half = ACRYLIC.edgeWidth / 2;
   g.lineStyle(ACRYLIC.edgeWidth, ACRYLIC.edge, ACRYLIC.edgeAlpha);
   g.strokeRect(x + half, y + half, width - ACRYLIC.edgeWidth, height - ACRYLIC.edgeWidth);

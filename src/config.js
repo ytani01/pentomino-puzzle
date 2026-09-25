@@ -535,8 +535,9 @@ export const GLASS = {
  *
  * 穴を暗く塗ると「マスが欠けている」ようにしか見えないので、動かせない
  * 板が嵌まっていると見せる。下の枠（パネル）の地がほぼ透けるよう、塗りは
- * ごく薄い（`fillAlpha`）。板らしさは外周の縁、内側の明るい縁、右下の厚みの影、
- * 斜めの光の筋で出す。筋の位置は `GLASS.streaks` と同じく、板の対角に対する割合。
+ * ごく薄い（`fillAlpha`）。板らしさは外周の縁、内側の明るい縁、斜めの光の筋で出す。
+ * 縁の面取り（`bevel`）は上と左を明るく、下と右を暗く塗り、板を浮き出て見せる（TODO-090）。
+ * 筋の位置は `GLASS.streaks` と同じく、板の対角に対する割合。
  */
 export const ACRYLIC = {
   fill: 0xdfefff,
@@ -544,11 +545,11 @@ export const ACRYLIC = {
   edge: 0xdfefff,
   edgeAlpha: 0.55,
   edgeWidth: 2,
-  innerInset: 5,
   innerAlpha: 0.25,
   innerWidth: 1,
-  thickness: 3,
-  thicknessAlpha: 0.35,
+  bevel: 0.08,  // 面取りの幅。板の短い辺に対する割合
+  bevelLightAlpha: 0.3,
+  bevelDarkAlpha: 0.45,
   streaks: [
     { from: 0.3, to: 0.48, alpha: 0.12 },
     { from: 0.56, to: 0.62, alpha: 0.08 },
