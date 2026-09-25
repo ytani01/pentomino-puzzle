@@ -1,11 +1,11 @@
 /**
- * デモ（TODO-040）。コンピューターが探索でピースを置いたり外したり
- * しながら解に至る様子を、本編と同じ盤とトレイの上で見せる。探し方は
- * ランダム（既定。TODO-075）と深さ優先から HUD で選ぶ（TODO-050・TODO-057）。
+ * デモ（TODO-040）。コンピューターがピースを置いたり外したりしながら
+ * 解に至る様子を、本編と同じ盤とトレイで見せる。探し方はランダム
+ * （既定。TODO-075）と深さ優先から HUD で選ぶ（TODO-050・TODO-057）。
  *
- * 盤・トレイ・ピースの描画は本編（`GameScene`）をそのまま使い回したいので
- * 継承する。`create()` は上書きして描画に要るものだけを組み、入力・ヒント・
- * おまかせ・遊びかけの保存・クリアの判定は持たない。**`storage.js` は呼ばない**
+ * 盤・トレイ・ピースの描画を使い回すため `GameScene` を継承する。
+ * `create()` は描画に要るものだけを組み、入力・ヒント・おまかせ・
+ * 遊びかけの保存・クリアの判定は持たない。**`storage.js` は呼ばない**
  * （記録・遊びかけ・見つけた解に何も残さないため）。本編の `create()` を
  * 通らないので、遊びかけを控える shutdown の処理も登録されない。
  *
@@ -14,23 +14,22 @@
  * （ランダムは手ごとに間隔を揺らす。`pickWaitScale()`。TODO-059）。
  * 1 フレームに 1 手までなので画面は止まらない。
  * 置いたら全解のデータで「解ける／解なし」を調べる。深さ優先は解なしならすぐ
- * 外すが、ランダムは外さずに置き続け、置ける場所が無くなって初めて
- * 「解ける」に戻るまで戻す（TODO-059。人が行き詰まってから考え直すのに近づける）。
- * ただし、5 の倍数でない大きさの閉じた空きができたときなど、置いた瞬間に詰みと
- * 分かるときは、行き詰まりを待たずにその場で外す（`logic.js` の
- * `solveStepsRandom()`。TODO-060・066〜068・077）。外す手が連なる
- * ときは、待たずに 1 フレームずつ続けて戻す（`advance()` の先読み。TODO-060）。
- * 解を見つけたら `DEMO.pauseMs` だけ止まって次へ進む。タイトルへ戻るまで
- * 止まらない（TODO-052）。次の解は盤を片づけて空の盤から探し直し、置いては
- * 外す様子を毎回はじめから見せる（TODO-054）。
+ * 外す。ランダムは置ける場所が無くなるまで置き続け、そこから「解ける」に
+ * 戻るまで外す（TODO-059。人が行き詰まってから考え直す動きに近づける）。
+ * ただし、5 の倍数でない大きさの閉じた空きができたときなど、置いた瞬間に
+ * 詰みと分かるときはその場で外す（`solveStepsRandom()`。TODO-060・066〜068・077）。
+ * 外す手が連なるときは、待たずに 1 フレームずつ続けて外す（`advance()` の
+ * 先読み。TODO-060）。
+ * 解を見つけたら `DEMO.pauseMs` だけ止まって次へ進み、タイトルへ戻るまで
+ * 続ける（TODO-052）。次の解は空の盤から探し直し、置いては外す様子を毎回
+ * はじめから見せる（TODO-054）。
  * ヒント表示を入にして解く人と同じ動きで、HUD にも本編のヒント表示と同じ
- * 文字を出す（TODO-043）。解につながる手だけを選んで置かないのは、それだと
- * 試行錯誤に見えなくなるため。全解のデータが届くまでは探索を始めない。
+ * 文字を出す（TODO-043）。解につながる手だけを選ばないのは、試行錯誤に
+ * 見えなくなるため。全解のデータが届くまでは探索を始めない。
  *
- * ランダム・`animate` の速さで置くときは、盤へ滑らせる前にトレイでの今の
- * 向きから置く向きまで、最短の回転・裏返しで回して見せる（`playTurns()`。
- * TODO-065）。人は手に取って向きを合わせてから置くため。最速と深さ優先は
- * 回さない。
+ * ランダム・`animate` の速さで置くときは、盤へ滑らせる前に、トレイでの今の
+ * 向きから置く向きまで最短の回転・裏返しで回して見せる（`playTurns()`。
+ * TODO-065）。人は向きを合わせてから置くため。最速と深さ優先は回さない。
  */
 
 import {
@@ -85,13 +84,12 @@ export default class DemoScene extends GameScene {
     this.waited = 0;
     // 次の 1 手までの待ち時間に掛ける倍率。ランダムのときだけ 1 以外になる（TODO-059）。
     this.waitScale = 1;
-    // 1 手先読みした generator の結果（TODO-060）。外す手が連なるときだけ
-    // 待たせないため、置いた／外した直後に先読みして持っておく。
+    // 1 手先読みした generator の結果（TODO-060）。外す手が連なるときに
+    // 待たせないため、手を仕上げた直後に読んでおく。
     this.peeked = null;
-    // ランダムで置く前に向きを回して見せている間の予約（TODO-065）。
-    // `turning` は今仕上げるべき手（`{ piece, value, animate }`）、`turnTimer` は
-    // 次の段まで待つ delayedCall。速さ・探し方の切り替え、次の解へ、で
-    // 押されたときに `cancelTurn()` から使う。
+    // 置く前に向きを回して見せている間の予約（TODO-065）。`turning` は
+    // 仕上げる手（`{ piece, value, animate }`）、`turnTimer` は次の段までの
+    // delayedCall。`cancelTurn()` が使う。
     this.turning = null;
     this.turnTimer = null;
 
@@ -99,16 +97,16 @@ export default class DemoScene extends GameScene {
     this.drawTray();
     this.createPieces();
     this.pieceByName = new Map(this.pieces.map((piece) => [piece.name, piece]));
-    // 押せる見た目（指のカーソル）を出さない。`createPieces()` がマスごとに付けている。
+    // 指のカーソルを出さない。`createPieces()` がマスごとに付けている。
     for (const piece of this.pieces) piece.tiles.forEach((tile) => tile.disableInteractive());
     this.createHud();
     this.createMessage();
     createVersionText(this);
     this.refreshHud();
 
-    // シーンを離れたあとに届くことがあるので、生きているかを確かめてから使う。
-    // Phaser はシーンを使い回すので、入り直したあとに前回の分が遅れて届くことも
-    // ある。探索を始めたあと・別の盤の表なら捨てる（盤のピースと食い違うため）。
+    // シーンを離れたあとに届くことがある。Phaser はシーンを使い回すので、
+    // 入り直したあとに前回の分が遅れて届くこともある。探索を始めたあとや
+    // 別の盤の表なら捨てる（盤のピースと食い違うため）。
     ensureSolutions(this.registry, this.spec).then((solutions) => {
       if (!this.scene.isActive() || this.state !== 'loading') return;
       if (solutions.spec.key !== this.spec.key) return;
@@ -120,10 +118,9 @@ export default class DemoScene extends GameScene {
   update(_time, delta) {
     if (this.state === 'loading') return;
     // 回している間（`this.turning`）は `playTurns()` の delayedCall が段を
-    // 進めるので、ここでは待ちを数えない（TODO-065）。数えたままだと、回す時間
-    // （1〜3 段）が前の手の待ち時間を超えたときに、回し終わる前に次の
-    // `advance()` が走ってしまう（レビューの要修正 1）。回し終えて
-    // `finishStep()` してから数え始めれば、回した時間は自然に次の待ちへ足される。
+    // 進めるので、待ちを数えない（TODO-065）。数えると、回す時間（1〜3 段）が
+    // 待ち時間を超えたときに、回し終わる前に次の `advance()` が走る。
+    // `finishStep()` のあとから数えれば、回した時間は次の待ちに足される。
     if (this.turning) return;
     this.waited += delta;
     if (this.state !== 'running') {
@@ -131,7 +128,7 @@ export default class DemoScene extends GameScene {
       if (this.waited >= DEMO.pauseMs) this.startSearch();
       return;
     }
-    // 追いつくために何手もまとめて進めない。1 手ずつ見せるのが目的なので。
+    // 遅れても何手もまとめて進めない。1 手ずつ見せるのが目的なので。
     if (this.waited < DEMO.speeds[this.speed].intervalMs * this.waitScale) return;
     this.waited = 0;
     this.advance();
@@ -139,14 +136,13 @@ export default class DemoScene extends GameScene {
 
   /**
    * 次の 1 手までの待ち時間の倍率を、1 手ごとに 1 回だけ引く（TODO-059）。
-   * `update()` で毎フレーム引き直すと、早く下回った値で進んでしまい平均が縮む。
-   * 間隔そのものでなく倍率で持つのは、途中で速さを変えてもすぐ効くようにするため。
-   * ランダムのときだけ揺らして機械的な等間隔を崩す。深さ優先は一定
-   * （もともと機械的な動きでよいものなので）。最速（`intervalMs: 0`）は
-   * 何を掛けても 0 なので、毎フレーム進む今の動きのまま。
-   * 外す手が連なるとき（今の手も次に先読みした手も `remove`）は、
-   * `advance()` がこれを呼ばずに 0 にする。連なりを待たずに続けて動かすため
-   * （TODO-060）。`place → remove` はここで引いた値で待つ（置いた手を画面に出すため）。
+   * `update()` で毎フレーム引き直すと、小さい値が出た時点で進んで平均が縮む。
+   * 間隔でなく倍率で持つのは、途中で速さを変えてもすぐ効かせるため。
+   * 揺らすのはランダムだけで、機械的な等間隔を崩すため。深さ優先は機械的で
+   * よいので一定。最速（`intervalMs: 0`）は何を掛けても 0 で、毎フレーム進む。
+   * 外す手が連なるとき（今の手も先読みした手も `remove`）は、これを呼ばずに
+   * 0 にして続けて動かす（TODO-060）。`place → remove` はここで引いた値で待つ
+   * （置いた手を画面に出すため）。
    */
   pickWaitScale(moveType) {
     if (this.strategy !== 'random') return 1;
@@ -155,15 +151,13 @@ export default class DemoScene extends GameScene {
   }
 
   /**
-   * generator を 1 手進め、動いたピースを今の位置へ移す。解を見つけたら
-   * そこで止める。generator が尽きたら黙って空の盤から探し直す（どちらの
-   * 探し方もデモでは解のたびに作り直すので、尽きるところまで来ない。万一の備え）。
-   * 先読み（`this.peeked`）があればそれを使い、無ければここで 1 手引く
-   * （初回や `startSearch()` 直後）。
+   * generator が尽きたら黙って空の盤から探し直す（解のたびに作り直すので
+   * 尽きることはない。万一の備え）。先読み（`this.peeked`）が無ければ
+   * ここで 1 手引く（初回や `startSearch()` 直後）。
    *
-   * ランダムで `animate` の place は、盤へ滑らせる前にトレイでの今の向きから
-   * 置く向きまで回して見せる（`playTurns()`。TODO-065）。回すものが無ければ
-   * （同じ向き、深さ優先、remove、最速）今までどおりその場で仕上げる。
+   * ランダムで `animate` の place は、盤へ滑らせる前に置く向きまで回して
+   * 見せる（`playTurns()`。TODO-065）。回すものが無ければ（同じ向き、
+   * 深さ優先、remove、最速）その場で仕上げる。
    */
   advance() {
     const { value, done } = this.peeked ?? this.steps.next();
@@ -189,9 +183,9 @@ export default class DemoScene extends GameScene {
   }
 
   /**
-   * 向きを 1 段ずつ変えて見せる（TODO-065）。トレイの位置のまま
-   * `refreshPiece()` で描き直し、回転か裏返しかで音を分ける。最後の段まで
-   * 進んだら `finishStep()` で今までどおり盤へ滑らせる。
+   * 向きを 1 段ずつ変えて見せる（TODO-065）。トレイの位置のまま描き直し、
+   * 回転か裏返しかで音を分ける。最後の段まで進んだら `finishStep()` で
+   * 盤へ滑らせる。
    */
   playTurns(piece, steps, index, value, animate) {
     const step = steps[index];
@@ -212,10 +206,9 @@ export default class DemoScene extends GameScene {
   }
 
   /**
-   * 予約が残っているなら、その場で仕上げてから止める（TODO-065）。速さ・
-   * 探し方の切り替え、次の解へ、で押されたときに呼ぶ。タイトルへ戻る
-   * （シーンの切り替え）は `scene.time` ごと止まるので、ここを通らなくてよい。
-   * 残りの段を飛ばして最終の向きへ直接進める（宙ぶらりんのまま止めない）。
+   * 回している途中なら、残りの段を飛ばして最後の向きで仕上げる
+   * （宙ぶらりんのまま止めない。TODO-065）。速さ・探し方の切り替えと
+   * 次の解へで呼ぶ。タイトルへ戻るときは `scene.time` ごと止まるので要らない。
    */
   cancelTurn() {
     if (!this.turnTimer) return;
@@ -237,30 +230,28 @@ export default class DemoScene extends GameScene {
       piece.col = value.col;
       if (animate) audio.drop();
       const hintState = value.ok ? 'ok' : 'dead';
-      // 本編と同じく、解なしに変わった瞬間に鳴らす（本編でヒント表示を入に
-      // して解なしの手を置いたときと同じ）。深さ優先は解なしの手をすぐ外して
-      // 「解ける」に戻るので置くたびに鳴る。ランダムは解なしのまま置き続けるので、
-      // 一度鳴ったら、戻って「解ける」に戻るまでは鳴らない（TODO-059）。
+      // 本編と同じく、解なしに変わった瞬間に鳴らす。深さ優先は解なしの手を
+      // すぐ外すので置くたびに鳴る。ランダムは解なしのまま置き続けるので、
+      // 「解ける」に戻るまでは 2 度目を鳴らさない（TODO-059）。
       if (animate && hintState === 'dead' && this.hintState !== 'dead') audio.invalid();
       this.hintState = hintState;
     } else {
       // 向きは最後に試したまま、自分のスロットへ戻す。
       piece.location = 'tray';
       if (animate) audio.lift();
-      // ランダムは外した後の盤面の `canContinue` を運ぶ（TODO-059）。深さ優先の
-      // `remove` には `ok` が無く、外した先は必ず「解ける」に潜った盤面なので 'ok'。
+      // ランダムの `ok` は外した後の盤面の `canContinue`（TODO-059）。深さ優先の
+      // `remove` には `ok` が無く、外した先は必ず「解ける」盤面なので 'ok'。
       this.hintState = value.ok === false ? 'dead' : 'ok';
     }
     this.refreshPiece(piece);
     this.settlePiece(piece, animate);
-    // ボタンは状態が変わったときだけ（`onSolved()`・`startSearch()`）。毎手
-    // 塗り直すと、値が同じでも Phaser が文字を描き直してしまうため。
+    // ボタンは状態が変わったときだけ塗り直す（`onSolved()`・`startSearch()`）。
+    // 毎手塗ると、値が同じでも Phaser が文字を描き直すため。
     this.refreshStatus();
-    // 次の手を先読みし、今の手も次の手も remove（外す手が連なる）ときだけ
-    // 待たせない（TODO-060）。`place → remove` は今までどおり
-    // `pickWaitScale('place')` の間隔で待つ（置いたピースが Tween で盤に
-    // 届く前に `remove` 側の `killTweensOf()` に止められると、置いた手が
-    // 画面にほぼ出ないため。`DEMO.speeds` の JSDoc の設計を保つ）。
+    // 今の手も先読みした次の手も remove のときだけ待たせない（TODO-060）。
+    // `place → remove` は `pickWaitScale('place')` の間隔で待つ（置いたピースが
+    // 盤に届く前に `remove` 側の `killTweensOf()` で止められると、置いた手が
+    // 画面にほぼ出ないため。`DEMO.speeds` の JSDoc を参照）。
     this.peeked = this.steps.next();
     const nextIsRemove = !this.peeked.done && this.peeked.value.type === 'remove';
     const skipWait = value.type === 'remove' && nextIsRemove;
@@ -273,8 +264,7 @@ export default class DemoScene extends GameScene {
     // 本編がトレイの残り 0 で消すのに合わせる。
     this.hintState = null;
     audio.fanfare();
-    // `showMessage()` は時間が経つと消えるので使わず、同じ文字を直接書く。
-    // 止まっている間は出したままにする。
+    // 止まっている間は出したままにしたいので、時間で消える `showMessage()` は使わない。
     this.messageText.setText(`解けた！ ${this.tried.toLocaleString('en-US')} 手目`);
     this.refreshHud();
   }
@@ -293,8 +283,8 @@ export default class DemoScene extends GameScene {
       fontSize: `${FONT.hud}px`,
       color: TEXT_COLORS.normal,
     }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
-    // 本編のヒント表示と同じ札（TODO-045）。本編の位置（`statusX`）には
-    // 試した手がかかるので、1 段目の右端に寄せる。
+    // 本編のヒント表示と同じ札（TODO-045）。本編の位置（`statusX`）では
+    // 試した手と重なるので、1 段目の右端に寄せる。
     this.hintBadge = createHintBadge(
       this, hud.x + hud.width - hud.padding, hud.y + hud.rowHeight / 2, 1,
     ).setDepth(DEPTH.hud);
@@ -322,7 +312,7 @@ export default class DemoScene extends GameScene {
     this.nextButton.setEnabled(this.state === 'solved');
   }
 
-  /** 1 段目の文字だけ。探索が進むたびに毎フレーム呼ぶ。 */
+  /** 1 段目の文字だけ。1 手ごとに呼ぶ。 */
   refreshStatus() {
     this.statusText.setText(
       `試した手 ${this.tried.toLocaleString('en-US')}　見つけた解 ${this.solvedCount}`,
@@ -334,8 +324,7 @@ export default class DemoScene extends GameScene {
 
   selectSpeed(speed) {
     audio.button();
-    // 回している途中の予約を残さない（TODO-065）。`startSearch()` を呼ばない
-    // ここだけは明示して止める。
+    // 回している途中の予約を残さない（TODO-065）。`startSearch()` を通らないので、ここで止める。
     this.cancelTurn();
     this.speed = speed;
     // 止まっている間は待ち時間を数え直さない（速さを変えるたびに延びるため）。
@@ -344,9 +333,9 @@ export default class DemoScene extends GameScene {
   }
 
   /**
-   * 探し方を切り替えて空の盤から探し直す。途中から続けないのは、2 つの
-   * 探し方で盤面の辿り方が違い、今の盤面を引き継げないため。全解のデータを
-   * 待っている間は探し方だけ変え、届いたときに `startSearch()` が使う。
+   * 探し方を切り替えて空の盤から探し直す。途中から続けないのは、2 つの探し方で
+   * 盤面の辿り方が違い、今の盤面を引き継げないため。全解のデータを待っている間は
+   * 探し方だけ変え、届いたときに `startSearch()` が使う。
    */
   toggleStrategy() {
     audio.button();
@@ -359,11 +348,11 @@ export default class DemoScene extends GameScene {
   }
 
   /**
-   * 探し直すときは、盤のピースを滑らせずにトレイへ戻す。何枚も同時に滑らせると
-   * 探索の 1 手と見分けがつかず、次の探索の最初の手とも重なるため。
+   * 盤のピースは滑らせずにトレイへ戻す。何枚も同時に滑らせると探索の 1 手と
+   * 見分けがつかず、次の探索の最初の手とも重なるため。
    * 見つけた解の数は戻さない。解のたびに探し直すので、戻すと 0 か 1 にしかならない。
-   * 回している途中の予約も、ここで仕上げてから止める（`toggleStrategy()`・
-   * `searchNext()` の両方がここを通るため。TODO-065）。
+   * 回している途中の予約もここで仕上げる（`toggleStrategy()`・`searchNext()` の
+   * 両方が通るため。TODO-065）。
    */
   startSearch() {
     this.cancelTurn();
@@ -382,8 +371,7 @@ export default class DemoScene extends GameScene {
     this.hintState = 'ok';
     this.waited = 0;
     this.waitScale = 1;
-    // 前の generator の先読みを持ち越さない（探し方の切り替え・解のあとの
-    // 探し直しでは新しい generator の最初の手から読むため。TODO-060）。
+    // 前の generator の先読みを持ち越さない（TODO-060）。
     this.peeked = null;
     this.messageText.setText('');
     this.refreshHud();

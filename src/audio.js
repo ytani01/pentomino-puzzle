@@ -1,9 +1,8 @@
 /**
  * 効果音。アセットファイルを持たずに Web Audio API で合成する。
  *
- * AudioContext とミュートの状態だけはモジュールに持たせている。
- * シーンをまたいでも同じ出力先とミュート設定を使い続ける必要があり、
- * ゲームの進行（＝シーンのプロパティ）とは別のものだから。
+ * AudioContext とミュートの状態はモジュールに持たせる。シーンをまたいで
+ * 使い続けるもので、ゲームの進行（シーンのプロパティ）とは別だから。
  */
 
 let context = null;
@@ -11,7 +10,7 @@ let muted = false;
 
 /**
  * 最初のユーザー操作から呼ぶ。ブラウザは操作をきっかけにしないと
- * AudioContext を鳴らせる状態にしてくれない。
+ * AudioContext を鳴らせる状態にしない。
  */
 export function unlock() {
   try {
@@ -44,8 +43,7 @@ export function toggleMuted() {
 
 /**
  * 単音を 1 つ鳴らす。`freqTo` を渡すと音程を滑らせる。
- * エンベロープを毎回作るのは、鳴り終わったノードを使い回さず捨てるため
- * （ノードの寿命を気にせずに済む）。
+ * ノードは毎回作って鳴り終わったら捨てる。使い回さないので寿命を気にせずに済む。
  */
 function tone({ freq, freqTo = null, type = 'sine', delay = 0, duration = 0.12, gain = 0.12 }) {
   if (!context || muted) return;

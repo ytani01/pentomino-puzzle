@@ -2,16 +2,14 @@
  * 盤の全解を数え上げる（TODO-022）。**開発時にだけ動かすもの**で、
  * 遊ぶ側（`src/`）からは読まない。`tools/gen-solutions.mjs` が使う。
  *
- * 元は `src/solver.js`（ヒント用の求解）で、深さ優先に次の 2 つの枝刈りを
- * 足しただけの素朴な作り。ここへ移すにあたって「1 解見つけたら止める」のを
- * やめ、全部拾うようにしただけで、探索そのものは同じ。
+ * 深さ優先に次の 2 つの枝刈りを足しただけの素朴な作り（元は `src/solver.js`）。
  *
  *   - 空きマスのうち一番若い位置を必ず埋める（同じ配置を順番違いで何度も試さない）
  *   - 空き領域を連結成分に分け、5 で割り切れない塊があればその枝を捨てる
  *
  * **速くする工夫はしない。** 作るのは 1 回だけなので、6×10 に 2 分半かかっても
- * 構わない（Dancing Links を持ち込む、探索順を練る、といったことをしない）。
- * 試行回数の上限も持たない——最後まで数え上げるのが仕事なので、打ち切る意味が無い。
+ * 構わない（Dancing Links や探索順の工夫は持ち込まない）。最後まで数え上げるのが
+ * 仕事なので、試行回数の上限も持たない。
  */
 
 import './window-shim.mjs';
@@ -51,8 +49,8 @@ export function enumerateSolutions(spec) {
     for (let pick = 0; pick < unused.length; pick += 1) {
       const name = unused[pick];
       for (const shape of shapes.get(name)) {
-        // 正規形は行優先に並んでいるので、目標のマスを覆えるのは先頭のセルだけ。
-        // （それより前のセルがあれば、目標より若い空きマスが残っていることになる）
+        // 正規形は行優先に並んでいるので、目標のマスを覆えるのは先頭のセルだけ
+        // （それより前のセルがあれば、目標より若い空きマスが残っていることになる）。
         const row = targetRow - shape[0][0];
         const col = targetCol - shape[0][1];
         if (!fits(grid, rows, cols, shape, row, col)) continue;
@@ -75,9 +73,9 @@ export function enumerateSolutions(spec) {
 /**
  * 代表形だけを、**文字列の昇順**に並べて返す。
  *
- * 昇順に固定するのは、この並びの順番（1 から数える）がそのまま解の番号になり、
- * 記録の保存に使うため。代表形は `canonicalBoard()` で一意に決まるので、
- * 作り直しても同じ並び＝同じ番号になる。
+ * この並びの順番（1 から数える）がそのまま解の番号で、記録の保存に使うため、
+ * 昇順に固定する。代表形は `canonicalBoard()` で一意に決まるので、作り直しても
+ * 同じ並び＝同じ番号になる。
  */
 export function canonicalSolutions(spec) {
   const all = enumerateSolutions(spec);

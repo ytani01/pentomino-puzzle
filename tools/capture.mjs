@@ -9,8 +9,8 @@
 //     node tools/capture.mjs
 //
 // 出力は docs/images/。番号付きの丸と吹き出しは、撮る直前に Canvas の上へ
-// HTML で重ねる。画像を後から描き足すと、画面が変わるたびに座標を合わせ直す
-// ことになるため。位置はシーンの部品（getBounds()）から取る。
+// HTML で重ねる（画像に後から描き足すと、画面が変わるたびに座標を合わせ直す
+// ことになるため）。位置はシーンの部品（getBounds()）から取る。
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -55,10 +55,10 @@ async function autoPlace(page, n) {
 }
 
 /**
- * 注記を重ねる。`at` はシーン `s` から部品（か部品の配列、か {x, y, width, height}）
- * を返す式。`text` があれば吹き出しを `side` の向きへ出し、無ければ丸だけを
+ * 注記を重ねる。`at` はシーン `s` から部品（部品の配列、{x, y, width, height} でも
+ * よい）を返す式。`text` があれば吹き出しを `side` の向きへ出し、無ければ丸だけを
  * 部品の枠の内側の左端に付ける（説明は文書の表に任せる）。`text` が無くても
- * `side` があれば、丸だけを部品の外へ出して線で指す（丸で隠れてしまう小さなボタン用）。
+ * `side` があれば、丸だけを部品の外へ出して線で指す（丸で隠れる小さなボタン用）。
  */
 async function annotate(page, sceneKey, notes) {
   await page.evaluate(({ sceneKey, notes }) => {
@@ -210,7 +210,7 @@ async function shot(page, name) {
     { n: 'A', at: 's.timeText', text: '経過時間', side: 'top', dist: 14 },
     { n: 'B', at: 's.remainText', text: 'トレイの残り', side: 'top', dist: 14 },
     { n: 'C', at: BADGE, text: '解ける／解なし', side: 'right', dist: 16 },
-    // ボタンの幅を詰めてから（TODO-076）は丸がアイコンに重なるので、下へ出して指す。
+    // ボタンの幅を詰めた（TODO-076）ので、丸がアイコンに重ならないよう下へ出して指す。
     ...[1, 2, 3, 4, 5, 6].map((n) => ({ n, at: `s.buttons[${n - 1}]`, side: 'bottom', dist: 14 })),
     { n: 'D', at: panel('boardPanel'), text: '盤', side: 'bottom', dist: 8 },
     { n: 'E', at: panel('trayPanel'), text: 'トレイ', side: 'bottom', dist: 8 },
@@ -269,7 +269,7 @@ async function shot(page, name) {
   await go(page, 'Demo');
   await page.evaluate(() => { window.game.scene.getScene('Demo').selectSpeed('fast'); });
   // 札が出ている瞬間で止める。既定のランダムは「解なし」のまま置き続けるので、
-  // 「解ける」を待つと長く待つことがある（TODO-075）。札が空になるのは解けたときだけ。
+  // 「解ける」を待つと長くかかることがある（TODO-075）。札が空になるのは解けたときだけ。
   await page.waitForTimeout(4000);
   await page.waitForFunction(() => {
     const s = window.game.scene.getScene('Demo');

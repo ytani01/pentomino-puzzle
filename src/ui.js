@@ -1,8 +1,7 @@
 /**
  * 画面部品（ボタンと枠）の組み立て。
  *
- * タイトル・本編・クリア・記録・デモの 5 シーンが同じ見た目のボタンを使うので、
- * 同じ描画をシーンごとに書かずに済むようここへ寄せた。
+ * 5 つのシーンが同じ見た目のボタンを使うので、描画をここへまとめる。
  * 状態はモジュールに持たず、作った Container のプロパティに持たせる。
  */
 
@@ -11,8 +10,8 @@ import {
 } from './config.js';
 
 /**
- * 右下にバージョンを出す。問い合わせのときにどの版かを画面から読めるように、
- * すべての画面に同じ位置で出す（TODO-041）。
+ * 右下にバージョンを出す。問い合わせのときにどの版かを画面から読めるよう、
+ * すべての画面の同じ位置に出す（TODO-041）。
  */
 export function createVersionText(scene) {
   return scene.add.text(SCREEN.width - 12, SCREEN.height - 12, VERSION, {
@@ -26,9 +25,9 @@ export function createVersionText(scene) {
  * 縦に積む部品の上端 `y` をまとめて出す。
  *
  * 内部解像度が画面の向きで変わるので（TODO-011）、タイトルとクリアの画面は
- * 固定の `y` を持てない。高さと、次の部品までの間隔だけを並べておき、
- * 余った高さを上下へ配る。`bias` は余りのうち上へ回す割合で、0 なら上寄せ、
- * 1 なら下寄せ、0.5 で中央。横画面での今までの位置を保つ値を各シーンが渡す。
+ * 固定の `y` を持てない。高さと次の部品までの間隔だけを並べ、余った高さを
+ * 上下へ配る。`bias` は余りのうち上へ回す割合で、0 なら上寄せ、1 なら下寄せ、
+ * 0.5 で中央。横画面での位置を保つ値を各シーンが渡す。
  *
  * @param {{height: number, gap: number}[]} rows 上から順の部品
  * @param {number} available 収める範囲の高さ
@@ -56,12 +55,12 @@ export function createPanel(scene, x, y, width, height, radius = 10) {
 }
 
 /**
- * 穴に嵌めた透明アクリルふうの板（TODO-051）。本編（デモも使い回す）と
- * 記録の完成形の 2 か所で同じ見た目にするため、ここに置く。
+ * 穴に嵌めた透明アクリルふうの板（TODO-051）。本編（デモも使う）と記録の
+ * 完成形で同じ見た目にするため、ここに置く。
  *
- * 光の筋は板の外へはみ出さないよう、対角に沿った帯を矩形で切った多角形で
- * 塗る（Graphics の塗りに切り抜きが無いため）。`x + y = t` の線が矩形を
- * 横切る 2 点を結び、帯が角をまたぐときだけその角を頂点に足す。
+ * Graphics の塗りには切り抜きが無いので、光の筋は対角の帯を矩形で切った多角形で
+ * 塗り、板の外へはみ出さないようにする。`x + y = t` の線が矩形を横切る 2 点を
+ * 結び、帯が角をまたぐときだけその角を頂点に足す。
  */
 export function drawAcrylic(g, x, y, width, height) {
   g.fillStyle(ACRYLIC.fill, ACRYLIC.fillAlpha);
@@ -80,7 +79,7 @@ export function drawAcrylic(g, x, y, width, height) {
     g.fillPoints(points, true);
   }
 
-  // 右と下の厚み。上と左を明るく、下と右を暗くするピースのマス（`TILE`）に揃える。
+  // 右と下の厚み。上と左が明るく下と右が暗い、ピースのマス（`TILE`）に揃える。
   const th = ACRYLIC.thickness;
   g.fillStyle(TILE.shadow, ACRYLIC.thicknessAlpha);
   g.fillRect(x, y + height - th, width, th);
@@ -96,11 +95,11 @@ export function drawAcrylic(g, x, y, width, height) {
 
 /**
  * ヒント表示の「解ける／解なし」の札（TODO-045）。本編とデモの両方が使うので
- * ここに 1 つだけ置き、文言（`ok`→解ける、`dead`→解なし）の対応もここにだけ持つ。
+ * ここに置き、文言（`ok`→解ける、`dead`→解なし）の対応もここだけに持つ。
  *
- * 角丸の帯 + 文字で、色は `ok` が緑（`COLORS.success`）、`dead` が赤
- * （`COLORS.danger`）。幅は文字に合わせて `setState()` のたびに測り直す
- * （「解ける」「解なし」は同じ文字数だが、フォントの実測に委ねたほうが確実）。
+ * 角丸の帯 + 文字で、`ok` は緑（`COLORS.success`）、`dead` は赤（`COLORS.danger`）。
+ * 幅は `setState()` のたびに文字を測り直して決める（2 つの文言は同じ文字数だが、
+ * フォントの実測に任せたほうが確実）。
  *
  * `originX` は 0 で `x` を左端、1 で右端に固定する（本編は左寄せ、デモは
  * 右寄せで置くため）。`state` に `null` を渡すと帯ごと隠す。
@@ -153,9 +152,8 @@ const CHOICE_BUTTON = {
  * ラベル 1 つと、選択肢ぶんのボタンを 1 行に並べる。中心を `(cx, y)` に置く。
  * 戻り値のボタンには選択肢のキーを持たせ、選び直したときの塗り分けに使う。
  *
- * タイトルの盤・色の選択だけだった頃はあちらの private メソッドだったが、
- * 記録の画面（TODO-008）も盤を切り替えるのに同じ行を使うのでここへ寄せた。
- * 「今どれが選ばれているか」の見え方を 2 つの画面で揃えるため。
+ * タイトルと記録の画面（TODO-008）が同じ行を使い、どれを選んでいるかの見え方を
+ * 揃える。
  *
  * 選択肢に `icon` があれば文字の代わりに図を描き、`tooltip` があれば説明を出す
  * （タイトルの盤・色。TODO-046）。図にするなら名前を説明に回すこと。
@@ -190,20 +188,19 @@ export function createChoiceRow(scene, cx, y, label, choices, onSelect) {
  * ボタン。中心を `(x, y)` に置く。
  *
  * 戻り値の Container には `setEnabled()`・`setLabel()`・`setSelected()`・
- * `setMark()` を生やしてある。ヒントや Undo は押せない場面があるので押せるか
- * どうかを、タイトルの盤の選択は 2 つのうちどちらを選んでいるかを、見た目に
- * 出す必要がある。
+ * `setMark()` を生やしてある。押せるかどうか（ヒントや Undo）や、どれを選んで
+ * いるか（タイトルの盤の選択）を見た目に出すため。
  *
  * `align` を `'left'` にすると、ラベルを左端から `PAD` だけ空けて左寄せにし、
- * `mark`（あれば）を右端へ右寄せで置く（TODO-027）。記録の一覧の行のように、
- * **中身の長さが行ごとに変わる**ところで使う——中央寄せのままだと、印の
- * 有無で日時や時間の位置が行ごとにずれて読みにくい。
+ * `mark`（あれば）を右端へ右寄せで置く（TODO-027）。記録の一覧の行のように
+ * **中身の長さが行ごとに変わる**ところで使う。中央寄せのままだと、印の有無で
+ * 日時や時間の位置が行ごとにずれて読みにくい。
  *
  * `icon`（`icons.js` の描画関数）を渡すと、文字の代わりにアイコンを描く。
- * HUD のボタンは 6 個並べると文字が窮屈になるため（TODO-042）。アイコンだけでは
- * 何のボタンか分からないことがあるので、`tooltip` に説明を渡すと、マウスでは
- * 載せたとき、タッチでは押したときに `scene.tooltip`（`createTooltip()` で作る。
- * 1 シーンに 1 つ）へ出す。`setIcon()`・`setTooltip()` で差し替えられる。
+ * HUD のボタンを 6 個並べると文字が窮屈になるため（TODO-042）。アイコンだけでは
+ * 分かりにくいので、`tooltip` に説明を渡すと、マウスでは載せたとき、タッチでは
+ * 押したときに `scene.tooltip`（`createTooltip()` で作る。1 シーンに 1 つ）へ出す。
+ * `setIcon()`・`setTooltip()` で差し替えられる。
  */
 
 /** 左寄せのボタンで、ラベル・印と枠の間に空ける分。 */
@@ -225,7 +222,7 @@ export function createButton(scene, options) {
     fontSize: `${fontSize}px`,
     color: TEXT_COLORS.normal,
   }).setOrigin(left ? 0 : 0.5, 0.5);
-  // 印はラベルより 1 段落として出す（行の主役は日時と時間なので）。
+  // 印はラベルより 1 段控えめに出す（行の主役は日時と時間なので）。
   const markText = scene.add.text(width / 2 - BUTTON_PAD, 0, mark, {
     fontFamily: FONT.family,
     fontSize: `${Math.round(fontSize * 0.85)}px`,
@@ -239,8 +236,8 @@ export function createButton(scene, options) {
   container.selected = false;
 
   const redraw = () => {
-    // 選んである状態は「押し込んだ面 + 強調色の枠と文字」で出す。塗りだけ
-    // 変えても、隣に並べたときにどちらを選んでいるか一目で分からないため。
+    // 選んだ状態は「押し込んだ面 + 強調色の枠と文字」で出す。塗りだけでは、
+    // 並べたときにどれを選んでいるか一目で分からないため。
     let fill = COLORS.buttonFace;
     if (!container.enabled) fill = COLORS.panel;
     else if (container.pressed || container.selected) fill = COLORS.buttonFaceDown;
@@ -264,8 +261,8 @@ export function createButton(scene, options) {
     else if (container.selected) iconColor = COLORS.accent;
     iconGraphics.clear();
     if (icon) icon(iconGraphics, iconColor);
-    // 印もラベルと同じ状態に連れていく。選んだ行だけ印が地の色のまま残ると、
-    // 行が選ばれていることが伝わりにくい（TODO-027）。
+    // 印もラベルと同じ規則で色を変える。選んだ行の印が地の色のままだと、
+    // 選ばれていることが伝わりにくい（TODO-027）。
     let markColor = TEXT_COLORS.dim;
     if (!container.enabled) markColor = TEXT_COLORS.disabled;
     else if (container.selected) markColor = TEXT_COLORS.accent;
@@ -275,10 +272,9 @@ export function createButton(scene, options) {
   container.setSize(width, height);
   container.setInteractive({ useHandCursor: true });
   // 説明はマウスとタッチで出し方を分ける（`pointer.wasTouch` で見分ける）。
-  // Phaser はタッチでも over / out を出すので、タッチの over では出さず、
+  // Phaser はタッチでも over / out を出すので、タッチでは over で出さず、
   // out でも消さない（押した直後に出した説明を、指を離したときの out で
-  // すぐ消してしまわないため）。押せないボタンでも出す——なぜ押せないかは
-  // 分からなくても、何のボタンかは分かるように。
+  // 消さないため）。押せないボタンでも、何のボタンかは分かるように出す。
   const tip = () => (tooltip ? scene.tooltip : null);
   container.on('pointerover', (pointer) => {
     container.hovered = true;
@@ -291,10 +287,10 @@ export function createButton(scene, options) {
     redraw();
     if (!pointer.wasTouch) tip()?.hide();
   });
-  // ドラッグ中は HUD のボタンを受けない（利用者が決めた。TODO-069）。
-  // ドラッグ中の 2 本目の指はどこを押しても向きの変更だけにするため、
-  // ボタンの上に乗っても `onClick` を走らせない（`scene.drag` は本編・
-  // デモだけが持つので、他の画面では常に偽で今までどおり動く）。
+  // ドラッグ中はボタンを受けない（利用者が決めた。TODO-069）。
+  // 2 本目の指はどこを押しても向きの変更だけにするため、ボタンの上でも
+  // `onClick` を走らせない（`scene.drag` は本編とデモだけが持つので、
+  // 他の画面では常に偽）。
   container.on('pointerdown', () => {
     if (scene.drag) return;
     container.pressed = true;
@@ -345,9 +341,8 @@ export function createButton(scene, options) {
 
 /**
  * ボタンの説明を出す枠。**1 シーンに 1 つだけ作り、シーンの `tooltip` に持たせる**
- * （TODO-042）。ボタンごとに作ると、隣のボタンへ移ったときに前の説明が
- * 残って重なりうるため。状態（消すまでのタイマー）も
- * この Container に持たせ、モジュールには置かない。
+ * （TODO-042）。ボタンごとに作ると、隣のボタンへ移ったときに前の説明が残って
+ * 重なりうるため。状態（消すまでのタイマー）もこの Container に持たせる。
  *
  * HUD は画面の上端にあるので、ボタンの下へ出す。左右は画面の内側に収める。
  * 当たり判定は持たせない（説明がほかのボタンを塞がないように）。

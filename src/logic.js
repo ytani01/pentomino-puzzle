@@ -1,9 +1,9 @@
 /**
- * 盤面とピースの計算。Phaser にも DOM にも依存しない純関数だけを置く
- * （`tests.html` から確かめられるようにするため）。
+ * 盤面とピースの計算。`tests.html` から確かめられるよう、Phaser にも DOM にも
+ * 依存しない純関数だけを置く。
  *
  * セルは `[行, 列]` の配列。ピースの形は「左上を原点へ寄せ、行優先で並べた」
- * 正規形で扱う。正規形にしておくと、向きの同一判定が配列の比較だけで済む。
+ * 正規形で扱う。こうすると、向きが同じかを配列の比較だけで判定できる。
  */
 
 import { DEMO, HOLE, PIECES, PIECE_SIZE } from './config.js';
@@ -34,20 +34,19 @@ export function rotateCw(cells) {
 
 /**
  * 左 90° 回転（`rotateCw` の逆）。`(行, 列) → (-列, 行)`。
- * タップで巡る向き（`turnOrder()`・`nextTurn()`）は右回りだけで足りるので
- * 使わないが、デモで置く前に向きを合わせて見せるときは、右へ 3 回まわすより
- * 左へ 1 回まわすほうが短い場合があるので使う（`orientationSteps()`。TODO-065）。
+ * タップで巡る向き（`turnOrder()`・`nextTurn()`）は右回りだけで足りる。
+ * デモで置く前に向きを合わせるときに、右へ 3 回より左へ 1 回で済む場合が
+ * あるので使う（`orientationSteps()`。TODO-065）。
  */
 export function rotateCcw(cells) {
   return normalize(cells.map(([row, col]) => [-col, row]));
 }
 
-/** 左右の反転。上下の反転は回転 2 回と組み合わせれば同じものが得られる。 */
+/** 左右の反転。上下の反転は、これと回転 2 回で得られる。 */
 export function flip(cells) {
   return normalize(cells.map(([row, col]) => [row, -col]));
 }
 
-/** 正規形どうしが同じ向きかを返す。 */
 export function sameShape(a, b) {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i += 1) {
@@ -79,8 +78,8 @@ function shapeKey(cells) {
 }
 
 /**
- * その形の向き全部から、いつも同じ 1 つを選ぶ。巡りの起点をここに固定しないと、
- * 「今の向き」から数え始めることになり、巡りが表側の 4 通りだけで閉じてしまう。
+ * その形の向き全部から、いつも同じ 1 つを選ぶ。巡りの起点を固定しないと
+ * 「今の向き」から数えることになり、巡りが表側の 4 通りだけで閉じてしまう。
  */
 function baseTurn(cells) {
   let base = null;
@@ -93,19 +92,18 @@ function baseTurn(cells) {
 /**
  * タップで順に巡るときの向きの並び（TODO-019）。
  *
- * `orientations()` の並びをそのまま使うと、表を 4 回転したあと裏の起点へ
- * 移るところで、絵が「別の角度の鏡像」へ飛んで見える。ここでは裏の起点を
- * 「表の最後の向きをその場で裏返したもの」に取るので、隣り合う向きの
- * 変化は必ず 90° 回転か、その場の裏返しのどちらかになる
- * （最後から先頭へ戻るところも裏返しになる）。
+ * `orientations()` の並びのままだと、表を 4 回転して裏の起点へ移るところで、
+ * 絵が「別の角度の鏡像」へ飛んで見える。ここでは裏の起点を「表の最後の向きを
+ * その場で裏返したもの」に取るので、隣り合う向きは必ず 90° 回転か、その場の
+ * 裏返しで移れる（最後から先頭へ戻るところも裏返し）。
  *
- * 探索の順を変えると `tools/enumerate.mjs` の数え上げの当たり方が変わるので、
- * `orientations()` 自体の並びには手を入れずに別の関数として持つ。
+ * `orientations()` の並びを変えると `tools/enumerate.mjs` の数え上げの順が
+ * 変わるので、別の関数にしてある。
  *
  * 起点 `origin` は並びの先頭に来る向き（TODO-025）。ピース定義の向きを渡すと、
  * どのピースも「表を全部回ってから裏返し、裏を全部回る」に揃い、裏返しが
- * 何タップ目に来るかがピースごとにばらつかなくなる。省いたときは
- * `baseTurn()` で、今の向きに関わらず同じ並びになる。
+ * 何タップ目に来るかがピースごとにばらつかない。省くと `baseTurn()` を使い、
+ * 今の向きに関わらず同じ並びになる。
  */
 export function turnOrder(cells, origin = null) {
   const order = [];
@@ -134,8 +132,8 @@ export function nextTurn(cells, origin = null) {
 }
 
 /**
- * 今の向きの 1 つ前を返す（TODO-069。ドラッグ中、ホイール上で 1 つ前の向きへ
- * 戻すため）。`turnOrder()` の並びは `nextTurn()` と同じで、逆向きに辿るだけ。
+ * 今の向きの 1 つ前を返す。ドラッグ中にホイールを上へ回したとき、1 つ前の
+ * 向きへ戻すため（TODO-069）。`nextTurn()` と同じ並びを逆に辿る。
  */
 export function prevTurn(cells, origin = null) {
   const order = turnOrder(cells, origin);
@@ -148,23 +146,19 @@ export function prevTurn(cells, origin = null) {
  * ドラッグ中に向きを変えるとき、つかんでいる点（`from` の座標系での
  * `[行, 列]`。マス単位の小数）が `to` の座標系でどこに来るかを返す
  * （TODO-069）。`turnOrder()` の隣どうしは必ず「右へ 90° 回転」「左へ 90° 回転」
- * 「その場の裏返し」のどれか 1 つで移れる（`turnOrder()` の JSDoc、
- * および `turnOrder の隣どうしは、90° 回転かその場の裏返しで移れる` の
- * テストで確かめてある）ので、`from` を `to` へ変える一歩がどれかを
- * `sameShape()` で見分ければ、その一歩ぶんだけ点を動かせば足りる
- * （レビュー: 間引く前の 8 通りを辿る形は作り込みすぎで、対称な形（I・Z）
- * では途中の道の選び方によって答えが割れる欠点もあった）。
+ * 「その場の裏返し」のどれか 1 つで移れる（テスト
+ * `turnOrder の隣どうしは、90° 回転かその場の裏返しで移れる` で確かめてある）。
+ * そこで、その一歩がどれかを `sameShape()` で見分け、一歩ぶんだけ点を動かす。
  *
  * 各変換の式は、`from` の外接矩形の大きさ（`rows` / `cols`）を使った
- * `rotateCw()` / `rotateCcw()` / `flip()` の連続版（マスのラベルだけでなく、
- * マスの中の点まで正しく動かす）。`from` は正規形（左上が原点）である前提。
+ * `rotateCw()` / `rotateCcw()` / `flip()` の連続版で、マスの中の点まで動かす。
+ * `from` は正規形（左上が原点）である前提。
  *
- * I のように右回りと左回りが同じ形になる向きでは（`cw` と `ccw` が両方
- * 真）、どちらを使っても新しい形の上には乗るが、往復（次の向きへ→1 つ前へ、
- * など）で同じ向き（例えば右回り）を選び続けると正味 180° 回ったことになり、
- * つかんだ点が元へ戻らない。`shapeKey()` の大小で一方の呼び出しでは右回り、
- * 逆向きの呼び出し（`from`/`to` が入れ替わる）では左回りを選ぶようにして、
- * 往復すると必ず打ち消し合うようにしてある。
+ * I のように右回りと左回りが同じ形になる向き（`cw` と `ccw` が両方真）で、
+ * 往復（次の向きへ→1 つ前へ）のたびに同じ回り方を選ぶと正味 180° 回り、
+ * つかんだ点が元へ戻らない。`shapeKey()` の大小で、一方では右回り、逆向きの
+ * 呼び出し（`from`/`to` が入れ替わる）では左回りを選び、往復で打ち消し合う
+ * ようにしてある。
  */
 export function turnPivot(from, to, point) {
   const { rows, cols } = shapeSize(from);
@@ -177,23 +171,22 @@ export function turnPivot(from, to, point) {
   if (cw) return [col, rows - row];
   if (ccw) return [cols - col, row];
   if (sameShape(flip(from), to)) return [row, cols - col];
-  return point; // 一歩で説明できない（起きない想定。念のため動かさずに返す）。
+  return point; // 一歩で移れない（起きない想定）。念のため動かさずに返す。
 }
 
 /**
  * `from` から `to`（どちらも正規形）まで、`rotateCw()`・`rotateCcw()`・`flip()` を
  * 使う最短の道を返す（デモで、置く前にトレイで向きを合わせて見せるため。TODO-065）。
- * 右だけでは足りないのは、右 3 回で着く向きが左 1 回で着くことがあるため
- * （`turnPiece()` のタップは右回りだけで巡るが、あちらは「次はどれか」を
- * 一意に決める並びが要るのに対し、ここは見た目の短さだけが要る）。
+ * 左回りも使うのは、右 3 回で着く向きが左 1 回で着くことがあるため
+ * （`turnPiece()` のタップは「次はどれか」を一意に決める並びが要るので
+ * 右回りだけだが、ここは見た目の短さだけが要る）。
  *
  * `from` は含まず `to` を含む。各段は `{ cells, kind }`（`kind` は `'rotate'` か
- * `'flip'`。左右どちらの回転も `'rotate'` で、音は同じため区別しない）。
- * 同じ向きなら空を返す。
+ * `'flip'`。左右の回転は音が同じなので区別しない）。同じ向きなら空を返す。
  *
- * 向きの全体は「回転 4 通り × 反転の要否」で高々 8 通りしかないので、
- * 幅優先探索で足りる（先に見つかった道が最短になる）。利用者と決めた
- * 「最大で裏返し 1 回＋回転 2 回」も、この 8 通りの中で確かめてある。
+ * 向きは高々 8 通り（回転 4 通り × 反転の有無）なので、幅優先探索で足りる
+ * （先に見つかった道が最短）。利用者と決めた「最大で裏返し 1 回＋回転 2 回」も、
+ * この 8 通りで確かめてある。
  */
 export function orientationSteps(from, to) {
   const start = normalize(from);
@@ -214,7 +207,7 @@ export function orientationSteps(from, to) {
       queue.push({ cells: next, path: nextPath });
     }
   }
-  return []; // 到達できない形を渡したとき（呼ぶ側は同じピースの向きだけを渡す想定）。
+  return []; // 到達できない形のとき（呼ぶ側は同じピースの向きだけを渡す想定）。
 }
 
 /** 正規形から、その向きの外接矩形の大きさを返す。トレイでの中央寄せに使う。 */
@@ -232,10 +225,9 @@ export function shapeSize(cells) {
  * シルエットの外周にあたる辺を返す。1 本は `[行1, 列1, 行2, 列2]` で、
  * マスの格子を単位とした線分（マス 1 個は `[0,0]`〜`[1,1]` の正方形）。
  *
- * 5 マスを 1 個の塊として見せるために、外周だけを濃く描きたい。
- * 隣にマスがある辺は内側の格子なので外周から外す。
- * 描画に使う値だが、Phaser を持ち込まずに `tests.html` から確かめられるよう
- * ここに置く。返す順は「上・右・下・左」を各マスについて行優先で見た順。
+ * 5 マスを 1 個の塊に見せるため、外周だけを濃く描く。隣にマスがある辺は
+ * 内側の格子なので外す。描画に使う値だが、`tests.html` から確かめられるよう
+ * ここに置く。返す順は、各マスを行優先で見て「上・右・下・左」。
  */
 export function outlineEdges(cells) {
   const has = new Set(cells.map(([row, col]) => `${row},${col}`));
@@ -250,8 +242,8 @@ export function outlineEdges(cells) {
 }
 
 /**
- * 盤のうちピースを置けるマスを、行優先で並べて返す（穴は含まない）。
- * 穴の無い盤（`hole: null`）は、大きさ 0 の穴として同じ道を通す。
+ * 盤のうちピースを置けるマスを、行優先で返す（穴は含まない）。
+ * 穴の無い盤（`hole: null`）は、大きさ 0 の穴として扱う。
  */
 export function boardCells(spec) {
   const hole = spec.hole || { row: 0, col: 0, rows: 0, cols: 0 };
@@ -270,9 +262,9 @@ export function boardCells(spec) {
 }
 
 /**
- * 空の盤面を作る。マスの中身は「空きなら `null`、穴なら `HOLE`、
- * 置かれていればピース名」。1 次元配列にしているのは、複製が速く、
- * 求解の内側のループで添字計算だけで済むため。
+ * 空の盤面を作る。マスの中身は、空きなら `null`、穴なら `HOLE`、
+ * 置かれていればピース名。1 次元配列にするのは、複製が速く、
+ * 探索の内側のループで添字計算だけで済むため。
  */
 export function createBoard(spec) {
   const grid = new Array(spec.rows * spec.cols).fill(HOLE);
@@ -287,9 +279,8 @@ export function cellAt(board, row, col) {
 }
 
 /**
- * 置けるかどうかと、置けない理由を返す。
- * 理由を返すのは、盤の外へはみ出したのか他のピースと重なったのかで
- * 画面の警告を出し分けるため。
+ * 置けるかどうかと、置けない理由を返す。理由も返すのは、盤の外へ
+ * はみ出したのか他のピースと重なったのかで、画面の警告を出し分けるため。
  */
 export function canPlace(board, cells, row, col) {
   for (const [dr, dc] of cells) {
@@ -307,11 +298,11 @@ export function canPlace(board, cells, row, col) {
 
 /**
  * 盤に置いたまま向きを変えるときの、次の向きを返す（TODO-023）。その場に
- * 置けない向きは飛ばす。置けるものが他に無ければ今の向きをそのまま返す。
+ * 置けない向きは飛ばし、他に無ければ今の向きを返す。
  *
- * `board` には自分を取り除いた盤面を渡す（今いる場所を自分で塞いでいると
- * 見なさないため）。飛ばすのは、置けない向きで止まると赤く光るだけになり、
- * 置ける向きに当たるまでタップし続けることになるため。
+ * `board` には自分を取り除いた盤面を渡す（自分のいる場所を塞がっていると
+ * 見なさないため）。飛ばすのは、置けない向きで止まると赤く光るだけで、
+ * 置ける向きまでタップし続けることになるため。
  */
 export function nextPlaceableTurn(board, cells, row, col, origin = null) {
   const order = turnOrder(cells, origin);
@@ -325,9 +316,9 @@ export function nextPlaceableTurn(board, cells, row, col, origin = null) {
 }
 
 /**
- * 離した升目から、実際に置く升目を決める（TODO-023）。そこに置けなければ
- * 周りを `range` 升まで、近い順に探す。指を正確に合わせなくても置けるように
- * するため。同じ距離なら上・左が先。どこにも置けなければ null。
+ * 離した升目から、実際に置く升目を決める（TODO-023）。指を正確に合わせなくても
+ * 置けるよう、そこに置けなければ周りを `range` 升まで近い順に探す。
+ * 同じ距離なら上・左が先。どこにも置けなければ null。
  */
 export function snapSpot(board, cells, row, col, range) {
   const spots = [];
@@ -346,8 +337,8 @@ export function snapSpot(board, cells, row, col, range) {
 }
 
 /**
- * ピースを置いた盤面を新しく作って返す。盤面を書き換えないのは、
- * Undo の履歴が過去の盤面を参照したままでも壊れないようにするため。
+ * ピースを置いた盤面を新しく作って返す。書き換えないのは、Undo の履歴が
+ * 過去の盤面を参照したままでも壊れないようにするため。
  */
 export function place(board, name, cells, row, col) {
   const grid = board.grid.slice();
@@ -355,13 +346,12 @@ export function place(board, name, cells, row, col) {
   return { rows: board.rows, cols: board.cols, grid };
 }
 
-/** 指定したピースを取り除いた盤面を新しく作って返す。 */
 export function remove(board, name) {
   const grid = board.grid.map((value) => (value === name ? null : value));
   return { rows: board.rows, cols: board.cols, grid };
 }
 
-/** 空きマスの座標を行優先で返す。求解の枝刈りと残りマス数の表示に使う。 */
+/** 空きマスの座標を行優先で返す。探索の枝刈りと残りマス数の表示に使う。 */
 export function emptyCells(board) {
   const cells = [];
   for (let index = 0; index < board.grid.length; index += 1) {
@@ -381,14 +371,13 @@ export function placedNames(board) {
   return names;
 }
 
-/** 空きマスが無ければ完成。 */
 export function isSolved(board) {
   return !board.grid.includes(null);
 }
 
 /**
- * 空き領域を上下左右の連結で分け、領域ごとのマスの添字を返す（見つけた順は行優先）。
- * 大きさだけ要る枝刈りと、形まで要る `forcedPlacements()` で塗り方を 1 つにするため。
+ * 空き領域を上下左右の連結で分け、領域ごとのマスの添字を返す（行優先の順）。
+ * 大きさだけ要る枝刈りと、形まで要る `forcedPlacements()` で共通に使う。
  */
 function emptyRegions(board) {
   const seen = new Uint8Array(board.grid.length);
@@ -416,7 +405,7 @@ function emptyRegions(board) {
 
 /**
  * 空き領域を上下左右の連結で分け、それぞれの大きさを返す。
- * 求解では「5 で割り切れない塊があれば置き方が無い」という枝刈りに使う。
+ * 「5 で割り切れない塊があれば解が無い」という枝刈りに使う。
  */
 export function emptyRegionSizes(board) {
   return emptyRegions(board).map((region) => region.length);
@@ -433,10 +422,10 @@ function pushIfEmpty(board, seen, stack, index) {
  * 周りから切り離された 5 マスの空きのうち、残りのピース `names` のどれかと同じ形のものを、
  * そのピースの置き方 `{ name, cells, row, col }` にして返す（TODO-044。`place()` にそのまま渡せる）。
  *
- * 解ける盤面なら、その空きはそのピースで埋めるしかない（12 種の形はどれも違う）ので、
+ * 12 種の形はどれも違うので、解ける盤面ならその空きはそのピースで埋めるしかなく、
  * 埋めても解けるまま。1 つ埋めても他の空きは変わらないので、一度に全部返す。
- * 解の有無は見ない（形だけ）。同じピースが 2 つの空きに当たる盤面は解なしだが、
- * 1 つのピースを 2 回置く手は返さないよう、最初の 1 つだけにする。
+ * 見るのは形だけで、解の有無は見ない。同じピースが 2 つの空きに当たる盤面は
+ * 解なしだが、同じピースを 2 回置く手は返さないよう最初の 1 つだけにする。
  */
 export function forcedPlacements(board, names) {
   const shapes = PIECES
@@ -459,9 +448,9 @@ export function forcedPlacements(board, names) {
 
 /**
  * 残りのピース `names` のどの置き方でも覆えない空きマスがあるか（TODO-077）。
- * そういうマスがあれば、その盤面から先は必ず解なし。空き領域の大きさ
- * （`regionsFitPieces()`）だけでは見えない、細い袋小路や角に残る 1 マスを拾う。
- * 置ける手を全部当てるので、`regionsFitPieces()` より重い。
+ * あれば、その盤面は必ず解なし。空き領域の大きさ（`regionsFitPieces()`）だけでは
+ * 見えない、細い袋小路や角に残る 1 マスを拾う。置ける手を全部当てるので、
+ * `regionsFitPieces()` より重い。
  */
 export function hasUncoverableCell(board, names) {
   const covered = new Uint8Array(board.grid.length);
@@ -486,10 +475,9 @@ export function regionsFitPieces(board) {
 
 /**
  * 置いたときに、盤の外・穴・置き済みのマスへ接する辺の数を返す（TODO-059）。
- * ランダム探索の置き場所の重み付けに使う。`cellAt()` は盤外・穴とも
- * `HOLE`（`null` ではない値）を返すので、`null` 以外を「接している」とみなせば
- * 3 つを区別せずに数えられる。ピース自身の内側の辺（隣り合う自分のマス）は
- * 接しているとは数えない。
+ * ランダム探索の置き場所の重み付けに使う。`cellAt()` は盤外・穴とも `HOLE` を
+ * 返すので、`null` 以外を「接している」とみなせば 3 つを区別せずに数えられる。
+ * ピース自身の内側の辺（隣り合う自分のマス）は数えない。
  */
 export function touchingEdges(board, cells, row, col) {
   const shape = new Set(cells.map(([dr, dc]) => `${dr},${dc}`));
@@ -505,9 +493,9 @@ export function touchingEdges(board, cells, row, col) {
 
 /**
  * `touchingEdges()` の数を抽選の重みにする（TODO-059）。隅や置いたピースの隣
- * ほど選ばれやすくしたいので 2 乗して差を広げる。接する辺が 0（盤の真ん中に
- * 独立して置く手）でも重み 0 にはしないよう +1 する（重みが全部 0 だと
- * 抽選できないうえ、そういう置き方も人はときどきする）。
+ * ほど選ばれやすいよう、2 乗して差を広げる。接する辺が 0（盤の真ん中に
+ * 離して置く手）でも重み 0 にしないよう +1 する（全部 0 だと抽選できず、
+ * そういう置き方も人はときどきする）。
  */
 function touchWeight(count) {
   return (count + 1) ** 2;
@@ -515,7 +503,7 @@ function touchWeight(count) {
 
 /**
  * 2 つの手のマスどうしの最短のマンハッタン距離（隣り合えば 1）。デモの
- * ランダムで、直前に置いた手からの近さを抽選の重みに掛けるため（TODO-062）。
+ * ランダムで、直前に置いた手からの近さを抽選の重みに掛ける（TODO-062）。
  */
 export function moveDistance(a, b) {
   let min = Infinity;
@@ -532,9 +520,9 @@ export function moveDistance(a, b) {
 
 /**
  * `choices`（残りの全ピースの置ける手。ピースごとの手の配列の配列）から、
- * 空きマスごとに「そのマスを覆う手の数」を数える。デモのランダムで
- * 「狭い所」（一番少ないマス）を選ぶため（TODO-061）。純関数として export し、
- * `tests.html` から確かめられるようにする。
+ * 空きマスごとに、そのマスを覆う手の数を数える。デモのランダムで
+ * 「狭い所」（一番少ないマス）を選ぶため（TODO-061）。`tests.html` から
+ * 確かめられるよう export する。
  */
 export function countCellMoves(choices) {
   const counts = new Map();
@@ -555,9 +543,9 @@ function moveCoversCell(move, cellKey) {
 }
 
 /**
- * `counts`（`countCellMoves()` の戻り値）から、数が 1 以上で一番少ないマスを
- * 1 つ選ぶ（同数なら `random` で選ぶ）。覆う手が無いマスは無い（`counts` は
- * 覆われたマスしか持たない）。`counts` は空でないこと（置ける手があるときだけ呼ぶ）。
+ * `counts`（`countCellMoves()` の戻り値）から、数が一番少ないマスを 1 つ選ぶ
+ * （同数なら `random` で選ぶ）。`counts` は覆われたマスしか持たないので、数は
+ * 必ず 1 以上。置ける手があるとき（`counts` が空でないとき）だけ呼ぶ。
  */
 function pickTightCell(counts, random) {
   let min = Infinity;
@@ -584,7 +572,7 @@ function pickWeighted(items, weights, random) {
   return items[items.length - 1];
 }
 
-/** Fisher–Yates で並びを入れ替える（渡した配列をそのまま入れ替えて返す）。 */
+/** Fisher–Yates で並びを入れ替える（渡した配列をその場で入れ替えて返す）。 */
 function shuffle(items, random) {
   for (let i = items.length - 1; i > 0; i -= 1) {
     const j = Math.floor(random() * (i + 1));
@@ -596,12 +584,12 @@ function shuffle(items, random) {
 /**
  * 空の盤から深さ優先で解を探し、1 手ずつ返す（デモ用。TODO-040）。
  *
- * 画面を止めずに探す様子を見せるため、探索を generator にして呼ぶ側が
- * フレームごとに好きな手数だけ `next()` する。探し方は一番若い空きマスを埋め、
+ * 画面を止めずに探す様子を見せるため、探索を generator にし、呼ぶ側が
+ * フレームごとに好きな手数だけ `next()` する。一番若い空きマスを埋め、
  * 置いたら `canContinue(board)` で先へ進むかを決める。既定の `regionsFitPieces`
  * （5 の倍数でない空き領域が出たら捨てる）なら `tools/enumerate.mjs` と同じで、
- * 違うのは始める前に 1 回だけピースの並びと各ピースの向きの並びを `random` で
- * 入れ替えることだけ。毎回違う試し方と解を見せるため。`random` を外から
+ * 違うのは、始める前に 1 回だけピースの並びと各ピースの向きの並びを `random` で
+ * 入れ替えることだけ（毎回違う試し方と解を見せるため）。`random` を外から
  * 受けるのは、テストでシード付きの乱数を渡して手順を固定するため。
  * `canContinue` を外から受けるのは、デモが全解のデータで「解ける／解なし」を
  * 調べ、ヒント表示を入にして解く人と同じ動きにするため（TODO-043。
@@ -609,17 +597,17 @@ function shuffle(items, random) {
  *
  * 返すのは `{ type: 'place', name, cells, row, col, ok }`・`{ type: 'remove', name }`・
  * `{ type: 'solved' }`。`ok` は置いたあとの `canContinue` の結果で、デモが HUD に
- * 出す。判定を yield の前にしてあるのはそのためで、探索の順と手は変わらない。
- * 捨てる置き方も place と remove の 2 手として返す（試して戻す様子を見せるため）。
+ * 出す（そのために判定を yield の前にしてあるが、探索の順と手は変わらない）。
+ * 捨てる置き方も、試して戻す様子を見せるため place と remove の 2 手で返す。
  * solved のあとも `next()` すれば次の解を探し、全部探し終えたら終わる。
  *
- * `place` の `cells` は探索が持っている向きの配列そのもの（写しを作らない）。
- * 受け取った側で書き換えると以降の探索が狂うので、読むだけにする。
+ * `place` の `cells` は探索が持つ向きの配列そのもの（写しを作らない）。
+ * 書き換えると以降の探索が狂うので、受け取った側は読むだけにする。
  *
  * 探索の盤はここに閉じた作業用の配列で、**その場で書き換える**。1 万手で
- * 50ms ほどの速さを保つため（毎手作り直すと割に合わない）。外へ渡すのは上の
- * 記述だけで、本編の盤面（Undo の履歴が参照するもの）とは別物なので、
- * 「盤面は書き換えず作り直す」の決まりとはぶつからない。
+ * 50ms ほどの速さを保つため（毎手作り直すと割に合わない）。本編の盤面
+ * （Undo の履歴が参照するもの）とは別物なので、「盤面は書き換えず作り直す」の
+ * 決まりとはぶつからない。
  */
 export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
   const board = createBoard(spec);
@@ -668,65 +656,58 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  * `solveSteps()` のランダム版（デモで探し方を選べるようにするため。TODO-057）。
  *
  * 速く解くためではなく、人が試行錯誤しながら置いていく様子を見せるため。
- * 5 マスの穴に残りのピースがちょうど合う手があれば必ずそれを置く（後述の
- * `forcedPlacements()`）。無ければ、まず「狭い所」（残りの手で覆える数が
- * 一番少ない空きマス。`countCellMoves()`）を探し、それを覆える手を持つ
+ * 5 マスの穴に残りのピースがちょうど合う手があれば必ずそれを置く
+ * （`forcedPlacements()`）。無ければ、まず「狭い所」（残りの手で覆える数が
+ * 一番少ない空きマス。`countCellMoves()`）を探し、そこを覆える手を持つ
  * ピースを `DEMO.randomTightWeight` で選ばれやすくして抽選する（TODO-061。
  * 人は「この隙間に入るのはどれか」と考えてピースを選ぶため）。選んだピースが
- * 狭い所を覆えるなら、置き方は狭い所を覆う手だけに絞る。置き方は一様に選ばない。
+ * 狭い所を覆えるなら、置き方はそこを覆う手だけに絞る。置き方は一様に選ばず、
  * `touchingEdges()` で数えた「盤の外・穴・置き済みのマスに接する辺の数」を
- * `touchWeight()` で重みにして抽選する（隅や、置いたピースの隣に置きやすく
- * なる。人はまず端や既に置いたものへ寄せて置くため）。さらに直前に置いた手
- * （`stack` の最後）からの `moveDistance()` が近いほど重みを大きくする
- * （TODO-062。人は盤の上を飛び回らず近くから順に埋めるため）。
+ * `touchWeight()` で重みにして抽選する（人はまず端や既に置いたものへ寄せて
+ * 置くため）。さらに直前に置いた手（`stack` の最後）からの `moveDistance()` が
+ * 近いほど重みを大きくする（TODO-062。人は盤の上を飛び回らず近くから埋めるため）。
  *
- * 置いた直後に `canContinue(board)` が偽（そこから先は解が無い盤面）でも
- * **その場では外さない**（置ける手が尽きたら、`canContinue(board)` が真になるまで
- * 最後に置いた手から順に 1 手ずつ外す。スタックが空になったら諦めて止める。
- * `canContinue` が常に偽を返す盤でも無限に外し続けないため）。ただし、次の
- * 3 つは行き詰まりを待たずに置いた直後にその場で外す。人も置いた瞬間に
- * 明らかな詰みだと気づくのはこの 3 つだけ。
+ * 置いた直後に `canContinue(board)` が偽（その先に解が無い盤面）でも
+ * **その場では外さない**。置ける手が尽きたら、`canContinue(board)` が真になるまで
+ * 最後に置いた手から 1 手ずつ外す（スタックが空になったら止める。
+ * `canContinue` が常に偽を返す盤でも外し続けないため）。ただし次の 3 つは、
+ * 人も置いた瞬間に詰みだと気づくので、行き詰まりを待たずにその場で外す。
  * 既定の `regionsFitPieces` は 1 つ目と同じ判定なので、既定のままだと偽の手は
- * 必ずその場で外れる（行き詰まってから戻す流れは、デモのように全解のデータで
- * 判定を渡したときに起きる）。
+ * 必ずその場で外れる（行き詰まってから戻すのは、デモのように全解のデータで
+ * 判定を渡したとき）。
  *
- * - 5 の倍数でない大きさの閉じた空き（ピースで埋め切れず必ず解無しになる。
- *   1〜4・7・12 マスなど。TODO-060・068）
- * - 5 マスの穴に合う残りのピースで埋めた手が、その `canContinue` を偽にしたとき
- *   （その穴の形はもうそのピースでしか埋まらない以上「埋める前の盤面が
- *   すでに解なし」ということなので、埋めた手と、その前に置いた手をまとめて
- *   外す。TODO-066）
+ * - 5 の倍数でない大きさの閉じた空き（必ず解なし。1〜4・7・12 マスなど。
+ *   TODO-060・068）
+ * - 5 マスの穴に合う残りのピースで埋めた手が `canContinue` を偽にしたとき
+ *   （その穴はそのピースでしか埋まらないので、埋める前の盤面がすでに解なし。
+ *   埋めた手と、その前に置いた手をまとめて外す。TODO-066）
  * - 残りのピースのどの置き方でも覆えない空きマスができたとき
  *   （`hasUncoverableCell()`。細い袋小路や、置き済みのピースと同じ形の 5 マスの
- *   閉じた空きなど。ピースは 1 種 1 つなので必ず解なしになる。TODO-067・077）
+ *   閉じた空きなど。ピースは 1 種 1 つなので必ず解なし。TODO-067・077）
  *
- * 外した手は、盤面ごとに `failed` に控えて選び直さない（同じ失敗を
- * 繰り返すと試行錯誤に見えないため）。盤面ごとにするのは、失敗は盤面によって
- * 変わるうえ、外して戻った先の盤面でも前の失敗をまた試さないため。
- * 空の盤で全部だめになったときだけ、空の盤の控えを消して選び直す。
+ * 外した手は盤面ごとに `failed` に控え、選び直さない（同じ失敗を繰り返すと
+ * 試行錯誤に見えないため）。盤面ごとにするのは、失敗は盤面によって変わり、
+ * 戻った先の盤面でも前の失敗をまた試さないため。空の盤で全部だめになった
+ * ときだけ、空の盤の控えを消して選び直す。
  *
- * 同じ深さ（盤に残るピースの数）で「詰まり」が続くと、1 手ずつでなく数手
- * まとめて外す（TODO-063。人は同じ所で詰まり続けると「やり直そう」と
- * 大きく崩すため）。「詰まり」に数えるのは、置ける手が尽きて `ok` が真に
- * なるまで戻る**行き詰まりの一続きだけ**。置いた直後にその場で外す手
- * （5 の倍数でない空き・5 マスの穴に合う手をまとめて外す 2 手・覆えない
- * 空きマスのいずれも。TODO-060・066〜068・077）は、置いた側の
- * 判断が明らかに間違っていただけで「試行錯誤して詰まった」わけではないので
- * 数えない。行き詰まりの一続きが終わるたびに、そのときの `stack.length` を
- * 深さとして回数を数える。回数が `DEMO.randomCollapseAfter` に達したら、
- * 続けて `DEMO.randomCollapseMoves` 手（`stack` にある分まで）を 1 手ずつ
- * `undoLast()` で `remove` として yield する。外した手は、通常の 1 手外しと
- * 同じくそれぞれ外した後の盤面の控えへ入れる（同じ崩し方を繰り返さない
- * ため）。崩したあとは、崩した後の深さ以上の回数を消して数え直す
- * （崩したことで前と違う状況になるため）。
+ * 同じ深さ（盤に残るピースの数）で「詰まり」が続くと、数手まとめて外す
+ * （TODO-063。人は同じ所で詰まり続けると大きく崩してやり直すため）。
+ * 「詰まり」に数えるのは、置ける手が尽きて `ok` が真になるまで戻る
+ * **行き詰まりの一続きだけ**。置いた直後にその場で外す手（上の 3 つ。
+ * TODO-060・066〜068・077）は、試行錯誤して詰まったのではなく置き方が明らかに
+ * 間違っていただけなので数えない。一続きが終わるたびに、そのときの
+ * `stack.length` を深さとして回数を数える。回数が `DEMO.randomCollapseAfter` に
+ * 達したら、`DEMO.randomCollapseMoves` 手（`stack` にある分まで）を 1 手ずつ
+ * `undoLast()` で `remove` として yield する。外した手は、1 手外しと同じく
+ * それぞれ外した後の盤面の控えへ入れる（同じ崩し方を繰り返さないため）。
+ * 崩したあとは、状況が変わるので、崩した後の深さ以上の回数を消して数え直す。
  *
- * 最初の solved で終わる（`solveSteps()` と違い次の解は探さない。デモは解の
- * たびに作り直すため）。
+ * 最初の solved で終わる（デモは解のたびに作り直すので、次の解は探さない）。
  *
  * 返す手、`random`・`canContinue` の受け方、盤をその場で書き換えることは
- * `solveSteps()` と同じ。乱数は `random` しか使わない（シードで手順を固定するため）。
+ * `solveSteps()` と同じ。シードで手順を固定するため、乱数は `random` しか使わない。
  * `remove` にも、外した後の盤面での `canContinue(board)` を `ok` として付ける
- * （デモの HUD 表示に使う。外した直後は必ず解けるとは限らないため）。
+ * （デモの HUD に出す。外した直後に解けるとは限らないため）。
  */
 export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) {
   const board = createBoard(spec);
@@ -734,8 +715,8 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
   const shapes = new Map(PIECES.map((piece) => [piece.name, orientations(piece.cells)]));
   const unused = PIECES.map((piece) => piece.name);
   const stack = [];
-  // ponytail: 控えに上限は無い。外した手の数だけ増える。デモの `hasSolution` でも
-  // 行き詰まるが、解のたびに作り直すので最初の解まで千件ほど（TODO-059 の実測）。
+  // ponytail: 控えに上限は無く、外した手の数だけ増える。デモは解のたびに
+  // 作り直すので、最初の解まで千件ほど（TODO-059 の実測）。
   // 増えて困るなら、戻るときに深い盤面の控えを捨てる。
   const failedByBoard = new Map();
   const failedOf = (key) => {
@@ -746,7 +727,7 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
   const fill = (move, value) => {
     for (const [dr, dc] of move.shape) grid[(move.row + dr) * cols + (move.col + dc)] = value;
   };
-  // 最後に置いた手を 1 つ外し、盤面ごとの控えに足して yield する形をそのまま返す（TODO-060）。
+  // 最後に置いた手を外して盤面ごとの控えに足し、yield する形で返す（TODO-060）。
   const undoLast = () => {
     const last = stack.pop();
     fill(last, null);
@@ -797,12 +778,12 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     }
 
     if (choices.length === 0) {
-      if (stack.length === 0) { // 空の盤で全部だめだったとき。控えを消して選び直す
+      if (stack.length === 0) { // 空の盤で全部だめなら、控えを消して選び直す
         failed.clear();
         continue;
       }
-      // 置ける手が無くなった。canContinue が真になるまで、または戻る手が
-      // 無くなるまで 1 手ずつ外す。
+      // 置ける手が尽きた。canContinue が真になるか、戻る手が無くなるまで
+      // 1 手ずつ外す。
       while (stack.length > 0) {
         const step = undoLast();
         yield step;
@@ -813,8 +794,7 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     }
 
     // 5 マスの穴に合うピースがあれば、抽選より先にそれで埋める（TODO-066）。
-    // `choices` からその手を拾うので、鍵の組み立てと `failed` の除外は
-    // `choices` を作った箇所（上）の 1 か所で済む。
+    // 手は `choices` から拾うので、鍵の組み立てと `failed` の除外は上の 1 か所で済む。
     const forcedFound = forcedPlacements(board, unused);
     const forced = choices.flat().filter((m) => forcedFound.some(
       (f) => f.name === m.name && f.row === m.row && f.col === m.col && sameShape(f.cells, m.shape),
@@ -823,8 +803,8 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     if (forced.length > 0) {
       move = pickOne(forced);
     } else {
-      // まず「狭い所」（覆える手が一番少ない空きマス）を探し、それを覆える
-      // 手を持つピースを選ばれやすくし、選んだら狭い所を覆う置き方に絞る（TODO-061）。
+      // 「狭い所」（覆える手が一番少ない空きマス）を覆えるピースを選ばれやすくし、
+      // 選んだら狭い所を覆う置き方に絞る（TODO-061）。
       const tightCell = pickTightCell(countCellMoves(choices), random);
       const covering = choices.map((moves) => moves.filter((m) => moveCoversCell(m, tightCell)));
       const pick = pickWeighted(
@@ -833,10 +813,9 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
         random,
       );
       const movesForName = covering[pick].length > 0 ? covering[pick] : choices[pick];
-      // 重みは選んだピースの置き方の分だけ数える（全ピース分は要らない）。
-      // 直前に置いた手（stack の最後）からの近さも掛け、盤の上を飛び回らず
-      // 近くから順に埋めていくようにする（TODO-062）。スタックが空（盤が
-      // まっさらな最初の手）なら距離の項は掛けない。
+      // 重みは選んだピースの置き方の分だけ数える。直前に置いた手（stack の最後）
+      // からの近さも掛け、近くから順に埋めていく（TODO-062）。最初の手
+      // （スタックが空）なら距離の項は掛けない。
       const last = stack[stack.length - 1];
       const weights = movesForName.map((m) => {
         const touch = touchWeight(touchingEdges(board, m.shape, m.row, m.col));
@@ -852,21 +831,17 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
       type: 'place', name: move.name, cells: move.shape, row: move.row, col: move.col, ok,
     };
     if (forced.length > 0 && !ok) {
-      // 穴の形に合うピースはそれしか無いので、埋めて解なしなら埋める前の
-      // 盤面がすでに解なし。その手と、その前に置いた手をまとめて外す（TODO-066）。
-      // 置いた直後のその場外しは「詰まり」に数えない（TODO-063）。
+      // 穴に合うピースはそれしか無いので、埋めて解なしなら埋める前の盤面が
+      // すでに解なし。その手と、その前に置いた手をまとめて外す（TODO-066）。
+      // その場外しは「詰まり」に数えない（TODO-063。下の 2 つも同じ）。
       yield undoLast();
       if (stack.length > 0) yield undoLast();
     } else if (!regionsFitPieces(board)) {
-      // 5 の倍数でない閉じた空き（ピースで埋め切れず必ず解なしになる）は
-      // 詰みが確定しているので、行き詰まりを待たずにその場で外す（TODO-060・068）。
-      // 置いた直後のその場外しは「詰まり」に数えない（TODO-063）。
+      // 5 の倍数でない閉じた空きは必ず解なしなので、その場で外す（TODO-060・068）。
       yield undoLast();
     } else if (hasUncoverableCell(board, unused)) {
-      // 残りのどのピースでも覆えない空きマスがあれば必ず解なし。これも
-      // 行き詰まりを待たずにその場で外す。置き済みのピースと同じ形の 5 マスの
-      // 空き（TODO-067）もここに含まれる（TODO-077）。
-      // 置いた直後のその場外しは「詰まり」に数えない（TODO-063）。
+      // 残りのどのピースでも覆えない空きマスがあれば必ず解なし。置き済みの
+      // ピースと同じ形の 5 マスの空き（TODO-067）もここに入る（TODO-077）。
       yield undoLast();
     }
   }
@@ -936,8 +911,8 @@ function shapeKeyOf(board) {
 /**
  * その盤の**形を保つ**変換だけを返す（`SYMMETRIES` の部分集合。TODO-012）。
  *
- * 8 通りを決め打ちで盤ごとに書かず、実際に当てはめて穴の位置が一致するものを
- * 残すのは、盤を足したときに書き足さずに済むようにするため。
+ * 盤ごとに決め打ちで書かず、実際に当てはめて穴の位置が一致するものを残すのは、
+ * 盤を足したときに書き足さずに済ませるため。
  * 8×8（中央 2×2 が穴）は 8 通りすべて、6×10（穴なし）は縦横が違うので
  * 90° 回転が形を変え、恒等・180° 回転・左右反転・上下反転の 4 通りになる。
  */
@@ -949,10 +924,9 @@ export function boardSymmetries(board) {
 /**
  * 回転・反転で重なる盤面から、いつも同じ 1 つを選んで返す（TODO-012）。
  *
- * 完成した解は、盤の形を保つ変換で写してもやはり解になる。そのままでは
- * 見た目だけ違う同じ解を別々に数えてしまうので、**写した中で `boardKey()` が
- * 一番小さいもの**を代表とする。X ピースの位置で決めるやり方は盤ごとに
- * 条件を立て直すことになるので採らない（盤に依らないこちらを使う）。
+ * 解は、盤の形を保つ変換で写してもやはり解になる。見た目だけ違う同じ解を
+ * 別々に数えないよう、**写した中で `boardKey()` が一番小さいもの**を代表とする。
+ * X ピースの位置で決めるやり方は、盤ごとに条件を立て直すことになるので採らない。
  *
  * 途中の盤面にも当てはめられるが、意味を持つのは完成形どうしを見比べるとき。
  */
@@ -973,9 +947,9 @@ export function canonicalBoard(board) {
 /**
  * 履歴の `cells` 文字列（`boardKey()` の出力）を代表形の文字列にする（TODO-021）。
  *
- * 履歴の 1 件は盤ではなく文字列で持っているので、いったん盤へ戻してから
- * `canonicalBoard()` に通す。`storage.js` に盤を組み立てる処理を書かず
- * ここへ置くのは、Phaser に依存しない計算を `logic.js` に集める規約のため。
+ * 履歴の 1 件は文字列なので、いったん盤へ戻してから `canonicalBoard()` に通す。
+ * `storage.js` でなくここに置くのは、Phaser に依存しない計算を `logic.js` に
+ * 集める規約のため。
  * `spec` は `{ rows, cols }` を持つ盤の定義（`BOARDS[key]` をそのまま渡せる）。
  */
 export function canonicalCellsKey(cells, spec) {
@@ -987,10 +961,10 @@ export function canonicalCellsKey(cells, spec) {
 /**
  * 一覧で選んでいる位置と頁を、件数が変わったあとに合わせ直す（純関数。TODO-071）。
  *
- * 選んでいた位置（一覧全体での添字）をそのまま保ち、件数からはみ出した
- * ときだけ末尾へ詰める。頁も同じように、はみ出したときだけ最後の頁へ詰める。
- * 選んでいた回を消したあとに使う（`selectionAfterRemoval()`）。1 件ずつ
- * 消していたとき（TODO-031）と同じ計算で、次の回（末尾なら 1 つ前）が選ばれる。
+ * 選んでいた位置（一覧全体での添字）を保ち、件数からはみ出したときだけ
+ * 末尾へ詰める。頁も、はみ出したときだけ最後の頁へ詰める。選んでいた回を
+ * 消したあとに使い（`selectionAfterRemoval()`）、次の回（末尾なら 1 つ前）が
+ * 選ばれる（TODO-031）。
  */
 export function clampSelection(length, selected, page, rowsPerPage) {
   const nextSelected = Math.max(0, Math.min(selected, length - 1));
@@ -1003,10 +977,10 @@ export function clampSelection(length, selected, page, rowsPerPage) {
  * 記録画面でチェックした回を消したあとの、選ぶ位置と頁（純関数。TODO-071）。
  * `nos` は消す前の一覧の番号を並びどおりに、`removed` は消した番号を渡す。
  *
- * 見ていた回が残っていれば、その回を選んだまま、見える頁へ移る。前の行が
+ * 見ていた回が残っていれば、それを選んだまま見える頁へ移る。前の行が
  * 消えて添字がずれても、別の回の完成形に差し替わらないようにするため。
  * 見ていた回を消したときだけ、残った中で次の回（末尾なら 1 つ前）へ移り、
- * 頁は `clampSelection()` で詰める（1 件ずつ消していた TODO-031 と同じ）。
+ * 頁は `clampSelection()` で詰める（TODO-031）。
  */
 export function selectionAfterRemoval(nos, selected, page, removed, rowsPerPage) {
   const gone = new Set(removed);

@@ -1,9 +1,9 @@
 /**
  * マス目テクスチャの生成。
  *
- * 画像ファイルを持たない方針なので、絵は起動時に Graphics API で描いて
- * テクスチャに焼く。1 マスぶんを 1 枚にしておけば、ピースは同じテクスチャを
- * 並べるだけで組め、向きが変わっても描き直さずに済む。
+ * 画像ファイルを持たない方針なので、起動時に Graphics API で描いてテクスチャに
+ * 焼く。1 マスを 1 枚にしておけば、ピースは同じテクスチャを並べるだけで組め、
+ * 向きが変わっても描き直さずに済む。
  */
 
 import {
@@ -15,13 +15,13 @@ import { loadPalette } from '../storage.js';
 /**
  * テクスチャ名。`game.js` から文字列を書かずに参照できるようにまとめておく。
  *
- * 名前にマスの大きさを含めるのは、盤によってマスの大きさが違うため
- * （TODO-009）。焼き直しではなく別の名前で持つことで、盤を選び直しても
- * 貼り直すだけで済む。大きさが同じなら同じ名前になり、自然に共用される。
+ * 盤によってマスの大きさが違うので、名前に大きさを含める（TODO-009）。別の名前で
+ * 持てば、盤を選び直しても焼き直さず貼り直すだけで済む。大きさが同じなら同じ
+ * 名前になり、そのまま共用される。
  *
  * 色の組も同じ理由で名前に入れる（TODO-015）。**単色の組ではピース名を
- * `mono` に潰して 1 枚に減らす**が、`game.js` は今までどおり名前ごとに
- * 引けばよく、どの組を選んでいるかを気にせずに済む。
+ * `mono` に潰して 1 枚に減らす**が、`game.js` はピース名ごとに引けばよく、
+ * どの組を選んでいるかを気にせずに済む。
  */
 export const TEX = {
   piece: (palette, name, cell) => `cell-${palette.key}-${palette.mono === null ? name : 'mono'}-${cell}`,
@@ -36,8 +36,8 @@ export function pieceColor(palette, piece) {
 }
 
 /**
- * 縁取り用に色を暗くする。マスの縁と、ピースの外周（`game.js`）が使う派生色。
- * テクスチャを作る側に置いてあるのは、マスの縁と外周で同じ作り方を保つため。
+ * 縁取り用に色を暗くする。マスの縁と、ピースの外周（`game.js`）が使う。
+ * ここに置くのは、マスの縁と外周で同じ作り方を保つため。
  */
 export function darken(color, factor) {
   const r = Math.round(((color >> 16) & 0xff) * factor);
@@ -52,8 +52,8 @@ export default class BootScene extends Phaser.Scene {
   }
 
   create() {
-    // 選べる盤ぶんと色の組ぶんをまとめて焼く。タイトルで選び直したときに
-    // 焼く時間を待たせないため（1 枚は数十 px 四方で、全部でも 30 枚ほど）。
+    // 選べる盤と色の組のぶんをまとめて焼く。タイトルで選び直したときに
+    // 待たせないため（1 枚は数十 px 四方で、全部でも 30 枚ほど）。
     for (const layout of Object.values(LAYOUTS)) {
       this.makeBoardTiles(layout.board.cell);
       for (const palette of Object.values(PALETTES)) {
@@ -61,7 +61,7 @@ export default class BootScene extends Phaser.Scene {
       }
     }
     this.registry.set(BOARD_REGISTRY_KEY, DEFAULT_BOARD_KEY);
-    // 前に選んだ色の組は覚えてある（盤と違い、遊ぶたびに選び直すものではない）。
+    // 色の組は前に選んだものを使う（盤と違い、遊ぶたびに選び直すものではない）。
     this.registry.set(PALETTE_REGISTRY_KEY, loadPalette());
     this.scene.start('Title');
   }
@@ -84,7 +84,7 @@ export default class BootScene extends Phaser.Scene {
 
   /**
    * 1 マスぶんのテクスチャを焼く。
-   * 立体感は「上と左を明るく、下と右を暗く」の 2 本の帯だけで出している
+   * 立体感は「上と左を明るく、下と右を暗く」の帯だけで出す
    * （細かい描き込みより、縮小してトレイに並べたときの見え方を優先した）。
    */
   makeTile(key, size, color, beveled) {
@@ -112,9 +112,8 @@ export default class BootScene extends Phaser.Scene {
    * 斜めの光の筋を重ねる。帯を割合で持つのは、盤（64px）とトレイ（20px）で
    * 同じ見え方にするため。
    *
-   * 筋を角で切らずに矩形へ収めるのは、Graphics の塗りに切り抜きが無いため。
-   * 対角に沿った帯をマスの外まで伸ばし、`generateTexture` の大きさで
-   * はみ出した分を落としている。
+   * Graphics の塗りには切り抜きが無いので、対角に沿った帯をマスの外まで伸ばし、
+   * はみ出した分は `generateTexture` の大きさで落とす。
    */
   makeGlassTile(key, size, color) {
     if (this.textures.exists(key)) return;

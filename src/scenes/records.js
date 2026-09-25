@@ -2,20 +2,18 @@
  * クリア記録の一覧（TODO-008）。盤ごとの履歴を新しい順に並べ、選んだ回の
  * 完成形を縮小して見せる。
  *
- * 履歴は盤ごとに分かれているので、**この画面の中で盤を切り替えられる**
- * ようにしてある（タイトルへ戻って盤を選び直させると、記録を見比べるだけで
- * 画面を 2 往復することになるため）。切り替えの行はタイトルと同じ
- * `createChoiceRow`（`ui.js`）を使う。
+ * **この画面の中で盤を切り替えられる**ようにしてある（タイトルで盤を
+ * 選び直させると、記録を見比べるだけで画面を 2 往復するため）。切り替えの
+ * 行はタイトルと同じ `createChoiceRow`（`ui.js`）。
  *
- * 一覧は**頁送り**で、スクロールは使わない。Phaser には要素をはみ出させずに
- * 流す仕組みが無く、当たり判定を持つ行を切り抜くにはカメラかマスクを別に
- * 用意することになる。50 件（`HISTORY_LIMIT`）なら 1 頁 7〜9 件でも数頁に
- * 収まるので、送る手数より作りの単純さを取った。
+ * 一覧は**頁送り**で、スクロールは使わない。Phaser には要素を枠内に収めて
+ * 流す仕組みが無く、当たり判定を持つ行を切り抜くにはカメラかマスクが要る。
+ * 50 件（`HISTORY_LIMIT`）なら 1 頁 7〜9 件でも数頁に収まるので、作りの
+ * 単純さを取った。
  *
- * 行にはいつもチェックボックスを出し、チェックした複数件をまとめて消せる
- * （TODO-071）。前へ・次へ・ゴミ箱は画面下の 1 段のアイコンに
- * まとめてあり（タイトルへは左上。TODO-076）、その分の縦の余白で一覧の行数を増やしてある（撮り比べて
- * 利用者が選んだ配置。もう一つの案は消した）。
+ * 行にはいつもチェックボックスを出し、チェックした回をまとめて消せる
+ * （TODO-071）。前へ・次へ・ゴミ箱は画面下の 1 段のアイコンにまとめ
+ * （タイトルへは左上。TODO-076）、空いた縦の余白で一覧の行数を増やしてある。
  */
 
 import {
@@ -35,8 +33,8 @@ import {
 import { darken, pieceColor } from './boot.js';
 
 /**
- * 一覧の 1 行の高さと、行どうしの間。TODO-026 で文字を大きくしたぶん、
- * 行も高くしてある（1 頁に載る件数はそのぶん減る）。
+ * 一覧の 1 行の高さと、行どうしの間。文字を大きくしたぶん、行も高くしてある
+ * （TODO-026。1 頁に載る件数はそのぶん減る）。
  */
 const ROW = { height: 44, gap: 6 };
 
@@ -44,29 +42,26 @@ const ROW = { height: 44, gap: 6 };
 const CHECKBOX = { size: 32, gap: 10 };
 
 /**
- * 行の文字（日時・時間・「おまかせ・ヒント」の印）を収める幅。チェックボックスを
- * 足す前の `listWidth`（TODO-027 の頃からの値。432 は横画面、570 は縦画面）と
- * 同じにしてあり、印が右詰めで収まることを確かめてある値そのもの。
+ * 行の文字（日時・時間・「おまかせ・ヒント」の印）を収める幅。印が右詰めで
+ * 収まることを確かめてある値（TODO-027。432 は横画面、570 は縦画面）。
  *
- * `L.listWidth`（チェックボックスぶんを足した、一覧の当たり判定全体の幅）は
- * ここへ `CHECKBOX.size + CHECKBOX.gap` を足して作る。逆に足し忘れると、
- * 行の文字を収める幅がその分だけ狭くなり、「おまかせ・ヒント」が経過時間に
- * くっついてしまう（TODO-071 の案を撮ったときに見つかった不具合）。
+ * `L.listWidth`（一覧の当たり判定全体の幅）は、ここへ
+ * `CHECKBOX.size + CHECKBOX.gap` を足して作る。足し忘れると文字の幅が
+ * そのぶん狭くなり、「おまかせ・ヒント」が経過時間にくっつく（TODO-071）。
  */
 const ROW_TEXT_WIDTH = { portrait: 570, landscape: 432 };
 
 /**
- * 画面の向きごとの配置。タイトル・クリアの画面と違って積む部品の高さが
- * 揃わない（一覧と完成形が横に並ぶか縦に並ぶかで組みが変わる）ので、
- * `stackTops()` ではなく向きごとに 1 組ずつ数を書いてある。
+ * 画面の向きごとの配置。一覧と完成形が横に並ぶか縦に並ぶかで組みが変わり、
+ * タイトル・クリアの画面のように `stackTops()` で積めないので、向きごとに
+ * 数を書いてある。
  *
  * 横画面は左に一覧・右に完成形、縦画面は上に一覧・下に完成形。前へ・次へ・
- * ゴミ箱は画面下の 1 段のアイコンにまとめてあり（`footY`・`foot`）、その分空いた
- * 縦の余白を一覧の行数（`rowsPerPage`）へ回してある
- * （TODO-071。撮り比べて利用者が選んだ配置）。
+ * ゴミ箱は画面下の 1 段（`footY`・`foot`）にまとめ、空いた縦の余白を一覧の
+ * 行数（`rowsPerPage`）へ回してある（TODO-071）。
  *
  * 完成形の下に「この回を続ける」（`continueY`）を置くため、完成形の枠
- * （`boardBox`）の高さを詰めてある（TODO-073）。一覧の行数と下段は変えない。
+ * （`boardBox`）の高さを詰めてある（TODO-073）。
  */
 const L = SCREEN.portrait
   ? {
@@ -102,7 +97,7 @@ const L = SCREEN.portrait
 
 /**
  * 「この回を続ける」の大きさ（TODO-073）。下段の ▶（次へ）と取り違えないよう、
- * アイコンではなく文字のボタンにしてある。
+ * 文字のボタンにしてある。
  */
 const CONTINUE_BUTTON = { width: 190, height: 48 };
 
@@ -116,28 +111,27 @@ const FOOT_GAP = 14;
 const PAGE_TEXT_WIDTH = 64;
 
 /**
- * 確認の枠の寸法。盤に依らない値なので、どの盤の `LAYOUTS` から取っても同じ
- * （この画面は盤を切り替えても組み直さないので、1 つ選んで固定しておく）。
+ * 確認の枠の寸法。盤に依らない値なので、1 つの盤の `LAYOUTS` から取って
+ * 固定する（この画面は盤を切り替えても組み直さないため）。
  */
 const CONFIRM = LAYOUTS[BOARDS['8x8'].key].confirm;
 
 /**
- * 完成形を描くときの、ピースの境目の太さ。マスが 44px ほどまで縮むので、
- * 盤の `OUTLINE.width`（2）のままでは塊の輪郭として細すぎる。
+ * 完成形のピースの境目の太さ。マスが 44px ほどまで縮むので、盤の
+ * `OUTLINE.width`（2）では輪郭として細すぎる。
  */
 const MINI_EDGE = 3;
 
-/** ピース名から定義を引く表。完成形の 60 マスを 1 文字ずつ引くため。 */
+/** ピース名から定義を引く表。完成形の 60 マスを 1 文字ずつ引く。 */
 const PIECE_BY_NAME = new Map(PIECES.map((piece) => [piece.name, piece]));
 
 /**
- * 行の右端へ出す印（TODO-027）。何に頼って解いた回かを、履歴 1 件が持つ
+ * 行の右端へ出す印（TODO-027）。何に頼って解いた回かを、履歴 1 件の
  * `a` / `h`（TODO-024、TODO-028）から組み立てる。
  *
- * 記号やアイコンではなく短い言葉にしてあるのは、**凡例を別に置かなくても
- * 意味が分かるようにするため**。1 文字へ縮めれば横幅は空くが、「お」「ヒ」が
- * 何を指すかはこの画面のどこにも書かれていないことになる。
- * 一番狭い横画面の行（432）でも、日時と時間に「おまかせ・ヒント」を足して収まる。
+ * 記号やアイコンでなく短い言葉にしたのは、**凡例なしで意味が分かるように
+ * するため**。「お」「ヒ」のように 1 文字へ縮めると、何を指すかが画面の
+ * どこにも書かれない。一番狭い横画面の行（432）でも収まる。
  */
 function marksOf(entry) {
   if (!entry) return '';
@@ -147,14 +141,14 @@ function marksOf(entry) {
   return marks.join('・');
 }
 
-/** 2 桁に揃える。日時の表示に使う。 */
+/** 日時の表示で 2 桁に揃える。 */
 function pad2(value) {
   return String(value).padStart(2, '0');
 }
 
 /**
- * クリアした日時。`toLocaleString()` を使わないのは、環境によって桁数や
- * 区切りが変わり、一覧の行ごとに幅が揃わなくなるため。
+ * クリアした日時。`toLocaleString()` は環境で桁数や区切りが変わり、行ごとの
+ * 幅が揃わないので使わない。
  */
 function formatDate(at) {
   const d = new Date(at);
@@ -169,18 +163,18 @@ export default class RecordsScene extends Phaser.Scene {
 
   create() {
     this.cameras.main.setBackgroundColor(COLORS.background);
-    // 見せる盤はこの画面の中で切り替える。タイトルで選んである盤を初めに出す。
+    // 初めはタイトルで選んである盤を出す。
     this.boardKey = this.registry.get(BOARD_REGISTRY_KEY);
     this.palette = PALETTES[this.registry.get(PALETTE_REGISTRY_KEY)];
     this.entries = [];
-    // 見ている盤の全解のデータ（TODO-022）。読み込むまでは null で、
-    // 完成形と達成度はそのあいだ出せない（一覧の日時と時間だけ先に出る）。
+    // 見ている盤の全解のデータ（TODO-022）。読み込むまでは null で、その間は
+    // 完成形と達成度を出せない（一覧の日時と時間だけ先に出る）。
     this.solutions = null;
     this.found = [];
     this.page = 0;
     this.selected = 0;
-    // チェックした回の解の番号（TODO-071）。ページを送っても残し、
-    // 盤を切り替えたら `reload()` が作り直す。
+    // チェックした回の解の番号（TODO-071）。頁を送っても残し、盤を
+    // 切り替えたら `reload()` が作り直す。
     this.checked = new Set();
 
     const cx = SCREEN.width / 2;
@@ -201,14 +195,14 @@ export default class RecordsScene extends Phaser.Scene {
     this.createFoot(cx);
 
     createVersionText(this);
-    // 下段と左上のアイコンの説明。ほかの部品より後に作って手前に出し、確認の枠
-    // （depth 10）には隠れるようにする（本編の `DEPTH` と同じ重なり順）。
+    // アイコンの説明。ほかの部品より後に作って手前に出し、確認の枠（depth 10）
+    // には隠れるようにする（本編の `DEPTH` と同じ重なり順）。
     this.tooltip = createTooltip(this);
     this.createConfirmDialog();
     this.reload();
   }
 
-  /** 一覧の上の「全部選ぶ」チェック（TODO-071）。見えていない頁の分も対象。 */
+  /** 一覧の上の「全部選ぶ」チェック（TODO-071）。見えていない頁のぶんも対象。 */
   createSelectAll() {
     const x = L.listX - L.listWidth / 2 + CHECKBOX.size / 2;
     this.selectAllButton = createButton(this, {
@@ -223,13 +217,12 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 一覧の行と頁送りを組む。行は毎回作り直さず、1 頁ぶんだけ先に作って
-   * 文字と表示・非表示を差し替える（頁を送るたびに当たり判定を作り直すと、
-   * 押した直後の行が入れ替わって二重に反応することがあるため）。
+   * 行は 1 頁ぶんだけ先に作り、文字と表示・非表示を差し替える（頁を送るたびに
+   * 当たり判定を作り直すと、押した直後の行が入れ替わって二重に反応することが
+   * あるため）。
    *
-   * 行の左端にはいつもチェックボックスを出す（TODO-071）。行そのものを
-   * 押すと今までどおり右に完成形を出し、チェックは選ぶ／外すだけをする
-   * （当たり判定を分けてある）。
+   * 行の左端にはいつもチェックボックスを出す（TODO-071）。行を押すと完成形を
+   * 出し、チェックボックスはチェックを付け外しするだけ（当たり判定を分けてある）。
    */
   createList() {
     this.rowButtons = [];
@@ -251,16 +244,15 @@ export default class RecordsScene extends Phaser.Scene {
         height: ROW.height,
         label: '',
         fontSize: FONT.small,
-        // 日時と時間は左端から、印は右端から（TODO-027）。中央寄せのままだと
-        // 印の有無で文字列の長さが変わり、日時の位置が行ごとにずれてしまう。
+        // 日時と時間は左端から、印は右端から（TODO-027）。中央寄せだと
+        // 印の有無で日時の位置が行ごとにずれる。
         align: 'left',
         onClick: () => this.selectRow(i),
       });
       this.rowButtons.push(button);
     }
 
-    // 「記録なし」は一覧の場所へ出す。行が 1 つも無いことが分かればよいので、
-    // 一覧の上端に寄せず、行が並ぶはずの範囲の中ほどに置く。
+    // 「記録なし」は、行が並ぶはずの範囲の中ほどに置く。
     this.emptyText = this.add.text(
       L.listX,
       L.listTop + (ROW.height + ROW.gap) * L.rowsPerPage / 2,
@@ -270,8 +262,8 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 下段。前へ・次へ・頁の数・ゴミ箱を 1 段のアイコンにまとめる（TODO-071）。
-   * タイトルへは画面を離れるボタンなので、本編の HUD と同じく左に分けて
+   * 下段。前へ・次へ・頁の数・ゴミ箱を 1 段にまとめる（TODO-071）。
+   * タイトルへは画面を離れるボタンなので、本編の HUD と同じく分けて、
    * 左上の見出しの高さに置く（TODO-076）。
    */
   createFoot(cx) {
@@ -301,9 +293,8 @@ export default class RecordsScene extends Phaser.Scene {
       x: next(size), y: L.footY, width: size, height,
       label: '', icon: ICONS.trash, tooltip: 'チェックした回を消す', onClick: () => this.confirmTrash(),
     });
-    // `tools/capture.mjs` が撮るときに吹き出しで指すため、他のボタンと同じく
-    // プロパティに持たせておく（クリック先はタイトルへ戻るだけで、シーンの
-    // 状態としては使わない）。
+    // シーンの中では使わないが、`tools/capture.mjs` が吹き出しで指すため
+    // プロパティに持たせる。
     this.titleButton = createButton(this, {
       x: SCREEN.margin + size / 2, y: L.headingY, width: size, height,
       label: '', icon: ICONS.title, tooltip: 'タイトルへ',
@@ -315,7 +306,7 @@ export default class RecordsScene extends Phaser.Scene {
     });
   }
 
-  /** 選んだ 1 件の見出しと、完成形を描く場所、そして達成度。 */
+  /** 選んだ 1 件の見出し、完成形を描く場所、達成度。 */
   createDetail() {
     this.detailText = this.add.text(
       L.boardBox.x + L.boardBox.width / 2, L.detailY, '', {
@@ -332,8 +323,8 @@ export default class RecordsScene extends Phaser.Scene {
       width: CONTINUE_BUTTON.width, height: CONTINUE_BUTTON.height,
       label: 'この回を続ける', fontSize: FONT.small, onClick: () => this.confirmContinue(),
     });
-    // 達成度（TODO-022）。分母は盤で違う（8×8 は 65、6×10 は 2339）ので、
-    // どちらの盤の話かが分かるように盤の名前を頭に付ける。
+    // 達成度（TODO-022）。分母が盤で違う（8×8 は 65、6×10 は 2339）ので、
+    // 盤の名前を頭に付ける。
     this.achieveText = this.add.text(
       L.boardBox.x + L.boardBox.width / 2, L.achieveY, '', {
         fontFamily: FONT.family,
@@ -344,13 +335,14 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 確かめてから進める操作（消す・この回を続ける。TODO-073）の確認。ブラウザの `confirm()` は使わない方針（CLAUDE.md）なので、
-   * `game.js` のタイトルへ戻る確認と同じ組みで Canvas 内に作る。背景の帯に
-   * 当たり判定を持たせ、開いている間は後ろのボタンへクリックが抜けないようにする。
+   * 消す・この回を続ける（TODO-073）の前の確認。ブラウザの `confirm()` は
+   * 使わない（CLAUDE.md）ので、`game.js` のタイトルへ戻る確認と同じ組みで
+   * Canvas 内に作る。背景の帯に当たり判定を持たせ、開いている間は後ろの
+   * ボタンへクリックが抜けないようにする。
    */
   createConfirmDialog() {
     // 開くときに `showConfirm()` が入れ替える（TODO-031）。枠が出ていない間に
-    // 呼ばれることは無いが、鍵を作っておかないと形が場面で変わってしまう。
+    // 呼ばれることは無いが、プロパティの有無が場面で変わらないよう先に作る。
     this.confirmAction = () => this.hideConfirm();
     const x = (SCREEN.width - CONFIRM.width) / 2;
     const y = (SCREEN.height - CONFIRM.height) / 2;
@@ -381,9 +373,9 @@ export default class RecordsScene extends Phaser.Scene {
       height: CONFIRM.buttonHeight,
       label: 'はい',
       fontSize: FONT.small,
-      // どのくらい消すか（TODO-031、TODO-071）は、開くときに決めて
-      // `confirmAction` へ持たせる。枠を組み直すより、文言と行き先だけを
-      // 差し替えるほうが、確認の見え方が分かれずに済む。
+      // 何をするか（TODO-031、TODO-071）は開くときに `confirmAction` へ
+      // 持たせる。枠を組み直さず文言と行き先だけを差し替えれば、確認の見え方が
+      // 分かれない。
       onClick: () => this.confirmAction(),
     }).setDepth(depth).setVisible(false));
     this.confirmParts.push(createButton(this, {
@@ -418,9 +410,9 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 行のチェックを選ぶ／外す（TODO-071）。番号（`entry.no`）で持つので、
-   * 全解のデータが届く前（番号がまだ無い件）はチェックできない——`removeHistoryMany()`
-   * も番号で件を指すため、番号の無いうちは何を消すのかが決まらない。
+   * 行のチェックを付け外しする（TODO-071）。チェックは番号（`entry.no`）で
+   * 持つので、全解のデータが届く前（番号がまだ無い件）は付けられない。
+   * `removeHistoryMany()` も番号で件を指すため、番号が無いと何を消すかが決まらない。
    */
   toggleRow(index) {
     const entry = this.entries[this.page * L.rowsPerPage + index];
@@ -433,7 +425,7 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 「全部選ぶ」。見えている頁だけでなく、**その盤の記録すべて**を対象にする
+   * 「全部選ぶ」。見えている頁だけでなく、**その盤の記録すべて**が対象
    * （TODO-071）。既に全部選んでいれば外す。
    */
   toggleSelectAll() {
@@ -446,7 +438,7 @@ export default class RecordsScene extends Phaser.Scene {
     this.refresh();
   }
 
-  /** 頁を送る。端では押せなくしてあるので、ここでは範囲だけ守る。 */
+  /** 端では押せなくしてあるが、ここでも範囲を守る。 */
   turnPage(step) {
     const pages = this.pageCount();
     const next = Math.min(Math.max(this.page + step, 0), pages - 1);
@@ -457,7 +449,7 @@ export default class RecordsScene extends Phaser.Scene {
     this.refresh();
   }
 
-  /** チェックした回を消す前の確認（TODO-071）。何件消すかを出す。 */
+  /** チェックした回を消す前の確認（TODO-071）。 */
   confirmTrash() {
     if (this.checked.size === 0) return;
     this.showConfirm(
@@ -468,7 +460,7 @@ export default class RecordsScene extends Phaser.Scene {
 
   /**
    * 選んでいる回の完成形から本編を始める（TODO-073）。遊びかけは盤ごとに
-   * 1 つしか持てないので、あれば消えることを確かめてから置き換える。
+   * 1 つだけなので、あれば消えてよいかを確かめてから置き換える。
    */
   confirmContinue() {
     if (this.continueProgress() === null) return;
@@ -493,7 +485,7 @@ export default class RecordsScene extends Phaser.Scene {
 
   /**
    * 遊びかけを置き換えて本編へ移る。遊ぶ盤は `registry` で渡すので、ここで
-   * 見ている盤へ切り替える（この画面で盤を切り替えても、ほかでは書き換えない）。
+   * 見ている盤に書き換える（この画面で盤を切り替えただけでは書き換えない）。
    * `progress` を本編へ直接渡すのは、保存できない環境でも始められるようにするため。
    */
   doContinue() {
@@ -542,15 +534,15 @@ export default class RecordsScene extends Phaser.Scene {
   // ---- 表示 -------------------------------------------------------------
 
   /**
-   * 盤を切り替えた・消したときに、履歴を読み直して先頭から見せ直す。
+   * 履歴を読み直して先頭から見せ直す。
    *
-   * 完成形は番号から引くので、全解のデータが要る（TODO-022）。読み込みを
-   * 待つあいだも一覧の日時と時間は出せるので、先に一度描いてから届いたぶんを
-   * 足す。待っている間にさらに盤を切り替えられることがあるので、**届いた
-   * ときに見ている盤が変わっていたら捨てる**。
+   * 完成形は番号から引くので、全解のデータが要る（TODO-022）。待つ間も
+   * 一覧の日時と時間は出せるので、先に一度描いてから届いたぶんを足す。
+   * 待つ間に盤を切り替えられることがあるので、**届いたときに見ている盤が
+   * 変わっていたら捨てる**。
    *
-   * チェック（`this.checked`）は盤を切り替えたら消す（TODO-071）。別の盤の
-   * 履歴の番号を持ち越しても意味が無いため。
+   * チェック（`this.checked`）は盤を切り替えたら消す（TODO-071）。別の盤の番号を
+   * 持ち越しても意味が無いため。
    */
   reload() {
     const spec = BOARDS[this.boardKey];
@@ -576,7 +568,7 @@ export default class RecordsScene extends Phaser.Scene {
     return Math.max(1, Math.ceil(this.entries.length / L.rowsPerPage));
   }
 
-  /** 一覧・頁送り・完成形を、今の頁と選んでいる 1 件、チェックに合わせて出し直す。 */
+  /** 一覧・頁送り・完成形を、今の頁・選んでいる 1 件・チェックに合わせて出し直す。 */
   refresh() {
     const pages = this.pageCount();
     const ready = this.solutions !== null;
@@ -600,13 +592,13 @@ export default class RecordsScene extends Phaser.Scene {
     const empty = this.entries.length === 0;
     this.emptyText.setVisible(empty);
     // 頁送りは 1 頁に収まっていても出す（端で押せなくする）。1 件も無いときだけ
-    // 行ごと引っ込める。送る先が無いことと、記録が無いことは別なので。
+    // 頁の数を消す。送る先が無いことと、記録が無いことは別なので。
     this.pageText.setText(empty ? '' : `${this.page + 1} / ${pages}`);
     this.prevButton.setEnabled(!empty && this.page > 0);
     this.nextButton.setEnabled(!empty && this.page < pages - 1);
 
-    // 「全部選ぶ」は、番号を持つ件が 1 件以上あり、その全部にチェックが
-    // 付いているときだけ選んである見た目にする（見えていない頁の分も含む）。
+    // 「全部選ぶ」は、番号を持つ件が 1 件以上あり、全部（見えていない頁のぶんも）
+    // にチェックが付いているときだけ選んである見た目にする。
     const nos = this.entries.filter((entry) => entry.no).map((entry) => entry.no);
     const allChecked = ready && nos.length > 0 && nos.every((no) => this.checked.has(no));
     this.selectAllButton.setEnabled(ready && nos.length > 0);
@@ -618,13 +610,12 @@ export default class RecordsScene extends Phaser.Scene {
     this.continueButton.setEnabled(this.continueProgress() !== null);
 
     const entry = this.entries[this.selected];
-    // 何番の解かも添える（TODO-022）。一覧の行は日時と時間だけで揃えたいので、
-    // 番号は選んだ 1 件の見出しにだけ出す。番号はデータが届いてから付く
-    // （古い形の件は読み替えたあとに入る）ので、無いうちは日時と時間だけ。
-    // 印は行にも出るが（TODO-027）、選んだ 1 件の見出しにも添える。行の印は
-    // 一覧を見渡すためのもので、こちらは今どの回を見ているかの確認になる。
-    // **2 行に分ける**のは、番号と印まで 1 行に並べると完成形の枠より横に
-    // はみ出すため（TODO-026 で文字を大きくして収まらなくなった）。
+    // 何番の解かも添える（TODO-022）。一覧の行を日時と時間だけで揃えたいので、
+    // 番号は見出しにだけ出す。番号はデータが届いてから付く（古い形の件は
+    // 読み替えたあとに入る）ので、無いうちは日時と時間だけ。
+    // 印は行にも出るが（TODO-027）、見出しにも添える。行の印は一覧を見渡す
+    // ため、こちらは今どの回を見ているかを確かめるため。
+    // **2 行に分ける**のは、1 行に並べると完成形の枠より横にはみ出すため（TODO-026）。
     const marks = marksOf(entry);
     let second = entry && entry.no ? `${entry.no} 番` : '';
     if (marks !== '') second += second === '' ? `（${marks}）` : `　（${marks}）`;
@@ -644,12 +635,12 @@ export default class RecordsScene extends Phaser.Scene {
    *
    * `boot.js` のテクスチャを貼らずに `Graphics` で塗るのは、テクスチャが盤と
    * トレイの大きさで焼いてあり、この画面のマス（44〜56px）に合う 1 枚が
-   * 無いため。縮小して貼ると立体の帯や光の筋がつぶれ、かえって塊の境目が
+   * 無いため。縮小して貼ると立体の帯や光の筋がつぶれ、かえって境目が
    * 分かりにくくなる。**ピースの境目が見分けられること**だけを目当てに、
    * 塗りと、隣が別のピースになる辺の線だけで描く。
    *
-   * 描く盤面は**番号から引く**（TODO-022）。履歴には 60 マスぶんの文字列を
-   * 持たなくなったので、データが届くまでは描けない。
+   * 盤面は**番号から引く**（TODO-022）。履歴は 60 マスぶんの文字列を持たない
+   * ので、データが届くまでは描けない。
    */
   drawMini(entry) {
     this.mini.clear();
@@ -685,7 +676,7 @@ export default class RecordsScene extends Phaser.Scene {
       }
     }
 
-    // 境目は塗り終えてから引く。先に引くと、あとで塗る隣のマスに上書きされる。
+    // 境目は塗り終えてから引く。先に引くと、隣のマスの塗りで消える。
     for (let row = 0; row < board.rows; row += 1) {
       for (let col = 0; col < board.cols; col += 1) {
         const ch = at(row, col);
