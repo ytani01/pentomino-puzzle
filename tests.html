@@ -175,10 +175,12 @@ test('PALETTES は必要な項目をそろえ、既定の組がその中にあ�
 
 group('src/config.js — トレイのスロット（makeLayout, TODO-053）');
 
-for (const portrait of [false, true]) {
+// 本編は下端に操作の概要を出す（`help: true`。TODO-094）。デモは出さないので両方を見る。
+for (const help of [false, true]) for (const portrait of [false, true]) {
   for (const spec of Object.values(BOARDS)) {
-    const label = `${portrait ? '縦' : '横'}画面・${spec.label}`;
-    const { board, tray } = makeLayout({ portrait, board: spec });
+    const label = `${portrait ? '縦' : '横'}画面・${spec.label}${help ? '・概要あり' : ''}`;
+    const layout = makeLayout({ portrait, board: spec, help });
+    const { board, tray } = layout;
     const longSide = (cells) => 1 + Math.max(...cells.map(([r]) => r), ...cells.map(([, c]) => c));
 
     test(`スロットが 12 個あり、どの 2 つも重ならない（${label}）`, () => {
@@ -219,6 +221,18 @@ for (const portrait of [false, true]) {
         || board.y + spec.rows * board.cell <= tray.y;
       assert(apart, '盤とトレイが重なる');
     });
+
+    if (help) {
+      test(`概要の帯がトレイの下端とメッセージの帯の間に収まる（${label}）`, () => {
+        const { trayPanel, message, height } = layout;
+        const h = layout.help;
+        assert(h.lines > 0 && h.height > 0, '概要の行が無い');
+        // メッセージの帯は画面の下端から、中心 `message.y` の 2 倍ぶん上まで。
+        const messageTop = height - (height - message.y) * 2;
+        assert(h.y - h.height / 2 >= trayPanel.y + trayPanel.height, '概要がトレイにかかる');
+        assert(h.y + h.height / 2 <= messageTop, '概要がメッセージの帯にかかる');
+      });
+    }
   }
 }
 

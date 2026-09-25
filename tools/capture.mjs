@@ -206,8 +206,8 @@ async function shot(page, name) {
     { n: 'C', at: BADGE, text: '解ける／解なし', side: 'right', dist: 16 },
     // ボタンの幅を詰めた（TODO-076）ので、丸がアイコンに重ならないよう下へ出して指す。
     ...[1, 2, 3, 4, 5, 6].map((n) => ({ n, at: `s.buttons[${n - 1}]`, side: 'bottom', dist: 14 })),
-    { n: 'D', at: panel('boardPanel'), text: '盤', side: 'bottom', dist: 8 },
-    { n: 'E', at: panel('trayPanel'), text: 'トレイ', side: 'bottom', dist: 8 },
+    { n: 'D', at: panel('boardPanel'), text: '盤', side: 'bottom', dist: 44 },
+    { n: 'E', at: panel('trayPanel'), text: 'トレイ', side: 'bottom', dist: 44 },
     { n: 'F', at: 's.pieces.find((p) => p.location === "tray" && s.turnMarkKind(p) === "rotate").container',
       text: '次のタップで回る', side: 'right', dist: 40 },
   ]);
@@ -271,7 +271,7 @@ async function shot(page, name) {
     return true;
   }, null, { polling: 'raf' });
   await annotate(page, 'Demo', [
-    { n: 'A', at: 's.statusText', text: '試した手・見つけた解', side: 'top', dist: 14 },
+    { n: 'A', at: 's.statusText', text: '試した手・見つけた解', side: 'top', dist: 52 },
     { n: 'B', at: BADGE, text: '解ける／解なし', side: 'top', dist: 14 },
     ...[1, 2, 3, 4, 5, 6, 7].map((n) => ({ n, at: `s.buttons[${n - 1}]`, side: 'bottom', dist: 14 })),
   ]);

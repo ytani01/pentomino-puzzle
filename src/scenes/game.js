@@ -27,13 +27,16 @@ import {
 import * as audio from '../audio.js';
 import {
   createButton, createHintBadge, createPanel, createTitleBar, createTooltip,
-  drawAcrylic,
+  drawAcrylic, HOW_TO_OPERATE, HOW_TO_OPERATE_SHORT,
 } from '../ui.js';
 import { ICONS } from '../icons.js';
 import { darken, pieceColor, TEX } from './boot.js';
 
 /** 重なりの順。ボタンの説明（TODO-042）は HUD の下へはみ出して盤やピースに
  *  重なるので、HUD より上・確認ダイアログより下に置く。 */
+/** やり直しのボタンの説明。作り直したシーンで出し直すとき（TODO-094）にも使う。 */
+const RESTART_TIP = 'やり直し';
+
 export const DEPTH = {
   board: 0, ghost: 5, piece: 10, traySlot: 15, dragging: 20, hud: 30, tooltip: 35, confirm: 40,
 };
@@ -53,8 +56,13 @@ export default class GameScene extends Phaser.Scene {
    * `progress` を渡すと、保存してある遊びかけではなくその盤面から始める
    * （記録画面の「この回を続ける」。TODO-073）。localStorage が使えない
    * ときも、その回の完成形から始められるようにするため。
+   *
+   * `restartTip` は、タッチで「やり直し」を押して作り直したときに真（TODO-094）。
+   * 押したときに出した説明は作り直す前のシーンのものなので、一緒に消える。
+   * 作り直したシーンで出し直すために受け取る。
    */
   init(data) {
+    this.restartTip = !!(data && data.restartTip);
     this.startProgress = (data && data.progress) || null;
     this.resuming = !!(data && data.resume) || this.startProgress !== null;
   }
@@ -83,6 +91,9 @@ export default class GameScene extends Phaser.Scene {
     this.playing = true;
     // 遊びかけを控えてよいか（TODO-030）。組み立てが済むまでは控えない。
     this.ready = false;
+    // 空の盤で遊びかけを消してよいか（TODO-094）。このシーンで盤に置いたか、
+    // 続きから始めたときだけ真。`persist()` が見る。
+    this.ownsProgress = this.resuming;
     this.pending = null;
     this.drag = null;
     this.messageTimer = null;
@@ -96,7 +107,9 @@ export default class GameScene extends Phaser.Scene {
     this.createTraySlots();
     this.createHud();
     this.createMessage();
+    this.createHelp();
     this.createConfirmDialog();
+    if (this.restartTip) this.tooltip.flash(this.restartButton, RESTART_TIP);
 
     // 全解のデータ（TODO-022）。6×10 は 139KB あるので動的 import で読む。
     // 届くまで [おまかせ] と [ヒント表示] は押せない（`refreshHud()` が見る）。
@@ -312,12 +325,13 @@ export default class GameScene extends Phaser.Scene {
       { icon: ICONS.undo, tooltip: '一手戻す', onClick: () => this.undo() },
       { icon: ICONS.auto, tooltip: 'おまかせ', onClick: () => this.useAuto() },
       { icon: ICONS.hint, tooltip: 'ヒント表示', onClick: () => this.toggleHint() },
-      { icon: ICONS.restart, tooltip: 'やり直し', onClick: () => this.restart() },
+      { icon: ICONS.restart, tooltip: RESTART_TIP, onClick: () => this.confirmRestart() },
       { ...this.muteFace(audio.isMuted()), onClick: () => this.toggleMute() },
     ]);
     this.undoButton = this.buttons[1];
     this.autoButton = this.buttons[2];
     this.hintButton = this.buttons[3];
+    this.restartButton = this.buttons[4];
     this.muteButton = this.buttons[5];
   }
 
@@ -364,7 +378,25 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * タイトルへ戻る前の確認。ブラウザの `confirm()` は使わない（CLAUDE.md）ので、
+   * 操作の概要を下端に出しておく（TODO-094）。タイトルの遊び方を読まずに
+   * 始めても、遊びながら操作を確かめられるようにするため。デモは自分の
+   * `create()` を持ち、ここを呼ばない（ピースを操作できないので要らない）。
+   */
+  createHelp() {
+    const { x, y, lines } = this.layout.help;
+    const text = lines > 1 ? HOW_TO_OPERATE.join('\n') : HOW_TO_OPERATE_SHORT;
+    this.add.text(x, y, text, {
+      fontFamily: FONT.family,
+      fontSize: `${FONT.small}px`,
+      color: TEXT_COLORS.dim,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(DEPTH.hud);
+  }
+
+  /**
+   * 確認の枠。タイトルへ戻る前とやり直す前（TODO-094）で同じ枠を使い、
+   * 文言と「はい」の動作だけを `showConfirm()` で差し替える。
+   * ブラウザの `confirm()` は使わない（CLAUDE.md）ので、
    * Canvas 内に組む。背景の帯に画面全体を覆う当たり判定を持たせ、開いている間は
    * ピースやほかのボタンへクリックが抜けないようにする（Phaser の入力は既定で
    * 最前面の対象だけに配る `topOnly` なので、これで足りる）。
@@ -385,16 +417,14 @@ export default class GameScene extends Phaser.Scene {
       createPanel(this, x, y, cfg.width, cfg.height).setDepth(DEPTH.confirm).setVisible(false),
     );
 
-    this.confirmParts.push(
-      // 途中の盤面は残るので（TODO-030）、失われるとは言わない。
-      this.add.text(x + cfg.width / 2, y + 50,
-                    'タイトルへ戻りますか？\n途中の盤面は残るので、\n「つづきから」で再開できます', {
-        fontFamily: FONT.family,
-        fontSize: `${FONT.body}px`,
-        color: TEXT_COLORS.normal,
-        align: 'center',
-      }).setOrigin(0.5).setDepth(DEPTH.confirm).setVisible(false),
-    );
+    this.confirmText = this.add.text(x + cfg.width / 2, y + 50, '', {
+      fontFamily: FONT.family,
+      fontSize: `${FONT.body}px`,
+      color: TEXT_COLORS.normal,
+      align: 'center',
+    }).setOrigin(0.5).setDepth(DEPTH.confirm).setVisible(false);
+    this.confirmParts.push(this.confirmText);
+    this.confirmAction = null;
 
     const buttonY = y + cfg.height - 40;
     const totalWidth = cfg.buttonWidth * 2 + cfg.gap;
@@ -406,7 +436,7 @@ export default class GameScene extends Phaser.Scene {
       height: cfg.buttonHeight,
       label: 'はい',
       fontSize: FONT.small,
-      onClick: () => this.goToTitle(),
+      onClick: () => this.confirmAction(),
     }).setDepth(DEPTH.confirm).setVisible(false));
     this.confirmParts.push(createButton(this, {
       x: left + cfg.buttonWidth + cfg.gap + cfg.buttonWidth / 2,
@@ -1063,16 +1093,21 @@ export default class GameScene extends Phaser.Scene {
    *
    * 1 個も置いていないときは控えずに消す。残しても `つづきから` が
    * 「はじめから」と同じになるだけで、押せるボタンが増えたぶん紛らわしい。
+   * ただし消すのは、このシーンで盤に置いたか、続きから始めたとき
+   * （`ownsProgress`）だけ（TODO-094）。何も置かずにホーム・やり直し・
+   * ヒント表示を押したときや、全解のデータが届いたときに、前の遊びかけを
+   * 消さないため。
    * `playing` が偽のとき（クリア表示を出している間・やり直しで捨てたあと）は
    * 何もしない。完成した盤面は `checkSolved()` が `playing` を偽にする前に
    * 控える（TODO-072）。
    */
   persist() {
     if (!this.playing) return;
-    if (this.pieces.every((piece) => piece.location === 'tray')) {
-      clearProgress(this.spec.key);
+    if (this.boardIsEmpty()) {
+      if (this.ownsProgress) clearProgress(this.spec.key);
       return;
     }
+    this.ownsProgress = true;
     saveProgress(this.spec.key, {
       ms: this.elapsed,
       usedAuto: this.usedAuto,
@@ -1203,7 +1238,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 同じ盤を最初から。遊びかけは捨てる（TODO-030）。
+   * 同じ盤を最初から。遊びかけは捨てる（TODO-030）。ただし何も置かずに
+   * 押したときは、前の遊びかけを残す（`persist()` と同じく `ownsProgress` を見る。TODO-094）。
    *
    * `playing` を先に偽にするのは、シーンを離れるときの控え（`onShutdown()`）に、
    * 捨てた盤面を書き戻させないため。`restart()` に引数を渡すのは、`init()` が
@@ -1212,8 +1248,24 @@ export default class GameScene extends Phaser.Scene {
   restart() {
     audio.button();
     this.playing = false;
-    clearProgress(this.spec.key);
-    this.scene.restart({ resume: false });
+    if (this.ownsProgress) clearProgress(this.spec.key);
+    // タッチで押したときだけ、作り直したシーンで説明を出し直す（TODO-094）。
+    // 確認の「はい」から来たときも、押したのはタッチかマウスかで決める。
+    this.scene.restart({ resume: false, restartTip: this.input.activePointer.wasTouch });
+  }
+
+  /** 盤に 1 つも置いていないか。置いていなければ、失うものが無いので確認を出さない（TODO-094）。 */
+  boardIsEmpty() {
+    return this.pieces.every((piece) => piece.location === 'tray');
+  }
+
+  /** やり直す前の確認（TODO-094）。今の盤面と遊びかけを捨てるので、押し間違いに備える。 */
+  confirmRestart() {
+    if (this.boardIsEmpty()) {
+      this.restart();
+      return;
+    }
+    this.showConfirm('やり直しますか？\n今の盤面は消えます', () => this.restart());
   }
 
   /**
@@ -1233,8 +1285,26 @@ export default class GameScene extends Phaser.Scene {
     if (!muted) audio.button();
   }
 
+  /**
+   * タイトルへ戻る前の確認。HUD のボタンとタイトル行（`createTitleBar()`）の両方から来る。
+   *
+   * 盤に何も置いていなければ、失うものが無いので確認せずに戻る（TODO-094）。
+   * 前の遊びかけは `persist()` が残す。
+   */
   confirmToTitle() {
+    if (this.boardIsEmpty()) {
+      this.goToTitle();
+      return;
+    }
+    // 途中の盤面は残るので（TODO-030）、失われるとは言わない。
+    this.showConfirm('タイトルへ戻りますか？\n途中の盤面は残るので、\n「つづきから」で再開できます',
+                     () => this.goToTitle());
+  }
+
+  showConfirm(message, onYes) {
     audio.button();
+    this.confirmText.setText(message);
+    this.confirmAction = onYes;
     this.confirmParts.forEach((part) => part.setVisible(true));
   }
 

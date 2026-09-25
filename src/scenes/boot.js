@@ -7,7 +7,7 @@
  */
 
 import {
-  BOARD_REGISTRY_KEY, COLORS, DEFAULT_BOARD_KEY, DEMO_LAYOUTS, GLASS, LAYOUTS, NEON, PALETTES,
+  BOARD_GLASS, BOARD_REGISTRY_KEY, COLORS, DEFAULT_BOARD_KEY, DEMO_LAYOUTS, GLASS, LAYOUTS, NEON, PALETTES,
   PALETTE_REGISTRY_KEY, PIECES, TILE,
 } from '../config.js';
 import { parseDemoParams } from '../logic.js';
@@ -71,10 +71,14 @@ export default class BootScene extends Phaser.Scene {
     this.scene.start(parseDemoParams(window.location.search) ? 'Demo' : 'Title');
   }
 
-  /** 盤の地（マス）と、置ける場所に出す影。色の組に依らない。 */
+  /**
+   * 盤の地（マス）と、置ける場所に出す影。色の組に依らない。
+   * 地はガラス面に見せる（TODO-094）。ガラスの組のピースと同じ描き方を、
+   * 控えめな値（`BOARD_GLASS`）で使う。
+   */
   makeBoardTiles(size) {
-    this.makeTile(TEX.boardCell(size), size, COLORS.boardCell, false);
-    this.makeTile(TEX.ghost(size), size, COLORS.ghost, true);
+    this.makeGlassTile(TEX.boardCell(size), size, COLORS.boardCell, BOARD_GLASS);
+    this.makeTile(TEX.ghost(size), size, COLORS.ghost);
   }
 
   /** 1 つの色の組で使うピースのマス。単色なら 12 種で 1 枚に落ちる。 */
@@ -83,7 +87,7 @@ export default class BootScene extends Phaser.Scene {
       const key = TEX.piece(palette, piece.name, size);
       if (palette.glass) this.makeGlassTile(key, size, pieceColor(palette, piece));
       else if (palette.neon) this.makeNeonTile(key, size, pieceColor(palette, piece));
-      else this.makeTile(key, size, pieceColor(palette, piece), true);
+      else this.makeTile(key, size, pieceColor(palette, piece));
     }
   }
 
@@ -92,21 +96,18 @@ export default class BootScene extends Phaser.Scene {
    * 立体感は「上と左を明るく、下と右を暗く」の帯だけで出す
    * （細かい描き込みより、縮小してトレイに並べたときの見え方を優先した）。
    */
-  makeTile(key, size, color, beveled) {
+  makeTile(key, size, color) {
     if (this.textures.exists(key)) return;
     const g = this.make.graphics({ x: 0, y: 0 }, false);
     g.fillStyle(color, 1);
     g.fillRect(0, 0, size, size);
-    if (beveled) {
-      g.fillStyle(TILE.highlight, TILE.highlightAlpha);
-      g.fillRect(0, 0, size, TILE.bevel);
-      g.fillRect(0, 0, TILE.bevel, size);
-      g.fillStyle(TILE.shadow, TILE.shadowAlpha);
-      g.fillRect(0, size - TILE.bevel, size, TILE.bevel);
-      g.fillRect(size - TILE.bevel, 0, TILE.bevel, size);
-    }
-    const edge = beveled ? darken(color, TILE.edgeDarken) : COLORS.boardCellEdge;
-    g.lineStyle(TILE.border, edge, 1);
+    g.fillStyle(TILE.highlight, TILE.highlightAlpha);
+    g.fillRect(0, 0, size, TILE.bevel);
+    g.fillRect(0, 0, TILE.bevel, size);
+    g.fillStyle(TILE.shadow, TILE.shadowAlpha);
+    g.fillRect(0, size - TILE.bevel, size, TILE.bevel);
+    g.fillRect(size - TILE.bevel, 0, TILE.bevel, size);
+    g.lineStyle(TILE.border, darken(color, TILE.edgeDarken), 1);
     g.strokeRect(TILE.border / 2, TILE.border / 2, size - TILE.border, size - TILE.border);
     g.generateTexture(key, size, size);
     g.destroy();
@@ -119,14 +120,17 @@ export default class BootScene extends Phaser.Scene {
    *
    * Graphics の塗りには切り抜きが無いので、対角に沿った帯をマスの外まで伸ばし、
    * はみ出した分は `generateTexture` の大きさで落とす。
+   *
+   * `spec` を差し替えられるのは、盤の空きマス（`BOARD_GLASS`。TODO-094）も
+   * 同じ描き方で焼くため。
    */
-  makeGlassTile(key, size, color) {
+  makeGlassTile(key, size, color, spec = GLASS) {
     if (this.textures.exists(key)) return;
     const g = this.make.graphics({ x: 0, y: 0 }, false);
-    g.fillStyle(color, GLASS.fillAlpha);
+    g.fillStyle(color, spec.fillAlpha);
     g.fillRect(0, 0, size, size);
 
-    for (const streak of GLASS.streaks) {
+    for (const streak of spec.streaks) {
       g.fillStyle(TILE.highlight, streak.alpha);
       // 対角に垂直な帯を、左上の角から `from`〜`to` の位置に置く。
       g.fillPoints([
@@ -137,10 +141,10 @@ export default class BootScene extends Phaser.Scene {
       ], true);
     }
 
-    const inset = GLASS.innerInset;
-    g.lineStyle(GLASS.innerWidth, TILE.highlight, GLASS.innerAlpha);
+    const inset = spec.innerInset;
+    g.lineStyle(spec.innerWidth, TILE.highlight, spec.innerAlpha);
     g.strokeRect(inset, inset, size - inset * 2, size - inset * 2);
-    g.lineStyle(TILE.border, GLASS.gridColor, GLASS.gridAlpha);
+    g.lineStyle(TILE.border, spec.gridColor, spec.gridAlpha);
     g.strokeRect(TILE.border / 2, TILE.border / 2, size - TILE.border, size - TILE.border);
     g.generateTexture(key, size, size);
     g.destroy();

@@ -254,6 +254,7 @@ const HUD_ROW = HUD_BUTTON_HEIGHT + 12; // HUD 1 段ぶんの高さ。ボタン�
 const HUD_REMAIN_X = 140;  // 段の中身の左端から見た「残り n」の位置
 const HUD_STATUS_X = 250;  // 同じく、解の有無（TODO-013）の位置
 const MESSAGE_BAND = 40;   // 画面の下端に空ける、メッセージ 1 行ぶんの帯
+const HELP_LINE = 26;      // 本編だけ、メッセージの帯の上に出す操作の概要 1 行ぶん（TODO-094）
 const TRAY_SLOT_PAD = 6;   // トレイの 1 スロットで、ピースの周りに空ける分
                            // 指を動かす距離を縮めるため詰めてある。この程度の間なら掴みやすさは落ちない（TODO-053）
 const TRAY_CELL_MAX = 20;  // トレイのマスの上限。これより大きくしても掴みやすさは
@@ -332,8 +333,13 @@ function screenSize(portrait) {
  *
  * スロットは `packTray()` が詰めて並べ、盤の側の端から置く（TODO-053）。
  */
-export function makeLayout({ portrait, board, buttons = HUD_BUTTONS, note = false }) {
+export function makeLayout({
+  portrait, board, buttons = HUD_BUTTONS, note = false, help = false,
+}) {
   const { width, height } = screenSize(portrait);
+  // 操作の概要（TODO-094）。縦画面は幅が足りず高さが余るので 3 行、
+  // 横画面は高さが足りないので 1 行に詰める。その分だけ盤とトレイが縮む。
+  const helpLines = help ? (portrait ? 3 : 1) : 0;
   const hudTop = TITLE_BAND + (note ? NOTE_LINE : 0);
 
   // 上限の幅で 1 段に並ぶだけ並べ、はみ出す分は次の段へ折り返す（TODO-076）。
@@ -370,7 +376,7 @@ export function makeLayout({ portrait, board, buttons = HUD_BUTTONS, note = fals
 
   // HUD の下からメッセージの帯の上までが、盤とトレイで分け合う範囲。
   const top = hud.y + hud.height + GAP;
-  const bottom = height - MESSAGE_BAND;
+  const bottom = height - MESSAGE_BAND - helpLines * HELP_LINE;
 
   // トレイに要る奥行き（棚の合計）だけを盤の取り分から引く。
   const trayLength = portrait
@@ -447,6 +453,10 @@ export function makeLayout({ portrait, board, buttons = HUD_BUTTONS, note = fals
     tray: { ...trayInner, cell: tray.cell, slots },
     trayPanel,
     message: { x: width / 2, y: height - MESSAGE_BAND / 2 },
+    // 概要はトレイとメッセージの帯の間。`lines` が 0 なら出さない（デモ）。
+    help: {
+      x: width / 2, y: bottom + (helpLines * HELP_LINE) / 2, lines: helpLines, height: helpLines * HELP_LINE,
+    },
     confirm: {
       width: 460, height: 200, buttonWidth: 130, buttonHeight: 56, gap: 20,
     },
@@ -475,7 +485,9 @@ export const SCREEN = { portrait: PORTRAIT, margin: MARGIN, ...screenSize(PORTRA
  * 中身は画面の向きと盤の大きさだけで決まるので、先に作っても同じになる。
  */
 export const LAYOUTS = Object.fromEntries(
-  Object.values(BOARDS).map((board) => [board.key, makeLayout({ portrait: PORTRAIT, board })]),
+  Object.values(BOARDS).map((board) => [
+    board.key, makeLayout({ portrait: PORTRAIT, board, help: true }),
+  ]),
 );
 
 /**
@@ -534,6 +546,23 @@ export const GLASS = {
   streaks: [
     { from: 0.42, to: 0.72, alpha: 0.16 },
     { from: 0.86, to: 0.98, alpha: 0.1 },
+  ],
+};
+
+/**
+ * 盤の空きマスの下地（TODO-094）。`GLASS` と同じ作りで、枠の地を透かす
+ * ガラス面に見せる。8×8 の中央の板（`ACRYLIC`）と見分けられるよう、
+ * 筋はマスごとに細く 1 本だけにして、板の大きな筋より控えめにする。
+ */
+export const BOARD_GLASS = {
+  fillAlpha: 0.7,
+  innerInset: 2.5,
+  innerAlpha: 0.08,
+  innerWidth: 1,
+  gridColor: COLORS.boardCellEdge,
+  gridAlpha: 1,
+  streaks: [
+    { from: 0.5, to: 0.62, alpha: 0.06 },
   ],
 };
 

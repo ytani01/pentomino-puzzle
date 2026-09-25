@@ -21,7 +21,7 @@ import { loadBest, loadProgress, savePalette } from '../storage.js';
 import * as audio from '../audio.js';
 import {
   CHOICE_ICON_HEIGHT, createButton, createChoiceRow, createPanel, createTooltip,
-  createVersionText, drawMiniBoard, stackTops,
+  createVersionText, drawMiniBoard, HOW_TO_OPERATE, stackTops,
 } from '../ui.js';
 import { boardIcon, paletteIcon } from '../icons.js';
 
@@ -92,14 +92,13 @@ const DEMO_BUTTON = {
 };
 
 /**
- * 遊び方。盤を選び直しても変わらない文言（TODO-092）。
+ * 遊び方。盤を選び直しても変わらない文言（TODO-092）。操作の 3 行は本編の
+ * 下端と同じものを使う（TODO-094）。
  */
 const HOW_TO_PLAY_TEXT = [
   '12 種のピースを盤にすき間なく敷き詰めるパズル。',
   '',
-  'ドラッグ … 置く / 動かす',
-  'タップ … 次の向きへ（回転と裏返しを順に巡る）',
-  '盤から外す … 盤の外で離す / トレイの方へ振る',
+  ...HOW_TO_OPERATE,
 ].join('\n');
 
 export default class TitleScene extends Phaser.Scene {
