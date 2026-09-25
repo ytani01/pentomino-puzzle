@@ -58,7 +58,7 @@ import { SOLUTIONS as SOLUTIONS_8X8 } from './src/data/8x8.js';
 import { SOLUTIONS as SOLUTIONS_6X10 } from './src/data/6x10.js';
 import {
   sanitizeHistory, sanitizeFound, migrateHistory, loadHistory,
-  clearHistory, loadFound, addFound, clearFound, loadBest, shouldRecordBest,
+  loadFound, addFound, clearFound, loadBest, shouldRecordBest,
   loadAuto, addAuto, clearAuto,
   removeHistory, removeHistoryMany, removeRecords, removeFound, removeAuto,
   sanitizeProgress, loadProgress, saveProgress, clearProgress, progressFromRecord,
@@ -3160,23 +3160,6 @@ for (const state of boardStates) {
     });
   });
 
-  test(`clearHistory の後は空の配列になる（${spec.label}）`, () => {
-    withCleanStorage(spec, () => {
-      recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
-      clearHistory(spec.key);
-      assertSame(loadHistory(spec.key), []);
-    });
-  });
-
-  test(`clearHistory は最短時間（loadBest）を消さない（${spec.label}）`, () => {
-    withCleanStorage(spec, () => {
-      window.localStorage.setItem(spec.storageKey, '12345');
-      recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
-      clearHistory(spec.key);
-      assertSame(loadBest(spec.key), 12345, '最短時間が消えた');
-    });
-  });
-
   test(`addFound は同じ番号を二度足さず、昇順で返る（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
       addFound(spec.key, 3, total);
@@ -3530,7 +3513,7 @@ for (const state of boardStates) {
     withCleanStorage(spec, () => {
       saveProgress(spec.key, progressFrom(spec, canonical[0], ['X']));
       recordClear(spec.key, { at: 1000, ms: 100, no: 1 }, solutions);
-      clearHistory(spec.key);
+      window.localStorage.removeItem(spec.historyKey);
       clearFound(spec.key);
       assert(loadProgress(spec.key) !== null, '記録を消したら遊びかけまで消えた');
     });

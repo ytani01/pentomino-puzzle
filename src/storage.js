@@ -365,15 +365,6 @@ export function removeRecords(boardKey, nos, solutions) {
   return next;
 }
 
-/** その盤の履歴を消す。最短時間は消さない。 */
-export function clearHistory(boardKey) {
-  try {
-    window.localStorage.removeItem(boardOf(boardKey).historyKey);
-  } catch (error) {
-    // 消せなくても実害は無い。
-  }
-}
-
 /**
  * 見つけた解の番号（TODO-022）。達成度（8×8 なら「65 解中 12 解」）を出すため、
  * 履歴（`HISTORY_LIMIT` = 50 件）とは**別に番号だけを全部貯める**。
