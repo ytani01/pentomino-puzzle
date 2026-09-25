@@ -696,6 +696,10 @@ export const ICON = {
  * - `pieceGap` … 見本のピースどうしの間
  * - `pieces` … 見本に使うピース。12 色の並びから色相の離れたもので、形も
  *   見分けやすい F・W・X（どれも 3 マス四方）
+ * - `glowScale` … ネオンのにじみ（`NEON.glow`）を見本の大きさへ縮める比
+ *   （TODO-092）。`NEON.glow` は盤の 1 マス（`OUTLINE.width` の説明にある
+ *   64px）の座標系での太さなので、見本の 1 マス（`pieceCell` = 12）との比
+ *   `12 / 64` で縮める
  */
 export const CHOICE_ICON = {
   boardCell: 6,
@@ -703,6 +707,7 @@ export const CHOICE_ICON = {
   pieceCell: 12,
   pieceGap: 9,
   pieces: ['F', 'W', 'X'],
+  glowScale: 12 / 64,
 };
 
 /**

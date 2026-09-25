@@ -180,11 +180,11 @@ async function shot(page, name) {
     { n: 2, at: 's.paletteButtons', text: '色の組を選ぶ', side: 'left', frame: true, dist: 50 },
     { n: 3, at: 's.children.list.find((c) => c.list?.[2]?.text === "はじめる")',
       text: 'はじめる', side: 'left' },
-    { n: 4, at: 's.resumeButton', text: 'つづきから', side: 'right' },
+    { n: 4, at: 's.resumeButton', text: 'つづきから', side: 'bottom', dist: 14 },
     { n: 5, at: 's.children.list.find((c) => c.list?.[2]?.text === "記録")',
-      text: '記録', side: 'left' },
+      text: '記録', side: 'bottom', dist: 14 },
     { n: 6, at: 's.children.list.find((c) => c.list?.[2]?.text === "デモ")',
-      text: 'デモ', side: 'right' },
+      text: 'デモ', side: 'top', dist: 14 },
   ]);
   await shot(page, 'title.png');
   await context.close();

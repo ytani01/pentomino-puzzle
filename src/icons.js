@@ -11,7 +11,7 @@
  */
 
 import { CHOICE_ICON, GLASS, ICON, NEON, PIECES, TILE } from './config.js';
-import { boardCells } from './logic.js';
+import { boardCells, outlineEdges, shapeSize } from './logic.js';
 import { darken, pieceColor } from './scenes/boot.js';
 
 const U = ICON.size / 2;
@@ -246,14 +246,20 @@ export function boardIcon(board) {
  * タイトルで選ぶ色の組の見本（TODO-046）。ピース F・W・X を並べて描く（TODO-087）。
  * 塗り・マスの区切り・外周の色と太さは、盤のマス目（`boot.js`）とピースの
  * 外周（`game.js`）に揃える。外周は本編と同じく線の太さの半分だけ内側へ寄せる。
- * 12 色の立体感、ガラスの光の筋、ネオンのにじみは、この大きさでは潰れるので描かない。
+ * 12 色の立体感、ガラスの光の筋は、この大きさでは潰れるので描かない。
+ *
+ * ネオンのにじみは、本編（`game.js` の `drawPieceEdges()`）と同じ描き方で
+ * 外周の内側へ重ねる（TODO-092）。太さは `NEON.glow` を見本の 1 マスとの比
+ * （`CHOICE_ICON.glowScale`）で縮める。明滅はしない（1 枚絵の見本なので）。
  *
  * マス目テクスチャを縮めて貼らないのは、蛍光の組の光る縁が細くなって暗く沈むため。
  * 見本の色は組ごとに決まっているので、選択の状態の `color` は使わない（選んだことは
  * 枠の強調色で分かる）。
  */
 export function paletteIcon(palette) {
-  const { pieceCell: cell, pieceGap: gap, pieces } = CHOICE_ICON;
+  const {
+    pieceCell: cell, pieceGap: gap, pieces, glowScale,
+  } = CHOICE_ICON;
   const size = cell * 3;
   const half = palette.outlineWidth / 2;
   return (g) => {
@@ -266,6 +272,42 @@ export function paletteIcon(palette) {
       g.fillStyle(palette.neon ? darken(color, NEON.fillDarken) : color,
                   palette.glass ? GLASS.fillAlpha : 1);
       for (const [row, col] of piece.cells) g.fillRect(left + col * cell, top + row * cell, cell, cell);
+
+      // ネオンのにじみ。凹の角の欠け（`drawPieceEdges()` と同じ理由）を、
+      // 芯より先に埋めておく。
+      if (palette.neon) {
+        const shape = shapeSize(piece.cells);
+        const edges = outlineEdges(piece.cells);
+        const concaveCorners = [];
+        for (let row = 0; row <= shape.rows; row += 1) {
+          for (let col = 0; col <= shape.cols; col += 1) {
+            const around = [[-1, -1], [-1, 0], [0, -1], [0, 0]]
+              .filter(([dr, dc]) => !has(row + dr, col + dc));
+            if (around.length !== 1) continue;
+            const [[dr, dc]] = around;
+            concaveCorners.push([row, col, dr === -1, dc === -1]);
+          }
+        }
+        for (const layer of NEON.glow) {
+          const width = layer.width * glowScale;
+          const inset = width / 2;
+          g.fillStyle(color, layer.alpha);
+          for (const [row, col, missingUp, missingLeft] of concaveCorners) {
+            g.fillRect(left + col * cell - (missingLeft ? 0 : width),
+                      top + row * cell - (missingUp ? 0 : width), width, width);
+          }
+          g.lineStyle(width, color, layer.alpha);
+          for (const [r1, c1, r2, c2] of edges) {
+            const horizontal = r1 === r2;
+            const dr = horizontal && has(r1, c1) ? inset : -inset;
+            const dc = !horizontal && has(r1, c1) ? inset : -inset;
+            const x = horizontal ? 0 : dc;
+            const y = horizontal ? dr : 0;
+            g.lineBetween(left + c1 * cell + x, top + r1 * cell + y,
+                          left + c2 * cell + x, top + r2 * cell + y);
+          }
+        }
+      }
 
       if (palette.glass) g.lineStyle(TILE.border, GLASS.gridColor, GLASS.gridAlpha);
       else if (palette.neon) g.lineStyle(TILE.border, color, NEON.gridAlpha);

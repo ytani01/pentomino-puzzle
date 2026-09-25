@@ -32,9 +32,12 @@ const CHOICE_ROW = CHOICE_ICON_HEIGHT + 2;
  * 上から順に積む部品。`height` は部品の高さ、`gap` は次の部品までの間隔。
  * 縦画面では画面が高くなるぶんだけ、この塊ごと下へずれる（TODO-011）。
  *
+ * `はじめる`・`つづきから`・`記録` を 1 行にまとめ（`start`）、`デモ` は
+ * ここに含めず画面の右下へ固定で置く（TODO-092）。
+ *
  * 横画面（高さ 640）は、動く盤を遊び方の枠の左に並べ（`PREVIEW`）、
- * 盤・色のボタンを高くした（TODO-087）ぶん間隔を詰めてあり、**合わせて 634 で
- * 下端に 6 ほどしか余らない**（TODO-008・TODO-026・TODO-076）。
+ * 盤・色のボタンを高くした（TODO-087）ぶん間隔を詰めてあり、**合わせて 572 で
+ * 下端に 68 ほど余る**（TODO-008・TODO-026・TODO-076・TODO-092）。
  * ここへ行を足すときは、まず間隔から削ること。縦画面は余りが大きいので、
  * 動く盤を題字の下に 1 行として置き、間隔も広げてある。
  */
@@ -47,8 +50,7 @@ const STACK = SCREEN.portrait ? [
   { key: 'palette', height: CHOICE_ROW, gap: 14 },
   { key: 'best', height: 30, gap: 12 },
   { key: 'start', height: 64, gap: 8 },
-  { key: 'keyHint', height: 24, gap: 12 },
-  { key: 'records', height: 56, gap: 0 },
+  { key: 'keyHint', height: 24, gap: 0 },
 ] : [
   { key: 'title', height: 68, gap: 4 },
   { key: 'subtitle', height: 36, gap: 8 },
@@ -57,8 +59,7 @@ const STACK = SCREEN.portrait ? [
   { key: 'palette', height: CHOICE_ROW, gap: 8 },
   { key: 'best', height: 30, gap: 6 },
   { key: 'start', height: 64, gap: 6 },
-  { key: 'keyHint', height: 24, gap: 6 },
-  { key: 'records', height: 56, gap: 0 },
+  { key: 'keyHint', height: 24, gap: 0 },
 ];
 
 /**
@@ -76,34 +77,30 @@ const PREVIEW = { width: SCREEN.portrait ? 400 : 200, gap: 16 };
 const STACK_BIAS = SCREEN.portrait ? 0.5 : 0.7;
 
 /**
- * `はじめる` と `つづきから` の 1 個ぶん（TODO-030）。2 個を横に並べても
- * 縦画面（内部解像度 640）の左右の余白に収まる大きさにしてある。
+ * `はじめる`・`つづきから`・`記録` の 1 個ぶん（TODO-030・TODO-092）。
+ * 3 個を横に並べても縦画面（内部解像度 640）の左右の余白に収まる大きさに
+ * してある（一番長い「つづきから」の 5 文字が `FONT.hud` で収まる幅）。
  */
-const START = { width: 224, height: 64, gap: 20 };
+const START = { width: 190, height: 64, gap: 14 };
 
 /**
- * `記録` と `デモ`（TODO-040）の 1 個ぶん。行を足すと横画面の縦が足りない
- * （`STACK` の説明）ので、`はじめる` の行と同じく 2 個を横に並べる。
+ * `デモ` は右下に固定で置く（TODO-092）。他の操作ボタンより一段控えめな
+ * 大きさにし、右下のバージョン表示（`createVersionText()`）の上に重ねずに置く。
  */
-const SUB = { width: 160, height: 56, gap: 20 };
+const DEMO_BUTTON = {
+  width: 120, height: 44, marginRight: 14, marginBottom: 46,
+};
 
 /**
- * 遊び方。1 行目は盤で変わるので、盤の `label` と `note` から組み立てる。
- *
- * 1 文目を 2 行に割るのは、文字を大きくした（TODO-026）ため枠に収まらず、
- * `wordWrap` に任せると盤によって折り返す場所が変わるため（8×8 と 6×10 で
- * 但し書きの長さが違う）。切れ目を決め打ちにして、どちらの盤でも同じ形に出す。
+ * 遊び方。盤を選び直しても変わらない文言（TODO-092）。
  */
-function howToPlay(board) {
-  return [
-    `${board.label}（${board.note}）の 60 マスへ、`,
-    '12 種のピースをすべて置く。',
-    '',
-    'ドラッグ … 置く / 動かす',
-    'タップ … 次の向きへ（回転と裏返しを順に巡る）',
-    '盤から外す … 盤の外で離す / トレイの方へ振る',
-  ].join('\n');
-}
+const HOW_TO_PLAY_TEXT = [
+  '12 種のピースを盤にすき間なく敷き詰めるパズル。',
+  '',
+  'ドラッグ … 置く / 動かす',
+  'タップ … 次の向きへ（回転と裏返しを順に巡る）',
+  '盤から外す … 盤の外で離す / トレイの方へ振る',
+].join('\n');
 
 export default class TitleScene extends Phaser.Scene {
   constructor() {
@@ -149,13 +146,13 @@ export default class TitleScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     createPanel(this, panelX, topOf('howTo'), panelWidth, STACK[indexOf('howTo')].height);
-    this.howToText = this.add.text(panelX + panelWidth / 2, centerOf('howTo'), '', {
+    this.add.text(panelX + panelWidth / 2, centerOf('howTo'), HOW_TO_PLAY_TEXT, {
       fontFamily: FONT.family,
       fontSize: `${FONT.body}px`,
       color: TEXT_COLORS.dim,
       align: 'center',
       lineSpacing: 4,
-      // 枠を詰めた縦画面では 1 行目が入りきらないので、枠の内側で折り返す。
+      // 枠を詰めた縦画面では折り返すことがあるので、枠の内側で折り返す。
       wordWrap: { width: panelWidth - 32 },
     }).setOrigin(0.5);
 
@@ -181,9 +178,8 @@ export default class TitleScene extends Phaser.Scene {
       fontSize: `${FONT.hud}px`,
     }).setOrigin(0.5);
 
-    // `はじめる` と `つづきから` は同じ行に並べる（TODO-030）。行を足すと
-    // 横画面（内部解像度 640）の縦が足りなくなる（`STACK` の説明）。
-    const startStep = (START.width + START.gap) / 2;
+    // `はじめる`・`つづきから`・`記録` は同じ行に並べる（TODO-030・TODO-092）。
+    const startStep = START.width + START.gap;
     createButton(this, {
       x: cx - startStep,
       y: centerOf('start'),
@@ -196,7 +192,7 @@ export default class TitleScene extends Phaser.Scene {
     // 遊びかけが無い盤では押せなくする（記録の画面の `消す` と同じ見せ方）。
     // 隠さないのは、盤を選び直すとボタンが出たり消えたりして行が動くため。
     this.resumeButton = createButton(this, {
-      x: cx + startStep,
+      x: cx,
       y: centerOf('start'),
       width: START.width,
       height: START.height,
@@ -206,6 +202,21 @@ export default class TitleScene extends Phaser.Scene {
         audio.unlock();
         audio.button();
         this.scene.start('Game', { resume: true });
+      },
+    });
+    // 記録の一覧（TODO-008）。盤はあちらでも切り替えられるので、ここで
+    // 選んでいる盤に関わらず 1 つのボタンから入れる。
+    createButton(this, {
+      x: cx + startStep,
+      y: centerOf('start'),
+      width: START.width,
+      height: START.height,
+      label: '記録',
+      fontSize: FONT.hud,
+      onClick: () => {
+        audio.unlock();
+        audio.button();
+        this.scene.start('Records');
       },
     });
 
@@ -220,27 +231,13 @@ export default class TitleScene extends Phaser.Scene {
       color: TEXT_COLORS.dim,
     }).setOrigin(0.5);
 
-    // 記録の一覧（TODO-008）。盤はあちらでも切り替えられるので、ここで
-    // 選んでいる盤に関わらず 1 つのボタンから入れる。
-    const subStep = (SUB.width + SUB.gap) / 2;
+    // デモ（TODO-040・TODO-092）。盤と色の組は本編と同じく registry から読む。
+    // 右下に固定で置き、バージョン表示（`createVersionText()`）の上に重ねる。
     createButton(this, {
-      x: cx - subStep,
-      y: centerOf('records'),
-      width: SUB.width,
-      height: SUB.height,
-      label: '記録',
-      onClick: () => {
-        audio.unlock();
-        audio.button();
-        this.scene.start('Records');
-      },
-    });
-    // デモ（TODO-040）。盤と色の組は本編と同じく registry から読む。
-    createButton(this, {
-      x: cx + subStep,
-      y: centerOf('records'),
-      width: SUB.width,
-      height: SUB.height,
+      x: SCREEN.width - DEMO_BUTTON.marginRight - DEMO_BUTTON.width / 2,
+      y: SCREEN.height - DEMO_BUTTON.marginBottom - DEMO_BUTTON.height / 2,
+      width: DEMO_BUTTON.width,
+      height: DEMO_BUTTON.height,
       label: 'デモ',
       onClick: () => {
         audio.unlock();
@@ -287,11 +284,9 @@ export default class TitleScene extends Phaser.Scene {
     this.drawPreview();
   }
 
-  /** 選んでいる盤に合わせて、ボタン・遊び方・最短時間を出し直す。 */
+  /** 選んでいる盤に合わせて、ボタン・最短時間を出し直す（遊び方は盤で変わらない）。 */
   refreshBoard() {
-    const board = BOARDS[this.boardKey];
     this.boardButtons.forEach((button) => button.setSelected(button.choiceKey === this.boardKey));
-    this.howToText.setText(howToPlay(board));
     const best = loadBest(this.boardKey);
     this.bestText.setText(best === null ? '記録なし' : `最短 ${formatTime(best)}`);
     this.bestText.setColor(best === null ? TEXT_COLORS.dim : TEXT_COLORS.accent);
