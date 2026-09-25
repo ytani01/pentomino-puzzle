@@ -79,7 +79,7 @@ export default class ClearScene extends Phaser.Scene {
 
   create() {
     const board = BOARDS[this.registry.get(BOARD_REGISTRY_KEY)];
-    const selfSolved = shouldRecordBest(this.usedAuto, this.usedHint);
+    const countsForBest = shouldRecordBest(this.usedAuto);
     audio.fanfare();
 
     // 下の本編を暗くする幕。本編は止めてあり入力を受けないので、当たり判定は要らない。
@@ -123,8 +123,8 @@ export default class ClearScene extends Phaser.Scene {
                     }).setOrigin(0.5);
     }
 
-    // 記録は盤ごとなので、最短時間の行には盤の名前を添える。おまかせ・ヒント
-    // 表示を使った回は、最短時間を更新しなかったと伝わる言い方にする（TODO-020）。
+    // 記録は盤ごとなので、最短時間の行には盤の名前を添える。おまかせを使った回は、
+    // 最短時間を更新しなかったと伝わる言い方にする（TODO-020・TODO-088）。
     // **一覧には残る**ので「記録しない」とは言わない（TODO-024）。
     // 状態の行は、履歴に足したか・上書きしたか・前の記録のままか（TODO-072）。
     // HUD にも同じものを出す。
@@ -137,7 +137,7 @@ export default class ClearScene extends Phaser.Scene {
     }
 
     let bestLine;
-    if (!selfSolved) {
+    if (!countsForBest) {
       bestLine = this.best !== null
         ? `${board.label} の最短 ${formatTime(this.best)}（今回は最短に入れない）`
         : `${board.label} はまだ最短の記録が無い`;
@@ -152,7 +152,7 @@ export default class ClearScene extends Phaser.Scene {
       color: this.bestUpdated ? TEXT_COLORS.accent : TEXT_COLORS.dim,
     }).setOrigin(0.5);
 
-    // おまかせ・ヒント表示のどちらを使ったかは、最短に入らない理由として伝える。
+    // おまかせ・ヒント表示のどちらを使ったかを伝える（おまかせは最短に入らない理由）。
     // 一覧には同じ印が付いて残る（TODO-024）ので、そのことも添える。
     const helps = [];
     if (this.usedAuto) helps.push('おまかせ');

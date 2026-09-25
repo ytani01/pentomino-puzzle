@@ -58,7 +58,7 @@ import { SOLUTIONS as SOLUTIONS_8X8 } from './src/data/8x8.js';
 import { SOLUTIONS as SOLUTIONS_6X10 } from './src/data/6x10.js';
 import {
   sanitizeHistory, sanitizeFound, migrateHistory, loadHistory,
-  loadFound, addFound, clearFound, loadBest, shouldRecordBest,
+  loadFound, addFound, clearFound, loadBest, saveBest, shouldRecordBest,
   loadAuto, addAuto, clearAuto,
   removeHistory, removeHistoryMany, removeRecords, removeFound, removeAuto,
   sanitizeProgress, loadProgress, saveProgress, clearProgress, progressFromRecord,
@@ -3294,49 +3294,40 @@ for (const { spec, canonical } of boardStates) {
 
 group('src/storage.js — 最短時間を更新してよいか（shouldRecordBest）');
 
-test('おまかせもヒント表示も使っていなければ最短時間を更新してよい', () => {
-  assertSame(shouldRecordBest(false, false), true);
+test('おまかせを使っていなければ最短時間を更新してよい（ヒント表示は問わない。TODO-088）', () => {
+  assertSame(shouldRecordBest(false), true);
 });
 
 test('おまかせを使ったら最短時間は更新しない', () => {
-  assertSame(shouldRecordBest(true, false), false);
-});
-
-test('ヒント表示を使ったら最短時間は更新しない', () => {
-  assertSame(shouldRecordBest(false, true), false);
-});
-
-test('両方使っても最短時間は更新しない', () => {
-  assertSame(shouldRecordBest(true, true), false);
+  assertSame(shouldRecordBest(true), false);
 });
 
 // ---- storage：成績の比べ方と、同じ解のまとめ方（TODO-072）------------------
 
 group('src/storage.js — 成績の比べ方（isBetterClear・dedupeHistory）');
 
-test('印の無い回は、印のある回より遅くてもよい', () => {
+test('おまかせの印の無い回は、印のある回より遅くてもよい', () => {
   assertSame(isBetterClear({ ms: 900 }, { ms: 100, a: true }), true, '自力 対 おまかせ');
-  assertSame(isBetterClear({ ms: 900 }, { ms: 100, h: true }), true, '自力 対 ヒント表示');
+  assertSame(isBetterClear({ ms: 900, h: true }, { ms: 100, a: true }), true, 'ヒント表示 対 おまかせ');
 });
 
-test('印のある回は、印の無い回より速くてもよくない', () => {
+test('おまかせの印のある回は、印の無い回より速くてもよくない', () => {
   assertSame(isBetterClear({ ms: 100, a: true }, { ms: 900 }), false, 'おまかせ 対 自力');
-  assertSame(isBetterClear({ ms: 100, h: true }, { ms: 900 }), false, 'ヒント表示 対 自力');
+  assertSame(isBetterClear({ ms: 100, a: true }, { ms: 900, h: true }), false, 'おまかせ 対 ヒント表示');
 });
 
-test('印の有無が同じなら、短い方だけがよい（同じ時間はよくない）', () => {
+test('おまかせの印の有無が同じなら、短い方だけがよい（同じ時間はよくない）', () => {
   assertSame(isBetterClear({ ms: 100 }, { ms: 200 }), true, '自力どうしで短い');
   assertSame(isBetterClear({ ms: 200 }, { ms: 100 }), false, '自力どうしで長い');
   assertSame(isBetterClear({ ms: 100 }, { ms: 100 }), false, '同じ時間');
   assertSame(isBetterClear({ ms: 100, a: true }, { ms: 200, a: true }), true, '印どうしで短い');
 });
 
-test('印は有無だけを見る（おまかせ・ヒント表示・両方を区別しない）', () => {
-  assertSame(isBetterClear({ ms: 100, a: true }, { ms: 200, h: true }), true, 'a の短い方');
-  assertSame(isBetterClear({ ms: 200, a: true, h: true }, { ms: 100, a: true }), false,
-    '両方の長い方');
-  assertSame(isBetterClear({ ms: 100, a: true, h: true }, { ms: 200, h: true }), true,
-    '両方の短い方');
+test('ヒント表示の印は見ない（最短時間の区切りと揃える。TODO-088）', () => {
+  assertSame(isBetterClear({ ms: 100, h: true }, { ms: 900 }), true, 'ヒント表示の速い方');
+  assertSame(isBetterClear({ ms: 900 }, { ms: 100, h: true }), false, '自力の遅い方');
+  assertSame(isBetterClear({ ms: 100, a: true, h: true }, { ms: 200, a: true }), true,
+    'おまかせどうしで短い');
 });
 
 test('dedupeHistory は同じ番号を、成績が一番よい 1 件にまとめて元の位置に残す', () => {
@@ -3347,9 +3338,10 @@ test('dedupeHistory は同じ番号を、成績が一番よい 1 件にまとめ
     { at: 2000, ms: 300, no: 1 },
     { at: 1000, ms: 100, no: 1, h: true },
   ];
+  // ヒント表示の印（h）は見ないので、no: 1 は h の付いた一番速い回が残る（TODO-088）。
   assertSame(dedupeHistory(entries), [
     { at: 4000, ms: 400, no: 2 },
-    { at: 2000, ms: 300, no: 1 },
+    { at: 1000, ms: 100, no: 1, h: true },
   ]);
 });
 
@@ -3379,6 +3371,7 @@ function withCleanStorage(spec, fn) {
     spec.historyKey, spec.storageKey, spec.foundKey, spec.autoKey, spec.progressKey,
   ];
   const saved = keys.map((key) => window.localStorage.getItem(key));
+  window.localStorage.removeItem(spec.storageKey);
   window.localStorage.removeItem(spec.historyKey);
   window.localStorage.removeItem(spec.foundKey);
   window.localStorage.removeItem(spec.autoKey);
@@ -3694,13 +3687,69 @@ for (const state of boardStates) {
     });
   });
 
-  test(`recordClear は最短時間（loadBest）に触らない（${spec.label}）`, () => {
-    // 最短時間は自力の回だけ本編が saveBest で更新する（shouldRecordBest）。
+  test(`recordClear は保存した最短時間（storageKey）に触らない（${spec.label}）`, () => {
+    // 最短時間は本編が saveBest で更新する（shouldRecordBest）。
     withCleanStorage(spec, () => {
       window.localStorage.setItem(spec.storageKey, '12345');
       recordOnto([], { at: 1000, ms: 100, no: 1 });
       recordOnto([{ at: 1000, ms: 900, no: 1 }], { at: 2000, ms: 100, no: 1 });
-      assertSame(loadBest(spec.key), 12345, '最短時間が変わった');
+      assertSame(window.localStorage.getItem(spec.storageKey), '12345', '最短時間が変わった');
+    });
+  });
+
+  // ---- TODO-088：最短時間は履歴のうちおまかせを使っていない回も見る ----------
+
+  test(`loadBest: 保存が無くても、履歴のヒント表示の回から最短を出す（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.historyKey, JSON.stringify([
+        { at: 2000, ms: 300, no: 1, h: true },
+        { at: 1000, ms: 500, no: 2 },
+      ]));
+      assertSame(loadBest(spec.key), 300);
+    });
+  });
+
+  test(`loadBest: おまかせの回は履歴にあっても見ない（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.historyKey, JSON.stringify([
+        { at: 2000, ms: 100, no: 1, a: true },
+        { at: 1000, ms: 200, no: 2, a: true, h: true },
+      ]));
+      assertSame(loadBest(spec.key), null, '記録なし');
+      window.localStorage.setItem(spec.storageKey, '12345');
+      assertSame(loadBest(spec.key), 12345, '保存した値');
+    });
+  });
+
+  test(`loadBest: 履歴から出した最短は保存値へ書き戻す（${spec.label}）`, () => {
+    // 書き戻さないと、その回を記録から消したときに最短が延びる。
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.historyKey, JSON.stringify([
+        { at: 1000, ms: 300, no: 1, h: true },
+      ]));
+      assertSame(loadBest(spec.key), 300);
+      assertSame(window.localStorage.getItem(spec.storageKey), '300', '保存値');
+      window.localStorage.removeItem(spec.historyKey);
+      assertSame(loadBest(spec.key), 300, '履歴を消したあと');
+    });
+  });
+
+  test(`saveBest: 履歴の最短より遅ければ更新しない（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.historyKey, JSON.stringify([
+        { at: 1000, ms: 300, no: 1, h: true },
+      ]));
+      assertSame(saveBest(spec.key, 500), { best: 300, updated: false });
+    });
+  });
+
+  test(`loadBest: 保存した値と履歴の短い方を返す（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.storageKey, '400');
+      window.localStorage.setItem(spec.historyKey, JSON.stringify([
+        { at: 1000, ms: 600, no: 1 },
+      ]));
+      assertSame(loadBest(spec.key), 400);
     });
   });
 
@@ -3719,7 +3768,19 @@ for (const state of boardStates) {
     });
   });
 
-  test(`recordCompletion: 頼った回は最短時間に入れず、履歴（印つき）と見つけた解には残す（${spec.label}）`, () => {
+  test(`recordCompletion: ヒント表示だけの回は最短時間に入れ、履歴には印を付ける（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.storageKey, '12345');
+      const result = recordCompletion(spec.key, {
+        at: 1000, ms: 100, no: 3, usedAuto: false, usedHint: true,
+      }, solutions);
+      assertSame(result, { best: 100, updated: true, status: 'new' }, '戻り値');
+      assertSame(window.localStorage.getItem(spec.storageKey), '100', '保存した最短時間');
+      assertSame(loadHistory(spec.key, solutions), [{ at: 1000, ms: 100, no: 3, h: true }], '履歴');
+    });
+  });
+
+  test(`recordCompletion: おまかせを使った回は最短時間に入れず、履歴（印つき）と見つけた解には残す（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
       window.localStorage.setItem(spec.storageKey, '12345');
       const result = recordCompletion(spec.key, {

@@ -27,16 +27,39 @@ function keyOf(boardKey) {
   return boardOf(boardKey).storageKey;
 }
 
-/** 記録が無い、または読めなければ `null`。 */
+/**
+ * 最短時間。記録が無い、または読めなければ `null`。
+ *
+ * 保存した値のほか、履歴のうちおまかせを使っていない回（`a` の無い件）も見る。
+ * ヒント表示を使った回を最短に入れるようにした（TODO-088）とき、それより前に
+ * ヒント表示を使って解いた回は履歴にしか残っていないため。
+ */
 export function loadBest(boardKey) {
+  let best = null;
   try {
     const raw = window.localStorage.getItem(keyOf(boardKey));
-    if (raw === null) return null;
     const ms = Number(raw);
-    return Number.isFinite(ms) && ms > 0 ? ms : null;
+    if (raw !== null && Number.isFinite(ms) && ms > 0) best = ms;
   } catch (error) {
-    return null;
+    // 読めなくても、履歴から出せればそれを使う。
   }
+  let fromHistory = false;
+  for (const entry of loadHistory(boardKey)) {
+    if (entry.a !== true && (best === null || entry.ms < best)) {
+      best = entry.ms;
+      fromHistory = true;
+    }
+  }
+  // 履歴から出した最短は保存値へ書き戻す。書かないと、その回を記録から消したときや
+  // 履歴が `HISTORY_LIMIT` からあふれたときに、最短が延びてしまう。
+  if (fromHistory) {
+    try {
+      window.localStorage.setItem(keyOf(boardKey), String(Math.round(best)));
+    } catch (error) {
+      // 書けなくても、今回の値は返せる。
+    }
+  }
+  return best;
 }
 
 /**
@@ -81,16 +104,18 @@ export function savePalette(key) {
 }
 
 /**
- * 最短時間を更新してよいか（TODO-020、TODO-024）。
+ * 最短時間を更新してよいか（TODO-020、TODO-024、TODO-088）。
  *
- * おまかせ・ヒント表示のどちらかに頼った回は自力ではないとみなし、最短時間に
- * 入れない。本編（`game.js`）とクリア表示（`clear.js`）から使う。
+ * おまかせを使った回だけ最短時間に入れない（コンピューターが置いた回のため）。
+ * ヒント表示を使った回は入れる（TODO-088。自分で置いた回で、入れないと
+ * 履歴はあるのに最短時間が「記録なし」のままになる）。本編（`game.js`）と
+ * クリア表示（`clear.js`）から使う。
  *
  * **見るのは最短時間だけ**（TODO-024）。履歴と達成度には残し、どの解を解いたかを
  * あとから辿れるようにする。履歴では何に頼ったかを印（`a` / `h`）で見分ける。
  */
-export function shouldRecordBest(usedAuto, usedHint) {
-  return !usedAuto && !usedHint;
+export function shouldRecordBest(usedAuto) {
+  return !usedAuto;
 }
 
 /**
@@ -209,12 +234,13 @@ export function loadHistory(boardKey, solutions = null) {
 /**
  * `entry` の成績が `other` より**よい**か（TODO-072）。同じなら偽。
  *
- * 印（`a` / `h`）の無い回をよいとし、印の有無が同じなら経過時間の短いほうを
- * よいとする。印は有無だけを見る（どれも自力ではなく、`shouldRecordBest()` と
- * 同じ区切り）。
+ * おまかせの印（`a`）の無い回をよいとし、印の有無が同じなら経過時間の短いほうを
+ * よいとする。ヒント表示の印（`h`）は見ない。最短時間の区切り（`shouldRecordBest()`）
+ * と揃えるため（TODO-088）。揃えないと、同じ解でヒント表示の回が自力の回より速いとき、
+ * 最短は更新したのに履歴には遅い自力の回が残り、最短の時間が一覧のどこにも無くなる。
  */
 export function isBetterClear(entry, other) {
-  const marked = (item) => item.a === true || item.h === true;
+  const marked = (item) => item.a === true;
   if (marked(entry) !== marked(other)) return !marked(entry);
   return entry.ms < other.ms;
 }
@@ -279,17 +305,17 @@ export const RECORD_STATUS = {
  * たびに呼ぶ。`clear` は `{ at, ms, no, usedAuto, usedHint }` で、`no` は解の
  * 番号（データが届く前に解き切ったときは `null`）。
  *
- * - 最短時間（`saveBest()`）は自力の回だけ（`shouldRecordBest()`。TODO-020）
+ * - 最短時間（`saveBest()`）はおまかせを使っていない回だけ（`shouldRecordBest()`。TODO-020・TODO-088）
  * - 履歴（`recordClear()`）と見つけた解（`addFound()`）は、頼った回も残し、
  *   履歴には何に頼ったかの印を付ける（TODO-024）
  * - 番号が無い、または `solutions` が無いときは、履歴にも見つけた解にも残せない
  *
  * 返り値は `{ best, updated, status }`。`best` / `updated` は `saveBest()` と同じ
- * （自力でない回は今の最短と `false`）。`status` は `recordClear()` の結果で、
+ * （おまかせを使った回は今の最短と `false`）。`status` は `recordClear()` の結果で、
  * 残せなかったときは `null`。
  */
 export function recordCompletion(boardKey, clear, solutions = null) {
-  const record = shouldRecordBest(clear.usedAuto, clear.usedHint)
+  const record = shouldRecordBest(clear.usedAuto)
     ? saveBest(boardKey, clear.ms)
     : { best: loadBest(boardKey), updated: false };
   if (clear.no === null || !solutions) return { ...record, status: null };
@@ -510,8 +536,8 @@ export function clearAuto(boardKey) {
  *
  * - `ms` … そこまでの経過時間（ミリ秒）
  * - `usedAuto` / `usedHint` … おまかせ・ヒント表示に頼ったか。**続きで解いても
- *   自力扱いにしない**ために持ち越す（中断で消せると、TODO-020 の判定と
- *   最短時間の意味が無くなる）
+ *   印を落とさない**ために持ち越す（中断で消せると、おまかせの回が最短時間に
+ *   入り（TODO-020・TODO-088）、履歴の印も付かなくなる）
  * - `pieces` … 12 種ぶんの `{ name, cells, location, row, col }`
  * - `solved` … そのプレーで完成させた解の番号の配列（TODO-072）。完成したあとも
  *   続けて遊べるので、どの解を作ったかを続きへ持ち越す
