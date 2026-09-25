@@ -41,7 +41,7 @@ import {
 } from '../logic.js';
 import { ensureSolutions, hasSolution } from '../solutions.js';
 import * as audio from '../audio.js';
-import { createHintBadge, createPanel, createTitleBar, createVersionText } from '../ui.js';
+import { createHintBadge, createPanel, createTitleBar } from '../ui.js';
 import { ICONS } from '../icons.js';
 import GameScene, { DEPTH } from './game.js';
 
@@ -105,7 +105,6 @@ export default class DemoScene extends GameScene {
     for (const piece of this.pieces) piece.tiles.forEach((tile) => tile.disableInteractive());
     this.createHud();
     this.createMessage();
-    createVersionText(this);
     this.refreshHud();
     // URL で直接開くとタイトルのボタンを通らないので、ここで音を使えるようにする
     // （TODO-083）。タイトルのボタンと同じ `pointerup`（タッチでは `touchstart` が

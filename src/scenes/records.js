@@ -12,15 +12,16 @@
  * 単純さを取った。
  *
  * 行にはいつもチェックボックスを出し、チェックした回をまとめて消せる
- * （TODO-071）。前へ・次へ・ゴミ箱は画面下の 1 段のアイコンにまとめ
- * （タイトルへは左上。TODO-076）、空いた縦の余白で一覧の行数を増やしてある。
+ * （TODO-071）。前へ・次へは画面下の 1 段のアイコンにまとめ（タイトルへは
+ * 左上。TODO-076）、空いた縦の余白で一覧の行数を増やしてある。ゴミ箱は
+ * 「全部選ぶ」と同じ行の右端（一覧の右端）に置く（TODO-093）。
  */
 
 import {
   BACKDROP, BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, LAYOUTS, PALETTES,
   PALETTE_REGISTRY_KEY, SCREEN, TEXT_COLORS,
 } from '../config.js';
-import { ICONS } from '../icons.js';
+import { boardIcon, ICONS } from '../icons.js';
 import { formatTime, selectionAfterRemoval } from '../logic.js';
 import { ensureSolutions, solutionCells } from '../solutions.js';
 import {
@@ -28,7 +29,7 @@ import {
 } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  createButton, createChoiceRow, createPanel, createTitleBar, createTooltip, createVersionText,
+  CHOICE_ICON_HEIGHT, createButton, createChoiceRow, createPanel, createTitleBar, createTooltip,
   drawMiniBoard,
 } from '../ui.js';
 
@@ -65,39 +66,47 @@ const ROW_TEXT_WIDTH = { portrait: 570, landscape: 432 };
  *
  * 最上段にタイトル行（`titleY`）を足したぶん、横画面は見出しから一覧までを
  * 下げ、一覧の最後の行と下段の間を詰めてある（TODO-089）。
+ *
+ * 盤の選択をタイトルと同じ図のボタン（`CHOICE_ICON_HEIGHT`）にし、ゴミ箱を
+ * 「全部選ぶ」の行へ移して少し大きくした（`trash`）ぶん、`chooseY` から下を
+ * 詰め直してある（TODO-093）。横画面は一覧（左）と完成形（右）が別の列なので、
+ * 一覧側の高さが増えたぶんは `rowsPerPage` を減らして吸収し、完成形の列は
+ * `chooseY` の行が高くなった分だけ動かしてある。
  */
 const L = SCREEN.portrait
   ? {
-    titleY: 22,
-    headingY: 64,
-    chooseY: 126,
-    selectAllY: 166,
+    titleY: 26,
+    headingY: 68,
+    chooseY: 127,
+    selectAllY: 194,
     listX: SCREEN.width / 2,
-    listTop: 204,
+    listTop: 234,
     listWidth: ROW_TEXT_WIDTH.portrait + CHECKBOX.size + CHECKBOX.gap,
-    rowsPerPage: 9,
-    detailY: 690,
-    boardBox: { x: 60, y: 730, width: 520, height: 250 },
-    continueY: 1008,
-    achieveY: 1055,
-    footY: 1100,
+    rowsPerPage: 8,
+    detailY: 670,
+    boardBox: { x: 60, y: 714, width: 520, height: 250 },
+    continueY: 992,
+    achieveY: 1039,
+    footY: 1084,
     foot: { width: 42, height: 56 },
+    trash: { width: 50, height: 60 },
   }
   : {
-    titleY: 16,
-    headingY: 48,
-    chooseY: 102,
-    selectAllY: 140,
+    titleY: 20,
+    headingY: 50,
+    chooseY: 109,
+    selectAllY: 167,
     listX: 250,
-    listTop: 176,
+    listTop: 214,
     listWidth: ROW_TEXT_WIDTH.landscape + CHECKBOX.size + CHECKBOX.gap,
-    rowsPerPage: 8,
-    detailY: 455,
-    boardBox: { x: 500, y: 152, width: 424, height: 274 },
-    continueY: 510,
-    achieveY: 556,
-    footY: 600,
+    rowsPerPage: 7,
+    detailY: 442,
+    boardBox: { x: 500, y: 165, width: 424, height: 250 },
+    continueY: 497,
+    achieveY: 543,
+    footY: 596,
     foot: { width: 36, height: 48 },
+    trash: { width: 42, height: 54 },
   };
 
 /**
@@ -182,16 +191,20 @@ export default class RecordsScene extends Phaser.Scene {
       color: TEXT_COLORS.accent,
     }).setOrigin(0.5);
 
-    this.boardButtons = createChoiceRow(this, cx, L.chooseY, '盤',
-                                        Object.values(BOARDS),
-                                        (choice) => this.selectBoard(choice.key));
+    // タイトルと同じ図のボタンにする（TODO-093）。名前は説明（tooltip）に回す。
+    const boardChoices = Object.values(BOARDS).map((board) => ({
+      ...board, icon: boardIcon(board), tooltip: `${board.label}（${board.note}）`,
+    }));
+    this.boardButtons = createChoiceRow(this, cx, L.chooseY, '盤', boardChoices,
+                                        (choice) => this.selectBoard(choice.key),
+                                        CHOICE_ICON_HEIGHT);
 
     this.createSelectAll();
     this.createList();
     this.createDetail();
     this.createFoot(cx);
 
-    createVersionText(this);
+    // タイトル行に添えたのでここでは出さない（TODO-093）。
     // アイコンの説明。ほかの部品より後に作って手前に出し、確認の枠（depth 10）
     // には隠れるようにする（本編の `DEPTH` と同じ重なり順）。
     this.tooltip = createTooltip(this);
@@ -199,7 +212,11 @@ export default class RecordsScene extends Phaser.Scene {
     this.reload();
   }
 
-  /** 一覧の上の「全部選ぶ」チェック（TODO-071）。見えていない頁のぶんも対象。 */
+  /**
+   * 一覧の上の行。左に「全部選ぶ」チェック（TODO-071。見えていない頁のぶんも
+   * 対象）、右端（一覧の右端に揃える）にゴミ箱（TODO-093。前は下段にあった。
+   * チェックした回を消す操作なので、チェックの行にまとめたほうが近い）。
+   */
   createSelectAll() {
     const x = L.listX - L.listWidth / 2 + CHECKBOX.size / 2;
     this.selectAllButton = createButton(this, {
@@ -211,6 +228,12 @@ export default class RecordsScene extends Phaser.Scene {
       fontSize: `${FONT.small}px`,
       color: TEXT_COLORS.dim,
     }).setOrigin(0, 0.5);
+    const { width: trashWidth, height: trashHeight } = L.trash;
+    this.trashButton = createButton(this, {
+      x: L.listX + L.listWidth / 2 - trashWidth / 2, y: L.selectAllY,
+      width: trashWidth, height: trashHeight,
+      label: '', icon: ICONS.trash, tooltip: 'チェックした回を消す', onClick: () => this.confirmTrash(),
+    });
   }
 
   /**
@@ -259,13 +282,14 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 下段。前へ・次へ・頁の数・ゴミ箱を 1 段にまとめる（TODO-071）。
+   * 下段。前へ・次へ・頁の数を 1 段にまとめる（TODO-071）。ゴミ箱は
+   * 「全部選ぶ」の行へ移した（TODO-093。`createSelectAll()`）。
    * タイトルへは画面を離れるボタンなので、本編の HUD と同じく分けて、
    * 左上の見出しの高さに置く（TODO-076）。
    */
   createFoot(cx) {
     const { width: size, height } = L.foot;
-    const total = size * 3 + PAGE_TEXT_WIDTH + FOOT_GAP * 3;
+    const total = size * 2 + PAGE_TEXT_WIDTH + FOOT_GAP * 2;
     let x = cx - total / 2;
     const next = (width) => {
       const center = x + width / 2;
@@ -285,10 +309,6 @@ export default class RecordsScene extends Phaser.Scene {
     this.nextButton = createButton(this, {
       x: next(size), y: L.footY, width: size, height,
       label: '', icon: ICONS.nextPage, tooltip: '次へ', onClick: () => this.turnPage(1),
-    });
-    this.trashButton = createButton(this, {
-      x: next(size), y: L.footY, width: size, height,
-      label: '', icon: ICONS.trash, tooltip: 'チェックした回を消す', onClick: () => this.confirmTrash(),
     });
     // シーンの中では使わないが、`tools/capture.mjs` が吹き出しで指すため
     // プロパティに持たせる。

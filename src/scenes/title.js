@@ -232,7 +232,7 @@ export default class TitleScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // デモ（TODO-040・TODO-092）。盤と色の組は本編と同じく registry から読む。
-    // 右下に固定で置き、バージョン表示（`createVersionText()`）の上に重ねる。
+    // 右下に固定で置き、バージョン表示（`createVersionText()`）より上に置く。
     createButton(this, {
       x: SCREEN.width - DEMO_BUTTON.marginRight - DEMO_BUTTON.width / 2,
       y: SCREEN.height - DEMO_BUTTON.marginBottom - DEMO_BUTTON.height / 2,

@@ -239,7 +239,8 @@ export const FONT = {
 const MARGIN = 14;         // 画面の縁と枠の間
 const PANEL_PAD = 10;      // 枠と、その中身の間
 const GAP = 12;            // 枠どうしの間
-const TITLE_BAND = 34;    // 画面の上端の「PENTOMINO PUZZLE」の行。HUD はこの下から（TODO-089）
+const TITLE_BAND = 42;    // 画面の上端の「PENTOMINO PUZZLE」の行。HUD はこの下から（TODO-089）
+                           // 題字を少し大きくしたぶん高くしてある（TODO-093）
 const NOTE_LINE = 26;     // デモだけ、タイトル行の下に探し方の一文を出す行（TODO-089）
 const HUD_PAD = 20;        // HUD の枠と、その中身の間
 const HUD_GAP = 8;         // ボタンどうしの間

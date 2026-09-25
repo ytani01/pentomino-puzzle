@@ -25,20 +25,31 @@ export function createVersionText(scene) {
 
 /**
  * 最上段の「PENTOMINO PUZZLE」の行。押すとタイトルへ戻る（TODO-089）。
- * 本編・記録・デモが同じ見た目で出すのでここに置く。
+ * 本編・記録・デモが同じ見た目で出すのでここに置く。右横にバージョンを
+ * 添える（TODO-093）ので、この行を出す画面では右下の `createVersionText()`
+ * を呼ばない（バージョンが 2 か所に出ないように。タイトル画面とクリア表示は
+ * これまでどおり右下）。
  *
  * ボタンの枠を付けず文字だけにするのは、HUD のボタンと見分けるため。当たり
  * 判定は文字の枠なので、`padding` で広げて指で押しやすくしてある。ボタン
  * （`createButton()`）と同じく、ドラッグ中は受けず、押し始めた文字の上で
  * 離したときだけ動く（ピースを離した位置がたまたまここでも戻らないように）。
+ *
+ * 押せる範囲は題字だけ（バージョンの文字は押しても何も起きない）。呼ぶ側が
+ * `.setDepth()` を掛けても両方に効くよう、2 つの文字を Container にまとめて返す。
  */
 export function createTitleBar(scene, y, onClick) {
   const text = scene.add.text(SCREEN.width / 2, y, 'PENTOMINO PUZZLE', {
     fontFamily: FONT.family,
-    fontSize: `${FONT.small}px`,
+    fontSize: `${FONT.body}px`,
     color: TEXT_COLORS.accent,
     padding: { x: 24, y: 6 },
   }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+  const version = scene.add.text(text.x + text.width / 2 + 8, y, VERSION, {
+    fontFamily: FONT.family,
+    fontSize: `${FONT.small}px`,
+    color: TEXT_COLORS.dim,
+  }).setOrigin(0, 0.5).setAlpha(0.6);
   let pressed = false;
   text.on('pointerdown', () => { pressed = !scene.drag; });
   text.on('pointerout', () => { pressed = false; });
@@ -46,7 +57,7 @@ export function createTitleBar(scene, y, onClick) {
     if (pressed && !scene.drag) onClick();
     pressed = false;
   });
-  return text;
+  return scene.add.container(0, 0, [text, version]);
 }
 
 /**

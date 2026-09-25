@@ -26,7 +26,7 @@ import {
 } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  createButton, createHintBadge, createPanel, createTitleBar, createTooltip, createVersionText,
+  createButton, createHintBadge, createPanel, createTitleBar, createTooltip,
   drawAcrylic,
 } from '../ui.js';
 import { ICONS } from '../icons.js';
@@ -97,7 +97,6 @@ export default class GameScene extends Phaser.Scene {
     this.createHud();
     this.createMessage();
     this.createConfirmDialog();
-    createVersionText(this);
 
     // 全解のデータ（TODO-022）。6×10 は 139KB あるので動的 import で読む。
     // 届くまで [おまかせ] と [ヒント表示] は押せない（`refreshHud()` が見る）。
