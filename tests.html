@@ -1468,7 +1468,17 @@ for (const spec of BOARD_LIST) {
       const effectiveCanContinue = label === '既定'
         ? (board) => hasSolution(solutionsForSpec, board)
         : canContinue;
-      const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), effectiveCanContinue, 3000);
+      // 常に偽だと DEMO.randomDeadLimit 手置くたびに盤が空まで戻り、置き済みピースの
+      // 形の空きができるほど深く進まない。ここで見たいのはその場で外す手なので、
+      // 上限を外して走らせる（上限そのものは TODO-081 のテストで確かめる）。
+      const savedDeadLimit = DEMO.randomDeadLimit;
+      let steps;
+      try {
+        if (label === '常に偽') DEMO.randomDeadLimit = Infinity;
+        steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), effectiveCanContinue, 3000);
+      } finally {
+        DEMO.randomDeadLimit = savedDeadLimit;
+      }
       let board = createBoard(spec);
       let sawRun = false;
       let sawForcedDoubleUndo = false;
@@ -1553,7 +1563,7 @@ for (const spec of BOARD_LIST) {
     });
   }
 
-  test(`常に偽を返す判定だと、置ける手が尽きるたびに、盤のピースがすべて外れるまで remove が続く（5 の倍数でない空きで即座に外れる 1 手は除く。${spec.label}）`, () => {
+  test(`常に偽を返す判定だと、戻るたびに（置ける手が尽きるか DEMO.randomDeadLimit に達するか）、盤のピースがすべて外れるまで remove が続く（5 の倍数でない空きで即座に外れる 1 手は除く。${spec.label}）`, () => {
     // canContinue が常に偽なので、置ける手が尽きたときの remove の while ループは
     // 一度も ok:true で break せず、stack が空になるまで（＝盤のピースが
     // すべて外れるまで）続く。ただし、置いた直後に 5 の倍数でない閉じた空きが
@@ -2400,6 +2410,118 @@ for (const spec of BOARD_LIST) {
     assert(rateWith > rateWithout,
       `DEMO.randomTightWeight を効かせたときの割合（${rateWith}）が、`
       + `1 にしたとき（${rateWithout}）より大きくなっていない`);
+  });
+}
+
+// ---- logic：解の無い盤面での打ち切り（solveStepsRandom, DEMO.randomDeadLimit, TODO-081）----
+//
+// canContinue に hasSolution を渡し（上の「hasSolution を渡すと…」の節と同じ）、
+// 最初の solved まで回す。「直前の盤面が ok 偽のまま続けて置いた place の数」を
+// 手元でも数え、DEMO.randomDeadLimit を超えないこと・超えた直後は ok になるまで
+// remove が続くことを、同じ 1 回の走査の中で確かめる。
+
+const DEAD_LIMIT_SEEDS = [FAST_SEED, OTHER_SEED, { '8x8': 7, '6x10': 7 }];
+
+for (const state of boardStates) {
+  const { spec, solutions } = state;
+  const canContinue = (board) => hasSolution(solutions, board);
+
+  test(`解の無い盤面で続けて置いた手が DEMO.randomDeadLimit（${DEMO.randomDeadLimit}）を超えず、超えた直後は ok になるまで remove が続く（${spec.label}）`, () => {
+    const STEP_LIMIT = 2000000; // 安全弁（最初の解までに手を尽くしすぎたら見直す）
+    let sawLimitHit = false;
+    for (const seed of DEAD_LIMIT_SEEDS.map((s) => s[spec.key])) {
+      let boardOk = true; // 直前の盤面が canContinue を満たすか（空の盤は真）
+      let deadRun = 0; // 解の無い盤面の上で続けて置いた手の数（remove で ok が真になったら 0 に戻す）
+      let awaitingOk = false; // deadRun が上限に達した直後、ok になるまでの区間
+      let solved = false;
+      let taken = 0;
+      for (const step of solveStepsRandom(spec, mulberry32(seed), canContinue)) {
+        taken += 1;
+        if (taken > STEP_LIMIT) throw new Error('手数の上限を超えた（シードを見直すこと）');
+        if (step.type === 'solved') { solved = true; break; }
+        if (step.type === 'place') {
+          assert(!awaitingOk,
+            `DEMO.randomDeadLimit に達した直後なのに、ok になる前に ${step.name} を place した`);
+          if (!boardOk) deadRun += 1;
+          assert(deadRun <= DEMO.randomDeadLimit,
+            `解の無い盤面で続けて置いた手が ${deadRun} 回になり、DEMO.randomDeadLimit（${DEMO.randomDeadLimit}）を超えた`);
+          if (deadRun === DEMO.randomDeadLimit) { sawLimitHit = true; awaitingOk = true; }
+          boardOk = step.ok;
+        } else if (step.type === 'remove') {
+          boardOk = step.ok;
+          if (boardOk) { deadRun = 0; awaitingOk = false; }
+        }
+      }
+      assert(solved, `シード ${seed} で最初の解に至らなかった（STEP_LIMIT を見直すこと）`);
+    }
+    assert(sawLimitHit,
+      '選んだシードのどれでも、DEMO.randomDeadLimit に達する場面が一度も無かった（見直すこと）');
+  });
+
+  test(`DEMO.randomDeadLimit で戻った一続きも、TODO-063 の崩し（maybeCollapse）に数える（${spec.label}）`, () => {
+    // hasSolution は regionsFitPieces よりずっと厳しいので、置ける手が尽きるより先に
+    // 上限に達しやすい。上限で戻った一続きだけで崩しが起きることを狙って見るため、
+    // 上限を 1（1 手 ok:false ならすぐ戻る）、崩しの閾値を 1 回目（すぐ崩す）に
+    // 下げて走らせる（DEMO を書き換えて try/finally で戻すのは既存のテストと同じ。
+    // tests.html:2204・2394）。
+    const TEMP_DEAD_LIMIT = 1;
+    const TEMP_COLLAPSE_AFTER = 1;
+    const TEMP_COLLAPSE_MOVES = 2;
+    const savedDeadLimit = DEMO.randomDeadLimit;
+    const savedCollapseAfter = DEMO.randomCollapseAfter;
+    const savedCollapseMoves = DEMO.randomCollapseMoves;
+    const STEP_LIMIT = 2000000;
+    let boardOk = true;
+    let deadRun = 0;
+    let depth = 0; // 盤に残っているピースの数（stack.length と同じ数え方）
+    let triggerDepth = -1; // 上限に達した瞬間の深さ（-1 は「まだ見ていない」）
+    let settleDepth = -1; // その後 ok:true になった深さ
+    let pendingExtra = -1; // 崩しで、あと何手 remove が続くはずか（-1 はまだ見ていない）
+    let checkedExtra = false; // pendingExtra が 0 になって崩しを確かめ終えた
+    let collapseBroken = false; // 崩しの途中のはずなのに remove 以外が出た
+    try {
+      DEMO.randomDeadLimit = TEMP_DEAD_LIMIT;
+      DEMO.randomCollapseAfter = TEMP_COLLAPSE_AFTER;
+      DEMO.randomCollapseMoves = TEMP_COLLAPSE_MOVES;
+      let taken = 0;
+      for (const step of solveStepsRandom(spec, mulberry32(FAST_SEED[spec.key]), canContinue)) {
+        taken += 1;
+        if (taken > STEP_LIMIT) throw new Error('手数の上限を超えた（見直すこと）');
+        if (checkedExtra || collapseBroken) break;
+        // settleDepth が決まった直後は、pendingExtra 手ぶんは必ず remove のはず
+        // （崩しの途中で place や solved が来たら、崩しが起きなかったということ）。
+        if (pendingExtra > 0 && step.type !== 'remove') { collapseBroken = true; break; }
+        if (step.type === 'solved') break;
+        if (step.type === 'place') {
+          depth += 1;
+          if (!boardOk) deadRun += 1;
+          if (deadRun === DEMO.randomDeadLimit && triggerDepth < 0) triggerDepth = depth;
+          boardOk = step.ok;
+        } else if (step.type === 'remove') {
+          depth -= 1;
+          boardOk = step.ok;
+          if (boardOk) deadRun = 0;
+          if (pendingExtra > 0) {
+            pendingExtra -= 1;
+            if (pendingExtra === 0) checkedExtra = true;
+          } else if (triggerDepth >= 0 && settleDepth < 0 && boardOk) {
+            settleDepth = depth;
+            pendingExtra = Math.min(TEMP_COLLAPSE_MOVES, settleDepth);
+            if (pendingExtra === 0) checkedExtra = true;
+          }
+        }
+      }
+    } finally {
+      DEMO.randomDeadLimit = savedDeadLimit;
+      DEMO.randomCollapseAfter = savedCollapseAfter;
+      DEMO.randomCollapseMoves = savedCollapseMoves;
+    }
+    assert(triggerDepth >= 0,
+      `選んだシードで DEMO.randomDeadLimit（${TEMP_DEAD_LIMIT}）に達する場面が一度も無かった（見直すこと）`);
+    assert(settleDepth >= 0, '上限に達したあと ok:true になる場面が無かった（見直すこと）');
+    assert(!collapseBroken,
+      '上限で戻って ok:true になった直後、崩し（TODO-063）の途中のはずなのに remove 以外が出た');
+    assert(checkedExtra, '上限で戻って ok:true になった直後、崩し（TODO-063）の remove が続かなかった');
   });
 }
 

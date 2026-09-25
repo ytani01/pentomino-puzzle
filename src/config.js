@@ -766,6 +766,10 @@ export const HINT_BADGE = {
  *   大きく崩してやり直すため。値は画面で見て利用者が決めた（TODO-074）
  * - `randomCollapseMoves` … まとめて崩すとき、何手まで外すか（スタックにある分
  *   まで。TODO-063）。値は画面で見て利用者が決めた（TODO-074）
+ * - `randomDeadLimit` … ランダムで、解の無い盤面の上で何手置いたら（置いてすぐ
+ *   外した手も数える）、置ける手が尽きるのを待たずに解のある盤面まで戻るか
+ *   （TODO-081）。無いと、広い空きが残る盤では気づくまでに百手以上重ねるため。
+ *   8 は利用者が決めた
  * - `randomTurnStepMs` … ランダムで置く前に、トレイでの今の向きから置く向きまで
  *   1 段（90° 回転かその場の裏返し）ごとに空ける時間（`logic.js` の
  *   `orientationSteps()`。TODO-065）。人は手に取ってから向きを合わせて置くので、
@@ -786,6 +790,7 @@ export const DEMO = {
   randomTightWeight: 10,
   randomCollapseAfter: 3,
   randomCollapseMoves: 3,
+  randomDeadLimit: 8,
   randomTurnStepMs: 150,
 };
 

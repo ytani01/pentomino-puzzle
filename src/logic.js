@@ -670,7 +670,10 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  * 置いた直後に `canContinue(board)` が偽（その先に解が無い盤面）でも
  * **その場では外さない**。置ける手が尽きたら、`canContinue(board)` が真になるまで
  * 最後に置いた手から 1 手ずつ外す（スタックが空になったら止める。
- * `canContinue` が常に偽を返す盤でも外し続けないため）。ただし次の 3 つは、
+ * `canContinue` が常に偽を返す盤でも外し続けないため）。
+ * 解の無い盤面の上で置いた手（すぐ外した手も含む）が `DEMO.randomDeadLimit` 手に
+ * 達したときも、尽きるのを待たずに同じく戻る（TODO-081。広い空きが残ると
+ * なかなか尽きず、気づくまでに百手以上重ねていたため）。ただし次の 3 つは、
  * 人も置いた瞬間に詰みだと気づくので、行き詰まりを待たずにその場で外す。
  * 既定の `regionsFitPieces` は 1 つ目と同じ判定なので、既定のままだと偽の手は
  * 必ずその場で外れる（行き詰まってから戻すのは、デモのように全解のデータで
@@ -692,8 +695,9 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  *
  * 同じ深さ（盤に残るピースの数）で「詰まり」が続くと、数手まとめて外す
  * （TODO-063。人は同じ所で詰まり続けると大きく崩してやり直すため）。
- * 「詰まり」に数えるのは、置ける手が尽きて `ok` が真になるまで戻る
- * **行き詰まりの一続きだけ**。置いた直後にその場で外す手（上の 3 つ。
+ * 「詰まり」に数えるのは、置ける手が尽きるか `DEMO.randomDeadLimit` に達して
+ * `ok` が真になるまで戻る **行き詰まりの一続きだけ**（上限で戻るのは、尽きる
+ * 前に気づいた行き詰まりなので同じに数える。TODO-081）。置いた直後にその場で外す手（上の 3 つ。
  * TODO-060・066〜068・077）は、試行錯誤して詰まったのではなく置き方が明らかに
  * 間違っていただけなので数えない。一続きが終わるたびに、そのときの
  * `stack.length` を深さとして回数を数える。回数が `DEMO.randomCollapseAfter` に
@@ -727,14 +731,29 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
   const fill = (move, value) => {
     for (const [dr, dc] of move.shape) grid[(move.row + dr) * cols + (move.col + dc)] = value;
   };
+  // 今の盤面が解につながるか（空の盤は真）と、解の無い盤面で続けて置いた
+  // 手の数（TODO-081）。解のある盤面か空の盤に戻ったら 0 に戻す（空の盤で
+  // 戻さないと、canContinue が常に偽の盤では以後毎手すぐ戻ってしまう）。
+  let boardOk = true;
+  let deadMoves = 0;
   // 最後に置いた手を外して盤面ごとの控えに足し、yield する形で返す（TODO-060）。
   const undoLast = () => {
     const last = stack.pop();
     fill(last, null);
     unused.push(last.name);
     failedOf(boardKey(board)).add(last.key);
-    return { type: 'remove', name: last.name, ok: canContinue(board) };
+    boardOk = canContinue(board);
+    if (boardOk || stack.length === 0) deadMoves = 0;
+    return { type: 'remove', name: last.name, ok: boardOk };
   };
+  // canContinue が真になるか、戻る手が無くなるまで 1 手ずつ外す。
+  function* undoUntilOk() {
+    while (stack.length > 0) {
+      const step = undoLast();
+      yield step;
+      if (step.ok) break;
+    }
+  }
   // 深さ（盤に残るピースの数）ごとに、その深さで行き詰まった回数を数える（TODO-063）。
   const collapseCounts = new Map();
   // 行き詰まりの一続きが終わるたびに呼ぶ。回数が閾値に達したら数手まとめて外す。
@@ -782,13 +801,8 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
         failed.clear();
         continue;
       }
-      // 置ける手が尽きた。canContinue が真になるか、戻る手が無くなるまで
-      // 1 手ずつ外す。
-      while (stack.length > 0) {
-        const step = undoLast();
-        yield step;
-        if (step.ok) break;
-      }
+      // 置ける手が尽きた。解のある盤面まで戻る。
+      yield* undoUntilOk();
       yield* maybeCollapse();
       continue;
     }
@@ -823,9 +837,11 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
       });
       move = pickWeighted(movesForName, weights, random);
     }
+    if (!boardOk) deadMoves += 1;
     fill(move, move.name);
     unused.splice(unused.indexOf(move.name), 1);
     const ok = canContinue(board);
+    boardOk = ok;
     stack.push(move);
     yield {
       type: 'place', name: move.name, cells: move.shape, row: move.row, col: move.col, ok,
@@ -843,6 +859,11 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
       // 残りのどのピースでも覆えない空きマスがあれば必ず解なし。置き済みの
       // ピースと同じ形の 5 マスの空き（TODO-067）もここに入る（TODO-077）。
       yield undoLast();
+    }
+    if (deadMoves >= DEMO.randomDeadLimit) {
+      // 解の無い盤面で手を重ねすぎた。行き詰まりと同じく戻り、詰まりに数える（TODO-081）。
+      yield* undoUntilOk();
+      yield* maybeCollapse();
     }
   }
 }
