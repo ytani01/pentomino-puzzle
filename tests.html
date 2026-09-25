@@ -48,7 +48,7 @@ import {
   clampSelection, selectionAfterRemoval,
   forcedPlacements, hasUncoverableCell, touchingEdges, moveDistance, countCellMoves, singlePieceCell,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
-  solveSteps, solveStepsRandom,
+  solveSteps, solveStepsRandom, parseDemoParams,
 } from './src/logic.js';
 import {
   autoFrom, buildSolutions, consistentSolutions, hasSolution, placementIn,
@@ -2658,6 +2658,41 @@ for (const state of boardStates) {
     assert(checkedExtra, '上限で戻って ok:true になった直後、崩し（TODO-063）の remove が続かなかった');
   });
 }
+
+group('src/logic.js — URL のデモの指定（parseDemoParams, TODO-083）');
+
+test('demo が無ければ null（空文字）', () => {
+  assertSame(parseDemoParams(''), null);
+});
+
+test('demo が無ければ null（board だけ指定）', () => {
+  assertSame(parseDemoParams('?board=6x10'), null);
+});
+
+test('demo=random と board=8x8 をそのまま読む', () => {
+  assertSame(JSON.stringify(parseDemoParams('?demo=random&board=8x8')),
+    JSON.stringify({ strategy: 'random', board: '8x8' }));
+});
+
+test('demo=depth と board=6x10 をそのまま読む', () => {
+  assertSame(JSON.stringify(parseDemoParams('?demo=depth&board=6x10')),
+    JSON.stringify({ strategy: 'depth', board: '6x10' }));
+});
+
+test('demo に値が無ければランダム・8×8', () => {
+  assertSame(JSON.stringify(parseDemoParams('?demo')),
+    JSON.stringify({ strategy: 'random', board: '8x8' }));
+});
+
+test('知らない値はランダム・8×8にする', () => {
+  assertSame(JSON.stringify(parseDemoParams('?demo=xx&board=9x9')),
+    JSON.stringify({ strategy: 'random', board: '8x8' }));
+});
+
+test('board=constructor のような継承したプロパティ名は 8x8 にする', () => {
+  const result = parseDemoParams('?demo=depth&board=constructor');
+  assertSame(result.board, '8x8');
+});
 
 // ---- data：全解のデータ（TODO-022）--------------------------------------
 //

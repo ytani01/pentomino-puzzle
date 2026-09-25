@@ -37,7 +37,7 @@ import {
   PALETTE_REGISTRY_KEY, TEXT_COLORS,
 } from '../config.js';
 import {
-  createBoard, orientationSteps, solveSteps, solveStepsRandom,
+  createBoard, orientationSteps, parseDemoParams, solveSteps, solveStepsRandom,
 } from '../logic.js';
 import { ensureSolutions, hasSolution } from '../solutions.js';
 import * as audio from '../audio.js';
@@ -61,8 +61,12 @@ export default class DemoScene extends GameScene {
 
   create() {
     this.cameras.main.setBackgroundColor(COLORS.background);
-    // 盤と色の組はタイトルで選んだもの（本編と同じ読み方）。
-    this.boardKey = this.registry.get(BOARD_REGISTRY_KEY);
+    // 盤と色の組はタイトルで選んだもの（本編と同じ読み方）。URL で開いたときは
+    // 盤と探し方を URL から取る（TODO-083）。registry には書かない（タイトルの
+    // 選択を変えないため）。`scene.start()` のデータで渡さないのは、Phaser が
+    // データ無しの `start()` では前回のデータを持ち越すため。
+    const fromUrl = parseDemoParams(window.location.search);
+    this.boardKey = fromUrl?.board ?? this.registry.get(BOARD_REGISTRY_KEY);
     this.spec = BOARDS[this.boardKey];
     // ボタンが本編より 1 つ多い分だけ HUD が違う。盤とトレイは本編と同じ（TODO-050）。
     this.layout = DEMO_LAYOUTS[this.boardKey];
@@ -75,7 +79,7 @@ export default class DemoScene extends GameScene {
     this.state = 'loading';
     this.steps = null;
     this.solutions = null;
-    this.strategy = 'random';
+    this.strategy = fromUrl?.strategy ?? 'random';
     // 直前に置いた手が解につながるか。null は表示を空にする（解けたとき）。
     this.hintState = 'ok';
     this.speed = DEMO.defaultSpeed;
@@ -103,6 +107,10 @@ export default class DemoScene extends GameScene {
     this.createMessage();
     createVersionText(this);
     this.refreshHud();
+    // URL で直接開くとタイトルのボタンを通らないので、ここで音を使えるようにする
+    // （TODO-083）。タイトルのボタンと同じ `pointerup`（タッチでは `touchstart` が
+    // 操作として扱われないブラウザがあるため）。
+    this.input.once('pointerup', () => audio.unlock());
 
     // シーンを離れたあとに届くことがある。Phaser はシーンを使い回すので、
     // 入り直したあとに前回の分が遅れて届くこともある。探索を始めたあとや
@@ -381,6 +389,15 @@ export default class DemoScene extends GameScene {
     if (this.state !== 'solved') return;
     audio.button();
     this.startSearch();
+  }
+
+  /** URL で開いたときは、読み直してもタイトルが開くようにパラメータを消す（TODO-083）。 */
+  goToTitle() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('demo');
+    url.searchParams.delete('board');
+    window.history.replaceState(null, '', url);
+    super.goToTitle();
   }
 
   // ---- 本編から外すもの -----------------------------------------------

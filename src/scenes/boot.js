@@ -10,6 +10,7 @@ import {
   BOARD_REGISTRY_KEY, COLORS, DEFAULT_BOARD_KEY, GLASS, LAYOUTS, NEON, PALETTES,
   PALETTE_REGISTRY_KEY, PIECES, TILE,
 } from '../config.js';
+import { parseDemoParams } from '../logic.js';
 import { loadPalette } from '../storage.js';
 
 /**
@@ -63,7 +64,8 @@ export default class BootScene extends Phaser.Scene {
     this.registry.set(BOARD_REGISTRY_KEY, DEFAULT_BOARD_KEY);
     // 色の組は前に選んだものを使う（盤と違い、遊ぶたびに選び直すものではない）。
     this.registry.set(PALETTE_REGISTRY_KEY, loadPalette());
-    this.scene.start('Title');
+    // URL でデモを指定されたら、タイトルを飛ばす（TODO-083）。
+    this.scene.start(parseDemoParams(window.location.search) ? 'Demo' : 'Title');
   }
 
   /** 盤の地（マス）と、置ける場所に出す影。色の組に依らない。 */

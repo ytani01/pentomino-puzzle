@@ -6,7 +6,9 @@
  * 正規形で扱う。こうすると、向きが同じかを配列の比較だけで判定できる。
  */
 
-import { DEMO, HOLE, PIECES, PIECE_SIZE } from './config.js';
+import {
+  BOARDS, DEFAULT_BOARD_KEY, DEMO, HOLE, PIECES, PIECE_SIZE,
+} from './config.js';
 
 /**
  * 左上を原点へ寄せ、行優先に並べ替える。
@@ -1069,4 +1071,20 @@ export function formatTime(ms) {
   const mm = String(minutes).padStart(2, '0');
   const ss = String(seconds).padStart(2, '0');
   return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/**
+ * URL のパラメータ（`?demo=random&board=8x8`）からデモの開き方を読む
+ * （TODO-083）。README から動いているデモへ直接飛べるようにするため。
+ * `demo` が無ければ `null`（タイトルを開く）。省いたものと知らない値は既定
+ * （ランダム・8×8）に倒す。書き間違えたリンクでも、何かが動いて見えるほうがよい。
+ */
+export function parseDemoParams(search) {
+  const params = new URLSearchParams(search);
+  if (!params.has('demo')) return null;
+  const board = params.get('board');
+  return {
+    strategy: params.get('demo') === 'depth' ? 'depth' : 'random',
+    board: Object.hasOwn(BOARDS, board) ? board : DEFAULT_BOARD_KEY,
+  };
 }

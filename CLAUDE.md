@@ -61,7 +61,7 @@ Chromium を動かして撮る。TODO-034）。
 | `index.html` | HTML / CSS、Phaser の読み込み、起動できなかったときの案内 |
 | `src/main.js` | Phaser の設定とシーンの登録 |
 | `src/config.js` | 盤面の定義、12 種のピースの形と色、マスの大きさ、レイアウト |
-| `src/logic.js` | 向きの生成・正規化、配置判定、盤面の更新、対称な解の代表形（TODO-012）、時間の整形（純関数）、デモ用に 1 手ずつ返す探索 `solveSteps()`（深さ優先。TODO-040）・`solveStepsRandom()`（ランダム。TODO-057）、ヒント表示で自動で置く手 `forcedPlacements()`（TODO-044） |
+| `src/logic.js` | 向きの生成・正規化、配置判定、盤面の更新、対称な解の代表形（TODO-012）、時間の整形（純関数）、デモ用に 1 手ずつ返す探索 `solveSteps()`（深さ優先。TODO-040）・`solveStepsRandom()`（ランダム。TODO-057）、ヒント表示で自動で置く手 `forcedPlacements()`（TODO-044）、URL でデモを開くパラメータの読み取り `parseDemoParams()`（TODO-083） |
 | `src/solutions.js` | 全解のデータの読み込み（動的 import）と、盤面との照合・おまかせ（TODO-022） |
 | `src/data/8x8.js` ・ `src/data/6x10.js` | 盤ごとの全解（代表形 65 件 / 2339 件）。**手で書き換えない** |
 | `src/audio.js` | 効果音の合成。最初のユーザー操作で `unlock()` を呼ぶ |

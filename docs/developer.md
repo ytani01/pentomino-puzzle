@@ -151,6 +151,7 @@ flowchart LR
 stateDiagram-v2
   [*] --> Boot
   Boot --> Title
+  Boot --> Demo: URL に demo がある
   Title --> Game: はじめる／つづきから
   Title --> Records: 記録
   Title --> Demo: デモ
@@ -164,7 +165,11 @@ stateDiagram-v2
   Demo --> Title: タイトルへ
 ```
 
-Boot はマス目テクスチャを作ったら Title へ進む。Game からタイトルへ戻るときは
+Boot はマス目テクスチャを作ったら Title へ進む。URL に `demo` があれば
+（`?demo=random&board=8x8`。`logic.js` の `parseDemoParams()`）Title を飛ばして
+Demo へ進む。Demo は URL の盤と探し方を使い、`registry` の盤は書き換えない。
+Demo の「タイトルへ」は `history.replaceState()` で URL から `demo`・`board` を
+消してから移る（読み直してもタイトルが開くように。TODO-083）。Game からタイトルへ戻るときは
 確認パネルを挟み、盤面は遊びかけとして保存される（[つづきから](UsersGuide.md#つづきから)）。
 Clear の「続ける」は `GameScene.continuePlay()` で止めた Game を動かし、Clear を閉じる。
 「もう一度」「記録」「タイトルへ」は止めてある Game を `scene.stop()` で閉じてから移る
