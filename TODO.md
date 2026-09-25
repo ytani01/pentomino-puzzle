@@ -1,8 +1,8 @@
 # TODO
 
-**残っている項目: TODO-079。** これまでに 78 件を決着させた。
+**残っている項目: TODO-079・TODO-080。** これまでに 78 件を決着させた。
 新しく足すときは「完了済み」の上に節を作る。
-**新規項目の番号は `TODO-080` から。**
+**新規項目の番号は `TODO-081` から。**
 
 ---
 
@@ -28,6 +28,25 @@
 - 決着は `refactor(src): …（TODO-079）` でコミットし、パッチのタグを付けて push する
 
 実装を 3 人に分けるのは量のため。言い回しの揃い方は reviewer が見る。
+
+---
+
+## TODO-080. 使われていない `clearHistory()` を消し、テストを直す
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort high | main（実装）+ verifier（Sonnet 5 / medium） |
+
+- [ ] `src/storage.js` の `clearHistory()` を消す
+- [ ] `tests.html` の `clearHistory` を使うテストを直す
+  - `clearHistory の後は空の配列になる`・`clearHistory は最短時間を消さない` の 2 件は消す
+  - `遊びかけは履歴・達成度と別に保たれる` は、`clearHistory()` の代わりに
+    `localStorage.removeItem(spec.historyKey)` で履歴を消す
+  - import から `clearHistory` を外す
+- [ ] verifier: `rg -n clearHistory --glob '!archives/**'` で参照が残っていないか、`tests.html` が全件通るか
+
+TODO-079 の途中で見つかった。ゲームからは呼ばれず、`tests.html` だけが使っている。
+利用者が「使われていないコードは消す」と決めた。
 
 ---
 
