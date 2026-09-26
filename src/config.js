@@ -249,7 +249,7 @@ const DEMO_HUD_BUTTONS = 7; // デモの HUD のボタンの数。探し方の�
 // ボタン 1 個の幅と高さ。アイコンだけなので幅は要らず、指で押しやすいよう
 // 高さを取る（TODO-076）。場所が足りなければ幅をここから詰める。
 const HUD_BUTTON_MAX = 76;
-const HUD_BUTTON_HEIGHT = 56;
+const HUD_BUTTON_HEIGHT = 64;
 const HUD_ROW = HUD_BUTTON_HEIGHT + 12; // HUD 1 段ぶんの高さ。ボタンの上下に 6 ずつ空ける
 const HUD_REMAIN_X = 140;  // 段の中身の左端から見た「残り n」の位置
 const HUD_STATUS_X = 250;  // 同じく、解の有無（TODO-013）の位置
@@ -731,7 +731,7 @@ export const INPUT = {
 /**
  * HUD のボタンのアイコン（`src/icons.js`。TODO-042）。
  *
- * - `size` … アイコンを収める正方形の一辺。ボタンの高さ（56）に対して上下に
+ * - `size` … アイコンを収める正方形の一辺。ボタンの高さ（64）に対して上下に
  *   余白が残る大きさ。`Scale.FIT` で 0.5 倍まで縮むので、線は太めにする
  * - `lineWidth` … 線の太さ
  * - `captionSize` … アイコンの下に添える名前の文字の大きさ（デモの探し方。TODO-097）。
@@ -741,8 +741,8 @@ export const INPUT = {
 export const ICON = {
   size: 28,
   lineWidth: 3,
-  captionSize: 12,
-  captionShift: 6,
+  captionSize: 16,
+  captionShift: 8,
 };
 
 /**
@@ -791,7 +791,7 @@ export const TOOLTIP = {
  * ヒント表示の「解ける／解なし」の札（`createHintBadge()`。TODO-045）の寸法。
  *
  * 幅は文字（`FONT.hud`）に合わせて実行時に決めるので、ここには高さと
- * 余白だけを置く。`height` は HUD 1 段（`HUD_ROW` = 68）に収まる値。
+ * 余白だけを置く。`height` は HUD 1 段（`HUD_ROW` = 76）に収まる値。
  */
 export const HINT_BADGE = {
   height: 40,
