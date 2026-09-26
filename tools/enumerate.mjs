@@ -12,7 +12,6 @@
  * 仕事なので、試行回数の上限も持たない。
  */
 
-import './window-shim.mjs';
 import { PIECES, PIECE_SIZE } from '../src/config.js';
 import { canonicalCellsKey, createBoard, orientations } from '../src/logic.js';
 

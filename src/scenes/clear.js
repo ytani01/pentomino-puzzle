@@ -7,7 +7,7 @@
  */
 
 import {
-  BACKDROP, BOARDS, BOARD_REGISTRY_KEY, FONT, SCREEN, TEXT_COLORS,
+  BACKDROP, BOARDS, BOARD_REGISTRY_KEY, FONT, TEXT_COLORS, orientationOf, screenOf,
 } from '../config.js';
 import { formatTime } from '../logic.js';
 import { clearProgress, RECORD_STATUS, shouldRecordBest } from '../storage.js';
@@ -30,7 +30,7 @@ const STACK = [
  * 余りのうち上へ回す割合。縦画面は余りが増え、横画面と同じ 0.44 だと下だけが
  * 空くので、中央へ置く（TODO-011）。
  */
-const STACK_BIAS = SCREEN.portrait ? 0.5 : 0.44;
+const STACK_BIAS = { portrait: 0.5, landscape: 0.44 };
 
 /**
  * 枠の上端から見た、中の 5 行の中心。`number`（解の番号。TODO-022）と
@@ -77,23 +77,36 @@ export default class ClearScene extends Phaser.Scene {
     this.status = data && RECORD_STATUS[data.status] ? data.status : null;
   }
 
+  /**
+   * 向きが変わったとき（TODO-095）。同じ内容で出し直す。`restart()` に引数を
+   * 渡さないと Phaser は前回の `init()` の値を渡し直すので、中身はそのまま残る。
+   * 記録は本編が済ませてあるので二重にならない。ファンファーレだけは鳴らし直さない。
+   */
+  relayout() {
+    this.relayouting = true;
+    this.scene.restart();
+  }
+
   create() {
     const board = BOARDS[this.registry.get(BOARD_REGISTRY_KEY)];
     const countsForBest = shouldRecordBest(this.usedAuto);
-    audio.fanfare();
+    const screen = screenOf(this);
+    if (!this.relayouting) audio.fanfare();
+    this.relayouting = false;
 
     // 下の本編を暗くする幕。本編は止めてあり入力を受けないので、当たり判定は要らない。
     // 版の表示は本編のものが見えている。
-    this.add.rectangle(0, 0, SCREEN.width, SCREEN.height, BACKDROP.color, BACKDROP.alpha)
+    this.add.rectangle(0, 0, screen.width, screen.height, BACKDROP.color, BACKDROP.alpha)
       .setOrigin(0);
 
-    const cx = SCREEN.width / 2;
-    const [titleTop, panelTop, buttonTop] = stackTops(STACK, SCREEN.height, STACK_BIAS);
-    const panelWidth = Math.min(560, SCREEN.width - SCREEN.margin * 2);
+    const cx = screen.width / 2;
+    const [titleTop, panelTop, buttonTop] = stackTops(STACK, screen.height,
+                                                      STACK_BIAS[orientationOf(this)]);
+    const panelWidth = Math.min(560, screen.width - screen.margin * 2);
 
     const buttonsWidth = BUTTONS.width * 4 + BUTTONS.gap * 3;
     const frameWidth = Math.min(Math.max(panelWidth, buttonsWidth) + FRAME_PAD.x * 2,
-                                SCREEN.width - SCREEN.margin * 2);
+                                screen.width - screen.margin * 2);
     const frameTop = titleTop - FRAME_PAD.y;
     createPanel(this, cx - frameWidth / 2, frameTop, frameWidth,
                 buttonTop + STACK[2].height + FRAME_PAD.y - frameTop);

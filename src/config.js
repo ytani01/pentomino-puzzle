@@ -464,44 +464,68 @@ export function makeLayout({
 }
 
 /**
- * 画面の向き。**起動時に 1 回だけ見て、以後は変えない**（TODO-011）。
+ * 今の画面の向き（`'landscape'` / `'portrait'`）を置く `game.registry` のキー。
+ * `main.js` が起動時と、端末を回して向きが変わったときに書く（TODO-095）。
  *
- * 遊んでいる最中に端末を回しても組み直さず、`Scale.FIT` が縮めるに任せる。
- * 組み直すには盤面・ピースの位置・経過時間・Undo の履歴を持ち越して Game
- * シーンを作り直すことになり、取りこぼしがバグになりやすいため。
+ * 配置は縦・横の 2 組を先に作っておき（`SCREENS`・`LAYOUTS`・`DEMO_LAYOUTS`）、
+ * 各シーンはこのキーで今の組を引く（`screenOf()`）。組そのものを書き換えないのは、
+ * 書き換わる状態をモジュールに持たせないため。
  */
-const PORTRAIT = window.innerHeight > window.innerWidth;
+export const ORIENTATION_REGISTRY_KEY = 'orientation';
+
+/** 向きの名前。`SCREENS`・`LAYOUTS`・`DEMO_LAYOUTS` の 1 段目のキー。 */
+export const ORIENTATIONS = ['landscape', 'portrait'];
+
+/** 向きごとに 1 組ずつ作る。`options` に向き（`portrait`）を足して `make` へ渡す。 */
+function byOrientation(make) {
+  return Object.fromEntries(ORIENTATIONS.map((key) => [key, make(key === 'portrait')]));
+}
 
 /**
- * 盤に依らない画面の寸法。Phaser の設定（`main.js`）と、盤を持たない
- * タイトル・クリアの画面が読む。
+ * 盤に依らない画面の寸法。向きごとに 1 組（`SCREENS.portrait` など）。
+ * Phaser の内部解像度（`main.js`）と、盤を持たないタイトル・クリア・記録の画面が読む。
  */
-export const SCREEN = { portrait: PORTRAIT, margin: MARGIN, ...screenSize(PORTRAIT) };
+export const SCREENS = byOrientation((portrait) => ({ portrait, margin: MARGIN, ...screenSize(portrait) }));
 
 /**
- * 盤ごとの配置。**選べる盤ぶんを起動時にまとめて作る**（TODO-009）。
+ * 盤ごとの配置。**向きと盤の組み合わせぶんを起動時にまとめて作る**（TODO-009・TODO-095）。
+ * 引くときは `LAYOUTS[向き][盤]`。
  *
  * 選ぶたびに作らないのは、書き換わる状態をモジュールに持たせないため。
  * 中身は画面の向きと盤の大きさだけで決まるので、先に作っても同じになる。
  */
-export const LAYOUTS = Object.fromEntries(
+export const LAYOUTS = byOrientation((portrait) => Object.fromEntries(
   Object.values(BOARDS).map((board) => [
-    board.key, makeLayout({ portrait: PORTRAIT, board, help: true }),
+    board.key, makeLayout({ portrait, board, help: true }),
   ]),
-);
+));
 
 /**
  * デモの配置（TODO-050）。HUD のボタンが本編より 1 つ多いので、本編の
  * `LAYOUTS` とは別に作る。ボタンの段数は `makeLayout()` が本編と揃える。
  * ただしタイトル行の下に探し方の一文（`note`）を足すので、盤とトレイは
  * その 1 行ぶん本編より下がり、横画面ではマスも小さくなる。そのマスの
- * テクスチャは Boot が焼く（TODO-089）。
+ * テクスチャは Boot が焼く（TODO-089）。引くときは `DEMO_LAYOUTS[向き][盤]`。
  */
-export const DEMO_LAYOUTS = Object.fromEntries(
+export const DEMO_LAYOUTS = byOrientation((portrait) => Object.fromEntries(
   Object.values(BOARDS).map((board) => [
-    board.key, makeLayout({ portrait: PORTRAIT, board, buttons: DEMO_HUD_BUTTONS, note: true }),
+    board.key, makeLayout({ portrait, board, buttons: DEMO_HUD_BUTTONS, note: true }),
   ]),
-);
+));
+
+/**
+ * シーンが今の向きを読む。シーンは `create()` で 1 回だけ読めばよい
+ * （向きが変わると `main.js` がシーンを作り直すため。TODO-095）。
+ * `registry` は `get` を持つ入れ物なら何でもよく、Phaser には依存しない。
+ */
+export function orientationOf(scene) {
+  return scene.registry.get(ORIENTATION_REGISTRY_KEY);
+}
+
+/** 今の向きの画面の寸法（`SCREENS` の 1 組）。 */
+export function screenOf(scene) {
+  return SCREENS[orientationOf(scene)];
+}
 
 /**
  * マス目テクスチャの描き方。`boot.js` がピースの色ごとに 1 枚作る。
@@ -835,6 +859,12 @@ export const DEMO = {
   randomDeadLimit: 8,
   randomTurnStepMs: 150,
 };
+
+/**
+ * 本編で完成してからクリア表示を重ねるまでの間（`game.js`。TODO-072）。
+ * 完成した盤と「完成」の文字を、表示で隠す前に見せる。
+ */
+export const CLEAR_DELAY_MS = 700;
 
 /**
  * タイトルの動く盤（TODO-087）。デモのランダムな探索を小さな盤で回す飾り。

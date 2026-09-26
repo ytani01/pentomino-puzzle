@@ -38,7 +38,7 @@
 <div id="results"></div>
 
 <script type="module">
-import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, DEMO, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT, makeLayout } from './src/config.js';
+import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, DEMO, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT, makeLayout, LAYOUTS, DEMO_LAYOUTS, ORIENTATIONS, SCREENS } from './src/config.js';
 import {
   normalize, rotateCw, rotateCcw, flip, sameShape, orientations, turnOrder, nextTurn, prevTurn,
   turnPivot,
@@ -176,10 +176,13 @@ test('PALETTES は必要な項目をそろえ、既定の組がその中にあ�
 group('src/config.js — トレイのスロット（makeLayout, TODO-053）');
 
 // 本編は下端に操作の概要を出す（`help: true`。TODO-094）。デモは出さないので両方を見る。
-for (const help of [false, true]) for (const portrait of [false, true]) {
+// 画面が実際に引く組（`LAYOUTS` / `DEMO_LAYOUTS` の向きごと。TODO-095）をそのまま確かめる。
+for (const [kind, table] of [['本編', LAYOUTS], ['デモ', DEMO_LAYOUTS]]) for (const orientation of ORIENTATIONS) {
+  const portrait = orientation === 'portrait';
+  const help = kind === '本編';
   for (const spec of Object.values(BOARDS)) {
-    const label = `${portrait ? '縦' : '横'}画面・${spec.label}${help ? '・概要あり' : ''}`;
-    const layout = makeLayout({ portrait, board: spec, help });
+    const label = `${kind}・${portrait ? '縦' : '横'}画面・${spec.label}`;
+    const layout = table[orientation][spec.key];
     const { board, tray } = layout;
     const longSide = (cells) => 1 + Math.max(...cells.map(([r]) => r), ...cells.map(([, c]) => c));
 
@@ -234,6 +237,25 @@ for (const help of [false, true]) for (const portrait of [false, true]) {
       });
     }
   }
+}
+
+group('src/config.js — 向きごとの組（SCREENS・LAYOUTS・DEMO_LAYOUTS, TODO-095）');
+
+for (const orientation of ORIENTATIONS) {
+  const portrait = orientation === 'portrait';
+  test(`${portrait ? '縦' : '横'}画面の組は、その向きの寸法で作ってある`, () => {
+    const screen = SCREENS[orientation];
+    assertSame(screen.portrait, portrait, 'SCREENS の向き');
+    assertSame(screen.height > screen.width, portrait, 'SCREENS の縦横');
+    for (const table of [LAYOUTS, DEMO_LAYOUTS]) {
+      for (const spec of Object.values(BOARDS)) {
+        const layout = table[orientation][spec.key];
+        assertSame(layout.portrait, portrait, `${spec.label} の向き`);
+        assertSame(layout.width, screen.width, `${spec.label} の幅`);
+        assertSame(layout.height, screen.height, `${spec.label} の高さ`);
+      }
+    }
+  });
 }
 
 group('src/config.js — HUD のボタンの並び（makeLayout, TODO-076）');

@@ -64,7 +64,6 @@ src/
 tools/                開発と公開の作業で使う（どれも公開するファイルには含めない）
   enumerate.mjs       全解の数え上げ
   gen-solutions.mjs   src/data/*.js を作る／突き合わせる
-  window-shim.mjs     Node から src/ を読むためのダミーの window
   capture.mjs         docs/images/ のキャプチャを撮り直す
   stamp-version.mjs   公開するコピーの読み込みに版を付ける（公開のワークフローが使う）
 tests.html            計算のテスト
@@ -184,6 +183,30 @@ Records の「この回を続ける」は、選んだ回の完成形から作っ
 localStorage が使えないときも始められるよう、保存した値とは別に直接渡す（TODO-073）。
 確認を挟むのは、その盤に遊びかけがあるときだけ。
 
+#### 画面の向きが変わったとき
+
+`src/main.js` が `window` の `resize` を 1 つだけ聞き、縦長か横長か
+（`innerHeight > innerWidth`）が変わったときだけ動く（幅を変えただけでは何もしない）。
+その場では作り直さず、フレームの終わり（`game.events` の `poststep`）ごとに見て、
+シーンの予約（`scene.start()` など）が残っておらず組み立ての途中のシーンも無くなったところで、
+そのときの向きで 1 回だけ作り直す（予約が残っているうちに作り直すと、シーンが 2 つ動いたり
+控えた状態が消えたりするため）。待つ間に向きが何度変わっても 1 回で、元の向きへ戻っていれば作り直さない。
+作り直すときは `ORIENTATION_REGISTRY_KEY` を書き換え、`game.scale.setGameSize()` で内部解像度を
+新しい向きの組（`SCREENS`）にしてから、動いているシーン（止めてある Game も含む）の
+`relayout()` を呼ぶ。各シーンは今の状態を自分のプロパティ（`relayoutState`）に控えて
+`scene.restart()` し、`create()` で控えを読んで組み直す（1 回使ったら捨てる）。
+Game と Demo は、そのまま持ち越すプロパティを `RELAYOUT_KEYS` の 1 つの並びにまとめてあり、
+控えるのも戻すのもそこを通す。
+ページは読み込み直さない（一手戻す履歴・デモの探索の途中・開いている確認が消えるため）。
+
+| シーン | 持ち越すもの |
+|---|---|
+| Title | なし（盤・色は `registry` にある）。動く盤は始め直す |
+| Game | 盤面・ピースの位置と向き・経過時間・一手戻す履歴・おまかせ／ヒント表示の状態・全解のデータ・完成の知らせ・開いている確認。ドラッグ中のピースは掴む前の位置へ戻す。クリア表示を出していれば止めたまま作り直す |
+| Clear | 本編から受け取った結果（`init()` の値をそのまま使う）。記録は本編が済ませてあるので二重にならず、ファンファーレも鳴らし直さない |
+| Records | 見ている盤・選んでいる回・チェック・開いている確認。1 頁の行数が向きで違うので、頁は見えていた回（選んでいる回か頁の先頭）が載る頁に合わせ直す |
+| Demo | 探索の generator（続きから進む）・盤のピース・探し方・速さ・数えた手と解・メッセージ。向きを回して見せている途中なら、先に仕上げてから控える |
+
 ### registry のキー
 
 シーンをまたいで持つ値は `this.registry`（`game.registry`）に置く。
@@ -192,6 +215,7 @@ localStorage が使えないときも始められるよう、保存した値と�
 |---|---|
 | `BOARD_REGISTRY_KEY`（`'board'`） | 選んでいる盤（`'8x8'` / `'6x10'`） |
 | `PALETTE_REGISTRY_KEY`（`'palette'`） | 選んでいる色の組（`'glass'` / `'colorful'` / `'neon'`） |
+| `ORIENTATION_REGISTRY_KEY`（`'orientation'`） | 今の画面の向き（`'landscape'` / `'portrait'`）。`main.js` が起動時と向きが変わったときに書く。シーンは `config.js` の `orientationOf()` / `screenOf()` で読み、`LAYOUTS` などから今の向きの組を引く |
 | `solutions/<盤>` | 読み込み済みの全解のデータ。`solutions.js` の `solutionsRegistryKey()` が `SOLUTIONS_REGISTRY_PREFIX`（`'solutions/'`）から盤のキーを添えて作る |
 
 `BOARD_REGISTRY_KEY` と `PALETTE_REGISTRY_KEY` は Boot が起動時に既定値で
@@ -206,8 +230,8 @@ Records の「この回を続ける」でも、記録の画面で見ている盤
 ## 画面の用語
 
 `src/config.js` の `makeLayout()` は、画面の部位ごとの配置を返す（以下
-`LAYOUT` と呼ぶ。実際に export してあるのは、盤ごとの `LAYOUT` を集めた
-`LAYOUTS`）。その `LAYOUT` のキーと画面の部位の対応を、以下にまとめる。
+`LAYOUT` と呼ぶ。実際に export してあるのは、向きと盤ごとの `LAYOUT` を集めた
+`LAYOUTS`。引くときは `LAYOUTS[向き][盤]`）。その `LAYOUT` のキーと画面の部位の対応を、以下にまとめる。
 やり取りでもソースでもこの呼び名を使う。
 
 ```
@@ -509,7 +533,6 @@ flowchart LR
 | `src/data/6x10.js` | 6×10（穴なし）の代表形 2339 件（全 9356 解） |
 | `tools/enumerate.mjs` | 数え上げ本体。深さ優先＋枝刈り 2 つ |
 | `tools/gen-solutions.mjs` | 上を呼んで `src/data/*.js` を書き出す／突き合わせる |
-| `tools/window-shim.mjs` | Node から `src/` を読むためのダミーの `window` |
 
 1 行が 1 つの代表形で、`logic.js` の `boardKey()` の出力そのまま
 （穴は `#`、あとはピース名。行優先）。**並びは文字列の昇順で固定**してあり、

@@ -19,7 +19,7 @@
 
 import {
   BACKDROP, BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, LAYOUTS, PALETTES,
-  PALETTE_REGISTRY_KEY, SCREEN, TEXT_COLORS,
+  PALETTE_REGISTRY_KEY, SCREENS, TEXT_COLORS, orientationOf, screenOf,
 } from '../config.js';
 import { boardIcon, ICONS } from '../icons.js';
 import { formatTime, selectionAfterRemoval } from '../logic.js';
@@ -46,7 +46,7 @@ const CHECKBOX = { size: 32, gap: 10 };
  * 行の文字（日時・時間・「おまかせ・ヒント」の印）を収める幅。印が右詰めで
  * 収まることを確かめてある値（TODO-027。432 は横画面、570 は縦画面）。
  *
- * `L.listWidth`（一覧の当たり判定全体の幅）は、ここへ
+ * `L` の `listWidth`（一覧の当たり判定全体の幅）は、ここへ
  * `CHECKBOX.size + CHECKBOX.gap` を足して作る。足し忘れると文字の幅が
  * そのぶん狭くなり、「おまかせ・ヒント」が経過時間にくっつく（TODO-071）。
  */
@@ -73,13 +73,13 @@ const ROW_TEXT_WIDTH = { portrait: 570, landscape: 432 };
  * 一覧側の高さが増えたぶんは `rowsPerPage` を減らして吸収し、完成形の列は
  * `chooseY` の行が高くなった分だけ動かしてある。
  */
-const L = SCREEN.portrait
-  ? {
+const L = {
+  portrait: {
     titleY: 26,
     headingY: 68,
     chooseY: 127,
     selectAllY: 194,
-    listX: SCREEN.width / 2,
+    listX: SCREENS.portrait.width / 2,
     listTop: 234,
     listWidth: ROW_TEXT_WIDTH.portrait + CHECKBOX.size + CHECKBOX.gap,
     rowsPerPage: 8,
@@ -90,8 +90,8 @@ const L = SCREEN.portrait
     footY: 1084,
     foot: { width: 42, height: 56 },
     trash: { width: 50, height: 60 },
-  }
-  : {
+  },
+  landscape: {
     titleY: 20,
     headingY: 50,
     chooseY: 109,
@@ -107,7 +107,8 @@ const L = SCREEN.portrait
     footY: 596,
     foot: { width: 36, height: 48 },
     trash: { width: 42, height: 54 },
-  };
+  },
+};
 
 /**
  * 「この回を続ける」の大きさ（TODO-073）。下段の ▶（次へ）と取り違えないよう、
@@ -116,7 +117,7 @@ const L = SCREEN.portrait
 const CONTINUE_BUTTON = { width: 190, height: 48 };
 
 /**
- * 下段のアイコンボタンどうしの間隔。大きさは `L.foot`。本編の HUD と同じく
+ * 下段のアイコンボタンどうしの間隔。大きさは `L` の `foot`。本編の HUD と同じく
  * 幅を詰めて高さを取る（TODO-076）。タイトルへも同じ大きさで左上に置く。
  */
 const FOOT_GAP = 14;
@@ -125,10 +126,10 @@ const FOOT_GAP = 14;
 const PAGE_TEXT_WIDTH = 64;
 
 /**
- * 確認の枠の寸法。盤に依らない値なので、1 つの盤の `LAYOUTS` から取って
- * 固定する（この画面は盤を切り替えても組み直さないため）。
+ * 確認の枠の寸法。盤にも向きにも依らない値なので、1 つの組の `LAYOUTS` から
+ * 取って固定する（この画面は盤を切り替えても組み直さないため）。
  */
-const CONFIRM = LAYOUTS[BOARDS['8x8'].key].confirm;
+const CONFIRM = LAYOUTS.landscape[BOARDS['8x8'].key].confirm;
 
 /**
  * 行の右端へ出す印（TODO-027）。何に頼って解いた回かを、履歴 1 件の
@@ -169,7 +170,10 @@ export default class RecordsScene extends Phaser.Scene {
   create() {
     this.cameras.main.setBackgroundColor(COLORS.background);
     // 初めはタイトルで選んである盤を出す。
-    this.boardKey = this.registry.get(BOARD_REGISTRY_KEY);
+    // 向きが変わって作り直したとき（TODO-095）は、見ていた盤から続ける。
+    const saved = this.relayoutState;
+    this.relayoutState = null;
+    this.boardKey = saved ? saved.boardKey : this.registry.get(BOARD_REGISTRY_KEY);
     this.palette = PALETTES[this.registry.get(PALETTE_REGISTRY_KEY)];
     this.entries = [];
     // 見ている盤の全解のデータ（TODO-022）。読み込むまでは null で、その間は
@@ -182,10 +186,13 @@ export default class RecordsScene extends Phaser.Scene {
     // 切り替えたら `reload()` が作り直す。
     this.checked = new Set();
 
-    const cx = SCREEN.width / 2;
+    // 配置は今の向きの組（向きが変わると `relayout()` で作り直す。TODO-095）。
+    const screen = screenOf(this);
+    this.L = L[orientationOf(this)];
+    const cx = screen.width / 2;
 
-    createTitleBar(this, L.titleY, () => this.goToTitle());
-    this.add.text(cx, L.headingY, '記録', {
+    createTitleBar(this, this.L.titleY, () => this.goToTitle());
+    this.add.text(cx, this.L.headingY, '記録', {
       fontFamily: FONT.family,
       fontSize: `${FONT.heading}px`,
       color: TEXT_COLORS.accent,
@@ -195,7 +202,7 @@ export default class RecordsScene extends Phaser.Scene {
     const boardChoices = Object.values(BOARDS).map((board) => ({
       ...board, icon: boardIcon(board), tooltip: `${board.label}（${board.note}）`,
     }));
-    this.boardButtons = createChoiceRow(this, cx, L.chooseY, '盤', boardChoices,
+    this.boardButtons = createChoiceRow(this, cx, this.L.chooseY, '盤', boardChoices,
                                         (choice) => this.selectBoard(choice.key),
                                         CHOICE_ICON_HEIGHT);
 
@@ -209,7 +216,44 @@ export default class RecordsScene extends Phaser.Scene {
     // には隠れるようにする（本編の `DEPTH` と同じ重なり順）。
     this.tooltip = createTooltip(this);
     this.createConfirmDialog();
+    this.confirmKind = null;
     this.reload();
+    if (saved) this.restoreRelayout(saved);
+  }
+
+  /**
+   * 向きが変わったとき（TODO-095）。見ている盤・頁・選んでいる回・チェック・
+   * 開いている確認を持ち越して作り直す。配置が向きごとに違い、部品を
+   * 動かすより組み直すほうが漏れないため。
+   */
+  relayout() {
+    // 1 頁の行数は向きで違う（`L` の `rowsPerPage`）ので、頁の番号でなく、回したあとも
+    // 見えているようにしたい回（`anchor`）で持つ。選んでいる回が今の頁にあればそれ
+    // （完成形と一覧の行が離れないように）、無ければ今の頁の先頭。
+    const first = this.page * this.L.rowsPerPage;
+    const onPage = this.selected >= first && this.selected < first + this.L.rowsPerPage;
+    this.relayoutState = {
+      boardKey: this.boardKey,
+      anchor: onPage ? this.selected : first,
+      selected: this.selected,
+      checked: this.checked,
+      confirmKind: this.confirmKind,
+    };
+    this.scene.restart();
+  }
+
+  /**
+   * `relayout()` で控えたものを戻す。`reload()` のあとに呼ぶ（`reload()` は頁・
+   * 選び位置・チェックを先頭へ戻すため）。1 頁の行数は向きで変わるので、頁は
+   * `anchor` の回が載る頁に合わせ直す。
+   */
+  restoreRelayout(saved) {
+    this.selected = saved.selected;
+    this.page = Math.min(Math.floor(saved.anchor / this.L.rowsPerPage),
+                         this.pageCount() - 1);
+    this.checked = saved.checked;
+    this.refresh();
+    if (saved.confirmKind) this.openConfirm(saved.confirmKind, true);
   }
 
   /**
@@ -218,19 +262,19 @@ export default class RecordsScene extends Phaser.Scene {
    * チェックした回を消す操作なので、チェックの行にまとめたほうが近い）。
    */
   createSelectAll() {
-    const x = L.listX - L.listWidth / 2 + CHECKBOX.size / 2;
+    const x = this.L.listX - this.L.listWidth / 2 + CHECKBOX.size / 2;
     this.selectAllButton = createButton(this, {
-      x, y: L.selectAllY, width: CHECKBOX.size, height: CHECKBOX.size,
+      x, y: this.L.selectAllY, width: CHECKBOX.size, height: CHECKBOX.size,
       label: '', onClick: () => this.toggleSelectAll(),
     });
-    this.add.text(x + CHECKBOX.size / 2 + CHECKBOX.gap, L.selectAllY, '全部選ぶ', {
+    this.add.text(x + CHECKBOX.size / 2 + CHECKBOX.gap, this.L.selectAllY, '全部選ぶ', {
       fontFamily: FONT.family,
       fontSize: `${FONT.small}px`,
       color: TEXT_COLORS.dim,
     }).setOrigin(0, 0.5);
-    const { width: trashWidth, height: trashHeight } = L.trash;
+    const { width: trashWidth, height: trashHeight } = this.L.trash;
     this.trashButton = createButton(this, {
-      x: L.listX + L.listWidth / 2 - trashWidth / 2, y: L.selectAllY,
+      x: this.L.listX + this.L.listWidth / 2 - trashWidth / 2, y: this.L.selectAllY,
       width: trashWidth, height: trashHeight,
       label: '', icon: ICONS.trash, tooltip: 'チェックした回を消す', onClick: () => this.confirmTrash(),
     });
@@ -247,11 +291,11 @@ export default class RecordsScene extends Phaser.Scene {
   createList() {
     this.rowButtons = [];
     this.rowChecks = [];
-    const rowLeft = L.listX - L.listWidth / 2;
-    const rowX = rowLeft + CHECKBOX.size + CHECKBOX.gap + (L.listWidth - CHECKBOX.size - CHECKBOX.gap) / 2;
-    const rowWidth = L.listWidth - CHECKBOX.size - CHECKBOX.gap;
-    for (let i = 0; i < L.rowsPerPage; i += 1) {
-      const y = L.listTop + ROW.height / 2 + i * (ROW.height + ROW.gap);
+    const rowLeft = this.L.listX - this.L.listWidth / 2;
+    const rowX = rowLeft + CHECKBOX.size + CHECKBOX.gap + (this.L.listWidth - CHECKBOX.size - CHECKBOX.gap) / 2;
+    const rowWidth = this.L.listWidth - CHECKBOX.size - CHECKBOX.gap;
+    for (let i = 0; i < this.L.rowsPerPage; i += 1) {
+      const y = this.L.listTop + ROW.height / 2 + i * (ROW.height + ROW.gap);
       const check = createButton(this, {
         x: rowLeft + CHECKBOX.size / 2, y, width: CHECKBOX.size, height: CHECKBOX.size,
         label: '', onClick: () => this.toggleRow(i),
@@ -274,8 +318,8 @@ export default class RecordsScene extends Phaser.Scene {
 
     // 「記録なし」は、行が並ぶはずの範囲の中ほどに置く。
     this.emptyText = this.add.text(
-      L.listX,
-      L.listTop + (ROW.height + ROW.gap) * L.rowsPerPage / 2,
+      this.L.listX,
+      this.L.listTop + (ROW.height + ROW.gap) * this.L.rowsPerPage / 2,
       '記録なし',
       { fontFamily: FONT.family, fontSize: `${FONT.body}px`, color: TEXT_COLORS.dim },
     ).setOrigin(0.5);
@@ -288,7 +332,7 @@ export default class RecordsScene extends Phaser.Scene {
    * 左上の見出しの高さに置く（TODO-076）。
    */
   createFoot(cx) {
-    const { width: size, height } = L.foot;
+    const { width: size, height } = this.L.foot;
     const total = size * 2 + PAGE_TEXT_WIDTH + FOOT_GAP * 2;
     let x = cx - total / 2;
     const next = (width) => {
@@ -298,22 +342,22 @@ export default class RecordsScene extends Phaser.Scene {
     };
 
     this.prevButton = createButton(this, {
-      x: next(size), y: L.footY, width: size, height,
+      x: next(size), y: this.L.footY, width: size, height,
       label: '', icon: ICONS.prevPage, tooltip: '前へ', onClick: () => this.turnPage(-1),
     });
-    this.pageText = this.add.text(next(PAGE_TEXT_WIDTH), L.footY, '', {
+    this.pageText = this.add.text(next(PAGE_TEXT_WIDTH), this.L.footY, '', {
       fontFamily: FONT.family,
       fontSize: `${FONT.small}px`,
       color: TEXT_COLORS.dim,
     }).setOrigin(0.5);
     this.nextButton = createButton(this, {
-      x: next(size), y: L.footY, width: size, height,
+      x: next(size), y: this.L.footY, width: size, height,
       label: '', icon: ICONS.nextPage, tooltip: '次へ', onClick: () => this.turnPage(1),
     });
     // シーンの中では使わないが、`tools/capture.mjs` が吹き出しで指すため
     // プロパティに持たせる。
     this.titleButton = createButton(this, {
-      x: SCREEN.margin + size / 2, y: L.headingY, width: size, height,
+      x: screenOf(this).margin + size / 2, y: this.L.headingY, width: size, height,
       label: '', icon: ICONS.title, tooltip: 'タイトルへ', onClick: () => this.goToTitle(),
     });
   }
@@ -327,7 +371,7 @@ export default class RecordsScene extends Phaser.Scene {
   /** 選んだ 1 件の見出し、完成形を描く場所、達成度。 */
   createDetail() {
     this.detailText = this.add.text(
-      L.boardBox.x + L.boardBox.width / 2, L.detailY, '', {
+      this.L.boardBox.x + this.L.boardBox.width / 2, this.L.detailY, '', {
         fontFamily: FONT.family,
         fontSize: `${FONT.body}px`,
         color: TEXT_COLORS.normal,
@@ -337,14 +381,14 @@ export default class RecordsScene extends Phaser.Scene {
     ).setOrigin(0.5);
     this.mini = this.add.graphics();
     this.continueButton = createButton(this, {
-      x: L.boardBox.x + L.boardBox.width / 2, y: L.continueY,
+      x: this.L.boardBox.x + this.L.boardBox.width / 2, y: this.L.continueY,
       width: CONTINUE_BUTTON.width, height: CONTINUE_BUTTON.height,
       label: 'この回を続ける', fontSize: FONT.small, onClick: () => this.confirmContinue(),
     });
     // 達成度（TODO-022）。分母が盤で違う（8×8 は 65、6×10 は 2339）ので、
     // 盤の名前を頭に付ける。
     this.achieveText = this.add.text(
-      L.boardBox.x + L.boardBox.width / 2, L.achieveY, '', {
+      this.L.boardBox.x + this.L.boardBox.width / 2, this.L.achieveY, '', {
         fontFamily: FONT.family,
         fontSize: `${FONT.small}px`,
         color: TEXT_COLORS.dim,
@@ -359,15 +403,16 @@ export default class RecordsScene extends Phaser.Scene {
    * ボタンへクリックが抜けないようにする。
    */
   createConfirmDialog() {
-    // 開くときに `showConfirm()` が入れ替える（TODO-031）。枠が出ていない間に
+    // 開くときに `openConfirm()` が入れ替える（TODO-031）。枠が出ていない間に
     // 呼ばれることは無いが、プロパティの有無が場面で変わらないよう先に作る。
     this.confirmAction = () => this.hideConfirm();
-    const x = (SCREEN.width - CONFIRM.width) / 2;
-    const y = (SCREEN.height - CONFIRM.height) / 2;
+    const screen = screenOf(this);
+    const x = (screen.width - CONFIRM.width) / 2;
+    const y = (screen.height - CONFIRM.height) / 2;
     const depth = 10;
 
     this.confirmParts = [
-      this.add.rectangle(0, 0, SCREEN.width, SCREEN.height, BACKDROP.color, BACKDROP.alpha)
+      this.add.rectangle(0, 0, screen.width, screen.height, BACKDROP.color, BACKDROP.alpha)
         .setOrigin(0).setDepth(depth).setInteractive().setVisible(false),
       createPanel(this, x, y, CONFIRM.width, CONFIRM.height)
         .setDepth(depth).setVisible(false),
@@ -419,7 +464,7 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   selectRow(index) {
-    const entry = this.page * L.rowsPerPage + index;
+    const entry = this.page * this.L.rowsPerPage + index;
     if (entry >= this.entries.length) return;
     audio.unlock();
     audio.button();
@@ -433,7 +478,7 @@ export default class RecordsScene extends Phaser.Scene {
    * `removeHistoryMany()` も番号で件を指すため、番号が無いと何を消すかが決まらない。
    */
   toggleRow(index) {
-    const entry = this.entries[this.page * L.rowsPerPage + index];
+    const entry = this.entries[this.page * this.L.rowsPerPage + index];
     if (!entry || !entry.no || this.solutions === null) return;
     audio.unlock();
     audio.button();
@@ -470,10 +515,7 @@ export default class RecordsScene extends Phaser.Scene {
   /** チェックした回を消す前の確認（TODO-071）。 */
   confirmTrash() {
     if (this.checked.size === 0) return;
-    this.showConfirm(
-      `${BOARDS[this.boardKey].label} の記録 ${this.checked.size} 件を消しますか？\nもとに戻せません`,
-      () => this.doTrash(),
-    );
+    this.openConfirm('trash');
   }
 
   /**
@@ -487,10 +529,7 @@ export default class RecordsScene extends Phaser.Scene {
       this.doContinue();
       return;
     }
-    this.showConfirm(
-      `${BOARDS[this.boardKey].label} の遊びかけの盤面が消えます\nこの回を続けますか？`,
-      () => this.doContinue(),
-    );
+    this.openConfirm('continue');
   }
 
   /** 選んでいる回から作った遊びかけ。完成形を引けないうちは `null`。 */
@@ -515,9 +554,27 @@ export default class RecordsScene extends Phaser.Scene {
     this.scene.start('Game', { progress });
   }
 
-  showConfirm(text, action) {
-    audio.unlock();
-    audio.button();
+  /**
+   * 確認を開く。何の確認かを `kind`（`'trash'` / `'continue'`）で持つのは、
+   * 向きが変わって作り直したときに開き直すため（TODO-095）。開き直すときは
+   * `silent` で音を鳴らさない。
+   */
+  openConfirm(kind, silent = false) {
+    const { label } = BOARDS[this.boardKey];
+    const { text, action } = kind === 'trash'
+      ? {
+        text: `${label} の記録 ${this.checked.size} 件を消しますか？\nもとに戻せません`,
+        action: () => this.doTrash(),
+      }
+      : {
+        text: `${label} の遊びかけの盤面が消えます\nこの回を続けますか？`,
+        action: () => this.doContinue(),
+      };
+    if (!silent) {
+      audio.unlock();
+      audio.button();
+    }
+    this.confirmKind = kind;
     this.confirmAction = action;
     this.confirmText.setText(text);
     this.confirmParts.forEach((part) => part.setVisible(true));
@@ -525,6 +582,7 @@ export default class RecordsScene extends Phaser.Scene {
 
   hideConfirm() {
     audio.button();
+    this.confirmKind = null;
     this.confirmParts.forEach((part) => part.setVisible(false));
   }
 
@@ -536,11 +594,12 @@ export default class RecordsScene extends Phaser.Scene {
    */
   doTrash() {
     audio.button();
+    this.confirmKind = null;
     this.confirmParts.forEach((part) => part.setVisible(false));
     if (this.solutions === null || this.checked.size === 0) return;
     const removed = [...this.checked];
     const next = selectionAfterRemoval(this.entries.map((entry) => entry.no),
-                                       this.selected, this.page, removed, L.rowsPerPage);
+                                       this.selected, this.page, removed, this.L.rowsPerPage);
     this.entries = removeRecords(this.boardKey, removed, this.solutions);
     this.checked.clear();
     this.found = loadFound(this.boardKey, this.solutions.canonical.length);
@@ -583,7 +642,7 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   pageCount() {
-    return Math.max(1, Math.ceil(this.entries.length / L.rowsPerPage));
+    return Math.max(1, Math.ceil(this.entries.length / this.L.rowsPerPage));
   }
 
   /** 一覧・頁送り・完成形を、今の頁・選んでいる 1 件・チェックに合わせて出し直す。 */
@@ -591,7 +650,7 @@ export default class RecordsScene extends Phaser.Scene {
     const pages = this.pageCount();
     const ready = this.solutions !== null;
     this.rowButtons.forEach((button, i) => {
-      const index = this.page * L.rowsPerPage + i;
+      const index = this.page * this.L.rowsPerPage + i;
       const entry = this.entries[index];
       const check = this.rowChecks[i];
       button.setVisible(!!entry);
@@ -659,6 +718,6 @@ export default class RecordsScene extends Phaser.Scene {
     if (!entry || this.solutions === null) return;
     const cells = solutionCells(this.solutions, entry.no);
     if (cells === null) return;
-    drawMiniBoard(this.mini, BOARDS[this.boardKey], cells, this.palette, L.boardBox);
+    drawMiniBoard(this.mini, BOARDS[this.boardKey], cells, this.palette, this.L.boardBox);
   }
 }

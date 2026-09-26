@@ -12,7 +12,6 @@
  * Node の標準機能だけで動く（`npm install` は要らない）。
  */
 
-import './window-shim.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

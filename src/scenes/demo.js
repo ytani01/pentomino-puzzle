@@ -34,7 +34,7 @@
 
 import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, DEMO, DEMO_LAYOUTS, FONT, PALETTES,
-  PALETTE_REGISTRY_KEY, TEXT_COLORS,
+  PALETTE_REGISTRY_KEY, TEXT_COLORS, orientationOf,
 } from '../config.js';
 import {
   createBoard, orientationSteps, parseDemoParams, solveSteps, solveStepsRandom,
@@ -54,6 +54,17 @@ const STRATEGIES = {
   random: { solve: solveStepsRandom, icon: ICONS.random, tooltip: '探し方: ランダム' },
 };
 
+/**
+ * 向きが変わって作り直すとき（`relayout()`。TODO-095）に、そのまま持ち越す
+ * プロパティ。本編の `RELAYOUT_KEYS`（`game.js`）と同じ作りで、控えるのも戻すのも
+ * この並びを通す。盤のピースとメッセージは画面の部品に写す手順が要るので別に控える。
+ * generator（`steps`）と先読み（`peeked`）をそのまま渡せば、探索は続きから進む。
+ */
+const RELAYOUT_KEYS = [
+  'state', 'steps', 'peeked', 'solutions', 'strategy', 'hintState', 'speed', 'tried',
+  'solvedCount', 'waited', 'waitScale',
+];
+
 export default class DemoScene extends GameScene {
   constructor() {
     super('Demo');
@@ -61,6 +72,9 @@ export default class DemoScene extends GameScene {
 
   create() {
     this.cameras.main.setBackgroundColor(COLORS.background);
+    // 向きが変わって作り直したとき（`relayout()`。TODO-095）に控えた状態。
+    const saved = this.relayoutState;
+    this.relayoutState = null;
     // 盤と色の組はタイトルで選んだもの（本編と同じ読み方）。URL で開いたときは
     // 盤と探し方を URL から取る（TODO-083）。registry には書かない（タイトルの
     // 選択を変えないため）。`scene.start()` のデータで渡さないのは、Phaser が
@@ -69,7 +83,7 @@ export default class DemoScene extends GameScene {
     this.boardKey = fromUrl?.board ?? this.registry.get(BOARD_REGISTRY_KEY);
     this.spec = BOARDS[this.boardKey];
     // ボタンが本編より 1 つ多い分だけ HUD が違う。盤とトレイは本編と同じ（TODO-050）。
-    this.layout = DEMO_LAYOUTS[this.boardKey];
+    this.layout = DEMO_LAYOUTS[orientationOf(this)][this.boardKey];
     this.palette = PALETTES[this.registry.get(PALETTE_REGISTRY_KEY)];
     // `drawBoard()` が穴の位置を見るためだけに持つ。探索の盤は generator の中にある。
     this.board = createBoard(this.spec);
@@ -96,6 +110,9 @@ export default class DemoScene extends GameScene {
     // delayedCall。`cancelTurn()` が使う。
     this.turning = null;
     this.turnTimer = null;
+    // 作り直したときは、探索の途中（generator）ごと続きから進める。HUD を
+    // 組む前に戻すのは、探し方のボタンの見た目を今の探し方で作るため。
+    if (saved) Object.assign(this, saved.state);
 
     this.drawBoard();
     this.drawTray();
@@ -105,6 +122,7 @@ export default class DemoScene extends GameScene {
     for (const piece of this.pieces) piece.tiles.forEach((tile) => tile.disableInteractive());
     this.createHud();
     this.createMessage();
+    if (saved) this.applyRelayout(saved);
     this.refreshHud();
     // URL で直接開くとタイトルのボタンを通らないので、ここで音を使えるようにする
     // （TODO-083）。タイトルのボタンと同じ `pointerup`（タッチでは `touchstart` が
@@ -120,6 +138,33 @@ export default class DemoScene extends GameScene {
       this.solutions = solutions;
       this.startSearch();
     });
+  }
+
+  /**
+   * 向きが変わったとき（TODO-095）。探索の途中・速さ・探し方・数えた手と解・
+   * 盤のピースを持ち越して作り直す。generator はそのまま渡せば続きから進む。
+   * 回している途中（`playTurns()`）は、先に仕上げて盤面と generator を揃える。
+   */
+  relayout() {
+    this.cancelTurn();
+    this.relayoutState = {
+      state: Object.fromEntries(RELAYOUT_KEYS.map((key) => [key, this[key]])),
+      pieces: this.pieces.map(({ cells, location, row, col }) => ({
+        cells, location, row, col,
+      })),
+      message: this.messageText.text,
+    };
+    this.scene.restart();
+  }
+
+  /** `relayout()` で控えたピースの位置とメッセージを、組み直した画面へ写す。 */
+  applyRelayout(saved) {
+    this.pieces.forEach((piece, index) => {
+      Object.assign(piece, saved.pieces[index]);
+      this.refreshPiece(piece);
+      this.settlePiece(piece, false);
+    });
+    this.messageText.setText(saved.message);
   }
 
   update(_time, delta) {

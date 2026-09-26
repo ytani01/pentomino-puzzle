@@ -8,8 +8,8 @@
  */
 
 import {
-  BACKDROP, BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, INPUT, LAYOUTS, NEON,
-  OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, TURN_MARK,
+  BACKDROP, BOARDS, BOARD_REGISTRY_KEY, CLEAR_DELAY_MS, COLORS, FONT, INPUT, LAYOUTS, NEON,
+  OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, TURN_MARK, orientationOf,
 } from '../config.js';
 import {
   boardKey, canPlace, createBoard, flip, forcedPlacements, formatTime, isSolved,
@@ -31,6 +31,18 @@ import {
 } from '../ui.js';
 import { ICONS } from '../icons.js';
 import { darken, pieceColor, TEX } from './boot.js';
+
+/**
+ * 向きが変わって作り直すとき（`relayout()`。TODO-095）に、そのまま持ち越す
+ * プロパティ。控えるのも戻すのもこの並びを通すので、持ち越す状態を足すときは
+ * ここに足す。盤面とピース（`snapshot()`）・HUD の文字・確認・止めているかは、
+ * 画面の部品に写す手順が要るので別に控える。全解のデータ（`solutions`）も
+ * 持ち越し、届くのを待たずにおまかせ・ヒント表示を使えるようにする。
+ */
+const RELAYOUT_KEYS = [
+  'history', 'elapsed', 'usedAuto', 'usedHint', 'hinting', 'hintState', 'playing',
+  'ownsProgress', 'solvedNumbers', 'solutions', 'avoidNumbers', 'clearData',
+];
 
 /** 重なりの順。ボタンの説明（TODO-042）は HUD の下へはみ出して盤やピースに
  *  重なるので、HUD より上・確認ダイアログより下に置く。 */
@@ -69,13 +81,17 @@ export default class GameScene extends Phaser.Scene {
 
   create() {
     this.cameras.main.setBackgroundColor(COLORS.background);
+    // 向きが変わって作り直したとき（`relayout()`。TODO-095）に控えた状態。
+    // 1 回使ったら捨てる（次にふつうに始めたときに持ち越さないため）。
+    const saved = this.relayoutState;
+    this.relayoutState = null;
 
     // 盤はタイトルで選ぶ（TODO-009。記録画面の「この回を続ける」も始める前に
     // 書き換える。TODO-073）。どちらも本編の外で書くので、ここで 1 回読めば
     // シーンが生きている間は変わらない。
     this.boardKey = this.registry.get(BOARD_REGISTRY_KEY);
     this.spec = BOARDS[this.boardKey];
-    this.layout = LAYOUTS[this.boardKey];
+    this.layout = LAYOUTS[orientationOf(this)][this.boardKey];
     // 色の組もタイトルでだけ選べる（TODO-015）。
     this.palette = PALETTES[this.registry.get(PALETTE_REGISTRY_KEY)];
 
@@ -99,6 +115,11 @@ export default class GameScene extends Phaser.Scene {
     this.messageTimer = null;
     // このプレーで完成させた解の番号（TODO-072）。遊びかけと一緒に保存する。
     this.solvedNumbers = [];
+    // 開いている確認（`'title'` / `'restart'`）。作り直したときに開き直すため（TODO-095）。
+    this.confirmKind = null;
+    // 完成してクリア表示へ渡す値（`checkSolved()`）。「続ける」までは持っておき、
+    // 向きが変わって作り直したときにクリア表示を出し直す（TODO-095）。
+    this.clearData = null;
 
     this.drawBoard();
     this.drawTray();
@@ -109,7 +130,8 @@ export default class GameScene extends Phaser.Scene {
     this.createMessage();
     this.createHelp();
     this.createConfirmDialog();
-    if (this.restartTip) this.tooltip.flash(this.restartButton, RESTART_TIP);
+    // 作り直したときは、前の `init()` の値が渡し直されるので見ない（TODO-095）。
+    if (this.restartTip && !saved) this.tooltip.flash(this.restartButton, RESTART_TIP);
 
     // 全解のデータ（TODO-022）。6×10 は 139KB あるので動的 import で読む。
     // 届くまで [おまかせ] と [ヒント表示] は押せない（`refreshHud()` が見る）。
@@ -123,7 +145,9 @@ export default class GameScene extends Phaser.Scene {
       if (!this.scene.isActive()) return;
       this.solutions = solutions;
       const total = solutions.canonical.length;
+      // 作り直したときは持ち越した分（`applyRelayout()`）に足す。
       this.avoidNumbers = new Set([
+        ...this.avoidNumbers,
         ...loadFound(this.spec.key, total),
         ...loadAuto(this.spec.key, total),
       ]);
@@ -148,7 +172,10 @@ export default class GameScene extends Phaser.Scene {
     this.events.once('shutdown', this.onShutdown, this);
 
     // 遊びかけの読み込みは、部品を組んでから（`refreshPiece()` などが要る）。
-    if (this.resuming) this.applyProgress(this.startProgress || loadProgress(this.spec.key));
+    // 作り直したときは控えた状態を戻し、遊びかけは読まない（前の `init()` の
+    // `resume` が渡し直されるが、控えた状態のほうが新しい）。
+    if (saved) this.applyRelayout(saved);
+    else if (this.resuming) this.applyProgress(this.startProgress || loadProgress(this.spec.key));
     this.refreshHud();
     // ここから先の `refreshHud()` は、盤が変わったときに呼ばれる。
     // 組み立ての最中に控えると、何も置いていない盤面で保存済みの遊びかけを
@@ -395,7 +422,7 @@ export default class GameScene extends Phaser.Scene {
 
   /**
    * 確認の枠。タイトルへ戻る前とやり直す前（TODO-094）で同じ枠を使い、
-   * 文言と「はい」の動作だけを `showConfirm()` で差し替える。
+   * 文言と「はい」の動作だけを `openConfirm()` で差し替える。
    * ブラウザの `confirm()` は使わない（CLAUDE.md）ので、
    * Canvas 内に組む。背景の帯に画面全体を覆う当たり判定を持たせ、開いている間は
    * ピースやほかのボタンへクリックが抜けないようにする（Phaser の入力は既定で
@@ -1128,6 +1155,51 @@ export default class GameScene extends Phaser.Scene {
     this.persist();
   }
 
+  // ---- 向きが変わったときの作り直し（TODO-095）-------------------------
+
+  /**
+   * 今の状態を控えて作り直す（`main.js` の `followOrientation()` から呼ばれる）。
+   * 配置は向きごとに違い、部品を 1 つずつ動かすより組み直すほうが漏れない。
+   *
+   * ドラッグ中のピースは掴む前の位置へ戻す（`drag.snapshot`）。作り直すと
+   * ポインタとのつながりが切れ、運んでいる途中を持ち越せないため。
+   * クリア表示を出しているとき（本編は止めてある）は、止めたまま作り直す
+   * （クリア表示は自分の `relayout()` で出し直す）。
+   */
+  relayout() {
+    this.cancelPending();
+    this.relayoutState = {
+      state: Object.fromEntries(RELAYOUT_KEYS.map((key) => [key, this[key]])),
+      position: this.drag ? this.drag.snapshot : this.snapshot(),
+      record: { text: this.recordText.text, color: this.recordText.style.color },
+      confirmKind: this.confirmKind,
+      paused: this.scene.isPaused(),
+    };
+    this.scene.restart();
+  }
+
+  /**
+   * `relayout()` で控えた状態を、組み直した画面へ写す。プロパティ（`RELAYOUT_KEYS`）を
+   * 先に戻すのは、`restoreState()` の中の `runHint()` が、ヒント表示の状態
+   * （`hintState`）を見て詰みの音を鳴らし直さないようにするため。
+   */
+  applyRelayout(saved) {
+    Object.assign(this, saved.state);
+    this.hintButton.setSelected(this.hinting);
+    this.restoreState(saved.position);
+    this.timeText.setText(formatTime(this.elapsed));
+    this.recordText.setText(saved.record.text).setColor(saved.record.color);
+    if (saved.confirmKind) this.openConfirm(saved.confirmKind, true);
+    if (saved.paused) {
+      // `create()` の中で止めても、終わったところで Phaser が動かし直すので、
+      // 組み立てが済んでから止める。
+      this.events.once(Phaser.Scenes.Events.CREATE, () => this.scene.pause());
+    } else if (this.clearData) {
+      // 完成からクリア表示までの間（`checkSolved()` の待ち）に作り直した。
+      this.time.delayedCall(CLEAR_DELAY_MS, () => this.showClear());
+    }
+  }
+
   /**
    * 保存してある遊びかけを画面へ写す（TODO-030）。読めなければ何もしない
    * （最初から遊ぶことになる）。
@@ -1265,7 +1337,7 @@ export default class GameScene extends Phaser.Scene {
       this.restart();
       return;
     }
-    this.showConfirm('やり直しますか？\n今の盤面は消えます', () => this.restart());
+    this.openConfirm('restart');
   }
 
   /**
@@ -1296,13 +1368,23 @@ export default class GameScene extends Phaser.Scene {
       this.goToTitle();
       return;
     }
-    // 途中の盤面は残るので（TODO-030）、失われるとは言わない。
-    this.showConfirm('タイトルへ戻りますか？\n途中の盤面は残るので、\n「つづきから」で再開できます',
-                     () => this.goToTitle());
+    this.openConfirm('title');
   }
 
-  showConfirm(message, onYes) {
-    audio.button();
+  /**
+   * 確認を開く。何の確認かを `kind` で持つのは、向きが変わって作り直したときに
+   * 開き直すため（TODO-095）。開き直すときは `silent` で音を鳴らさない。
+   */
+  openConfirm(kind, silent = false) {
+    const { message, onYes } = kind === 'title'
+      ? {
+        // 途中の盤面は残るので（TODO-030）、失われるとは言わない。
+        message: 'タイトルへ戻りますか？\n途中の盤面は残るので、\n「つづきから」で再開できます',
+        onYes: () => this.goToTitle(),
+      }
+      : { message: 'やり直しますか？\n今の盤面は消えます', onYes: () => this.restart() };
+    if (!silent) audio.button();
+    this.confirmKind = kind;
     this.confirmText.setText(message);
     this.confirmAction = onYes;
     this.confirmParts.forEach((part) => part.setVisible(true));
@@ -1310,6 +1392,7 @@ export default class GameScene extends Phaser.Scene {
 
   hideConfirm() {
     audio.button();
+    this.confirmKind = null;
     this.confirmParts.forEach((part) => part.setVisible(false));
   }
 
@@ -1412,19 +1495,23 @@ export default class GameScene extends Phaser.Scene {
     this.refreshHud();
     this.showRecordStatus(no, result.status);
     this.showMessage('完成');
-    this.time.delayedCall(700, () => {
-      this.scene.pause();
-      this.scene.launch('Clear', {
-        ms: this.elapsed,
-        usedAuto: this.usedAuto,
-        usedHint: this.usedHint,
-        no,
-        total: this.solutions ? this.solutions.canonical.length : null,
-        best: result.best,
-        bestUpdated: result.updated,
-        status: result.status,
-      });
-    });
+    this.clearData = {
+      ms: this.elapsed,
+      usedAuto: this.usedAuto,
+      usedHint: this.usedHint,
+      no,
+      total: this.solutions ? this.solutions.canonical.length : null,
+      best: result.best,
+      bestUpdated: result.updated,
+      status: result.status,
+    };
+    this.time.delayedCall(CLEAR_DELAY_MS, () => this.showClear());
+  }
+
+  /** 本編を止めて、その上にクリア表示を重ねる（TODO-072）。 */
+  showClear() {
+    this.scene.pause();
+    this.scene.launch('Clear', this.clearData);
   }
 
   /**
@@ -1461,6 +1548,7 @@ export default class GameScene extends Phaser.Scene {
   continuePlay() {
     this.scene.resume();
     this.playing = true;
+    this.clearData = null;
     this.undoButton.setEnabled(this.history.length > 0);
   }
 }

@@ -6,8 +6,8 @@
  */
 
 import {
-  ACRYLIC, COLORS, FONT, HINT_BADGE, HOLE, NEON, PIECES, SCREEN, TEXT_COLORS, TILE, TOOLTIP,
-  VERSION,
+  ACRYLIC, COLORS, FONT, HINT_BADGE, HOLE, NEON, PIECES, TEXT_COLORS, TILE, TOOLTIP,
+  VERSION, screenOf,
 } from './config.js';
 import { darken, pieceColor } from './scenes/boot.js';
 
@@ -27,7 +27,8 @@ export const HOW_TO_OPERATE_SHORT = 'ドラッグで置く・タップで向き�
  * すべての画面の同じ位置に出す（TODO-041）。
  */
 export function createVersionText(scene) {
-  return scene.add.text(SCREEN.width - 12, SCREEN.height - 12, VERSION, {
+  const screen = screenOf(scene);
+  return scene.add.text(screen.width - 12, screen.height - 12, VERSION, {
     fontFamily: FONT.family,
     fontSize: `${FONT.small}px`,
     color: TEXT_COLORS.dim,
@@ -50,7 +51,7 @@ export function createVersionText(scene) {
  * `.setDepth()` を掛けても両方に効くよう、2 つの文字を Container にまとめて返す。
  */
 export function createTitleBar(scene, y, onClick) {
-  const text = scene.add.text(SCREEN.width / 2, y, 'PENTOMINO PUZZLE', {
+  const text = scene.add.text(screenOf(scene).width / 2, y, 'PENTOMINO PUZZLE', {
     fontFamily: FONT.family,
     fontSize: `${FONT.body}px`,
     color: TEXT_COLORS.accent,
@@ -520,11 +521,12 @@ export function createTooltip(scene) {
     back.fillRoundedRect(0, 0, width, height, 6);
     back.lineStyle(2, COLORS.buttonEdge, 1);
     back.strokeRoundedRect(0, 0, width, height, 6);
+    const screen = screenOf(scene);
     const x = Phaser.Math.Clamp(button.x - width / 2,
-      SCREEN.margin, SCREEN.width - SCREEN.margin - width);
+      screen.margin, screen.width - screen.margin - width);
     // 下に出すと画面からはみ出すボタン（記録の画面の下段。TODO-071）では上に出す。
     const below = button.y + button.height / 2 + TOOLTIP.gap;
-    const y = below + height > SCREEN.height - SCREEN.margin
+    const y = below + height > screen.height - screen.margin
       ? button.y - button.height / 2 - TOOLTIP.gap - height
       : below;
     box.setPosition(x, y);

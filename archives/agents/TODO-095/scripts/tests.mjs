@@ -1,0 +1,12 @@
+const { chromium } = await import('/home/ytani/.npm/_npx/6bcb61ec6d5aea22/node_modules/playwright/index.mjs');
+const browser = await chromium.launch();
+const page = await browser.newPage();
+const errors = [];
+page.on('pageerror', (e) => errors.push(e.message));
+await page.goto('http://127.0.0.1:8798/tests.html', { waitUntil: 'commit' });
+await page.waitForFunction(() => document.getElementById('summary')?.textContent, null, { timeout: 60000 });
+console.log(await page.textContent('#summary'));
+console.log(await page.evaluate(() => [...document.querySelectorAll('.why')].map((e) => e.parentElement.textContent).join('\n')));
+console.log(await page.evaluate(() => [...document.querySelectorAll('li')].filter((l) => l.textContent.includes('向き') && l.textContent.includes('組')).length));
+console.log('errors', errors);
+await browser.close();

@@ -56,9 +56,11 @@ export default class BootScene extends Phaser.Scene {
     // 選べる盤と色の組のぶんをまとめて焼く。タイトルで選び直したときに
     // 待たせないため（1 枚は数十 px 四方で、全部でも 30 枚ほど）。
     // デモは横画面でマスが本編より小さいので、その大きさも焼く（TODO-089）。
+    // 遊んでいる途中で端末を回すと向きが変わるので、縦・横の両方を焼く（TODO-095）。
     // 同じ大きさを二度焼くとキーがぶつかるので、Set で重ねない。
     const cells = new Set(
-      [...Object.values(LAYOUTS), ...Object.values(DEMO_LAYOUTS)].map((layout) => layout.board.cell),
+      [LAYOUTS, DEMO_LAYOUTS].flatMap((byOrientation) => Object.values(byOrientation))
+        .flatMap((byBoard) => Object.values(byBoard)).map((layout) => layout.board.cell),
     );
     for (const cell of cells) {
       this.makeBoardTiles(cell);

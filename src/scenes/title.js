@@ -11,7 +11,7 @@
 
 import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, PALETTES, PALETTE_REGISTRY_KEY,
-  SCREEN, TEXT_COLORS, TITLE_DEMO,
+  TEXT_COLORS, TITLE_DEMO, orientationOf, screenOf,
 } from '../config.js';
 import {
   createBoard, formatTime, place, remove, solveStepsRandom,
@@ -41,26 +41,29 @@ const CHOICE_ROW = CHOICE_ICON_HEIGHT + 2;
  * ここへ行を足すときは、まず間隔から削ること。縦画面は余りが大きいので、
  * 動く盤を題字の下に 1 行として置き、間隔も広げてある。
  */
-const STACK = SCREEN.portrait ? [
-  { key: 'title', height: 68, gap: 6 },
-  { key: 'subtitle', height: 36, gap: 16 },
-  { key: 'preview', height: 240, gap: 16 },
-  { key: 'howTo', height: 186, gap: 12 },
-  { key: 'size', height: CHOICE_ROW, gap: 10 },
-  { key: 'palette', height: CHOICE_ROW, gap: 14 },
-  { key: 'best', height: 30, gap: 12 },
-  { key: 'start', height: 64, gap: 8 },
-  { key: 'keyHint', height: 24, gap: 0 },
-] : [
-  { key: 'title', height: 68, gap: 4 },
-  { key: 'subtitle', height: 36, gap: 8 },
-  { key: 'howTo', height: 186, gap: 6 },
-  { key: 'size', height: CHOICE_ROW, gap: 6 },
-  { key: 'palette', height: CHOICE_ROW, gap: 8 },
-  { key: 'best', height: 30, gap: 6 },
-  { key: 'start', height: 64, gap: 6 },
-  { key: 'keyHint', height: 24, gap: 0 },
-];
+const STACK = {
+  portrait: [
+    { key: 'title', height: 68, gap: 6 },
+    { key: 'subtitle', height: 36, gap: 16 },
+    { key: 'preview', height: 240, gap: 16 },
+    { key: 'howTo', height: 186, gap: 12 },
+    { key: 'size', height: CHOICE_ROW, gap: 10 },
+    { key: 'palette', height: CHOICE_ROW, gap: 14 },
+    { key: 'best', height: 30, gap: 12 },
+    { key: 'start', height: 64, gap: 8 },
+    { key: 'keyHint', height: 24, gap: 0 },
+  ],
+  landscape: [
+    { key: 'title', height: 68, gap: 4 },
+    { key: 'subtitle', height: 36, gap: 8 },
+    { key: 'howTo', height: 186, gap: 6 },
+    { key: 'size', height: CHOICE_ROW, gap: 6 },
+    { key: 'palette', height: CHOICE_ROW, gap: 8 },
+    { key: 'best', height: 30, gap: 6 },
+    { key: 'start', height: 64, gap: 6 },
+    { key: 'keyHint', height: 24, gap: 0 },
+  ],
+};
 
 /**
  * 動く盤を描く場所（TODO-087）。縦画面は `STACK` の `preview` の行に幅
@@ -68,13 +71,13 @@ const STACK = SCREEN.portrait ? [
  * そのぶん詰める（高さは枠と同じ）。マスは盤ごとに、この中へ収まる大きさ
  * （`drawMiniBoard()`）。
  */
-const PREVIEW = { width: SCREEN.portrait ? 400 : 200, gap: 16 };
+const PREVIEW = { portrait: { width: 400, gap: 16 }, landscape: { width: 200, gap: 16 } };
 
 /**
  * 余りのうち上へ回す割合。縦画面は余りが 3 倍以上に増え、横画面と同じ 0.7 だと
  * 下だけが大きく空く。中身が少ない画面なので、縦では中央へ置く（TODO-011）。
  */
-const STACK_BIAS = SCREEN.portrait ? 0.5 : 0.7;
+const STACK_BIAS = { portrait: 0.5, landscape: 0.7 };
 
 /**
  * `はじめる`・`つづきから`・`記録` の 1 個ぶん（TODO-030・TODO-092）。
@@ -111,24 +114,29 @@ export default class TitleScene extends Phaser.Scene {
     this.boardKey = this.registry.get(BOARD_REGISTRY_KEY);
     this.paletteKey = this.registry.get(PALETTE_REGISTRY_KEY);
 
-    const cx = SCREEN.width / 2;
-    const tops = stackTops(STACK, SCREEN.height, STACK_BIAS);
-    const indexOf = (key) => STACK.findIndex((row) => row.key === key);
+    // 配置は今の向きの組を使う（向きが変わると `relayout()` で作り直す。TODO-095）。
+    const screen = screenOf(this);
+    const orientation = orientationOf(this);
+    const stack = STACK[orientation];
+    const preview = PREVIEW[orientation];
+    const cx = screen.width / 2;
+    const tops = stackTops(stack, screen.height, STACK_BIAS[orientation]);
+    const indexOf = (key) => stack.findIndex((row) => row.key === key);
     const topOf = (key) => tops[indexOf(key)];
-    const centerOf = (key) => topOf(key) + STACK[indexOf(key)].height / 2;
+    const centerOf = (key) => topOf(key) + stack[indexOf(key)].height / 2;
     // 遊び方の枠は縦画面では画面幅に収まらないので、はみ出す前に詰める。
     // 横画面は左に動く盤を並べるので、そのぶん詰めて 2 つを中央に寄せる。
-    const panelWidth = SCREEN.portrait
-      ? Math.min(720, SCREEN.width - SCREEN.margin * 2)
-      : Math.min(720, SCREEN.width - SCREEN.margin * 2 - PREVIEW.width - PREVIEW.gap);
-    const panelX = SCREEN.portrait
+    const panelWidth = screen.portrait
+      ? Math.min(720, screen.width - screen.margin * 2)
+      : Math.min(720, screen.width - screen.margin * 2 - preview.width - preview.gap);
+    const panelX = screen.portrait
       ? cx - panelWidth / 2
-      : cx + (PREVIEW.width + PREVIEW.gap - panelWidth) / 2;
-    this.previewBox = SCREEN.portrait
-      ? { x: cx - PREVIEW.width / 2, y: topOf('preview'), width: PREVIEW.width,
-          height: STACK[indexOf('preview')].height }
-      : { x: panelX - PREVIEW.gap - PREVIEW.width, y: topOf('howTo'), width: PREVIEW.width,
-          height: STACK[indexOf('howTo')].height };
+      : cx + (preview.width + preview.gap - panelWidth) / 2;
+    this.previewBox = screen.portrait
+      ? { x: cx - preview.width / 2, y: topOf('preview'), width: preview.width,
+          height: stack[indexOf('preview')].height }
+      : { x: panelX - preview.gap - preview.width, y: topOf('howTo'), width: preview.width,
+          height: stack[indexOf('howTo')].height };
     this.previewGraphics = this.add.graphics();
     // シーンに入り直すと前回のタイマーは Phaser が捨てている。触らないよう空にする。
     this.previewTimer = null;
@@ -144,7 +152,7 @@ export default class TitleScene extends Phaser.Scene {
       color: TEXT_COLORS.accent,
     }).setOrigin(0.5);
 
-    createPanel(this, panelX, topOf('howTo'), panelWidth, STACK[indexOf('howTo')].height);
+    createPanel(this, panelX, topOf('howTo'), panelWidth, stack[indexOf('howTo')].height);
     this.add.text(panelX + panelWidth / 2, centerOf('howTo'), HOW_TO_PLAY_TEXT, {
       fontFamily: FONT.family,
       fontSize: `${FONT.body}px`,
@@ -233,8 +241,8 @@ export default class TitleScene extends Phaser.Scene {
     // デモ（TODO-040・TODO-092）。盤と色の組は本編と同じく registry から読む。
     // 右下に固定で置き、バージョン表示（`createVersionText()`）より上に置く。
     createButton(this, {
-      x: SCREEN.width - DEMO_BUTTON.marginRight - DEMO_BUTTON.width / 2,
-      y: SCREEN.height - DEMO_BUTTON.marginBottom - DEMO_BUTTON.height / 2,
+      x: screen.width - DEMO_BUTTON.marginRight - DEMO_BUTTON.width / 2,
+      y: screen.height - DEMO_BUTTON.marginBottom - DEMO_BUTTON.height / 2,
       width: DEMO_BUTTON.width,
       height: DEMO_BUTTON.height,
       label: 'デモ',
@@ -251,6 +259,14 @@ export default class TitleScene extends Phaser.Scene {
     createVersionText(this);
     // 盤・色の説明。最後に作り、ほかの部品より手前に出す。
     this.tooltip = createTooltip(this);
+  }
+
+  /**
+   * 向きが変わったとき（TODO-095）。選んでいる盤と色は `registry` にあるので、
+   * 作り直すだけで保たれる。動く盤は始め直す（飾りなので途中を持ち越さない）。
+   */
+  relayout() {
+    this.scene.restart();
   }
 
   /** 盤を選び直す。選んだ盤は `registry` に置き、他のシーンがそこから読む。 */

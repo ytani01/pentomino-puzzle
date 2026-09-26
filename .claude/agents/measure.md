@@ -22,10 +22,10 @@ tools: Read, Grep, Glob, Bash, mcp__playwright__browser_navigate, mcp__playwrigh
 
 ### Node から
 
-`src/config.js` はトップレベルで `window.innerHeight` を触るので、
-`tools/window-shim.mjs` のダミーを先に読ませる。`src/logic.js` と
-`src/solutions.js` は Phaser にも DOM にも依存しないので、そのまま呼べる
-（Node は `.js` でも構文検出で ES Modules として読む）。
+`src/config.js`・`src/logic.js`・`src/solutions.js` は Phaser にも DOM にも
+依存しないので、そのまま import して呼べる（Node は `.js` でも構文検出で
+ES Modules として読む）。`src/storage.js` は関数の中で `window.localStorage` を
+読むので、呼ぶ前にダミーの `globalThis.window` を置く。
 
 ### ブラウザから
 
