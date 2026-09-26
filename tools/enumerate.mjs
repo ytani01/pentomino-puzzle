@@ -1,5 +1,5 @@
 /**
- * 盤の全解を数え上げる（TODO-022）。**開発時にだけ動かすもの**で、
+ * ボードの全解を数え上げる（TODO-022）。**開発時にだけ動かすもの**で、
  * 遊ぶ側（`src/`）からは読まない。`tools/gen-solutions.mjs` が使う。
  *
  * 深さ優先に次の 2 つの枝刈りを足しただけの素朴な作り（元は `src/solver.js`）。
@@ -16,7 +16,7 @@ import { PIECES, PIECE_SIZE } from '../src/config.js';
 import { canonicalCellsKey, createBoard, orientations } from '../src/logic.js';
 
 /**
- * その盤の解を全部返す（`logic.js` の `boardKey()` と同じ文字列の配列）。
+ * そのボードの解を全部返す（`logic.js` の `boardKey()` と同じ文字列の配列）。
  * 回転・反転で重なるものもそれぞれ 1 件として含む。
  */
 export function enumerateSolutions(spec) {
@@ -83,7 +83,7 @@ export function canonicalSolutions(spec) {
   return { all: all.length, canonical: [...seen].sort() };
 }
 
-/** 盤の範囲に収まり、どのマスも空いているか。探索の内側のループなので添字で回す。 */
+/** ボードの範囲に収まり、どのマスも空いているか。探索の内側のループなので添字で回す。 */
 function fits(grid, rows, cols, shape, row, col) {
   for (const [dr, dc] of shape) {
     const r = row + dr;

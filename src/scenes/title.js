@@ -1,9 +1,9 @@
 /**
  * タイトル。遊び方の要点と、これまでの最短時間を出す。
  *
- * 題字の下（横画面では遊び方の枠の左）で、デモと同じランダムな探索を小さな盤で
+ * 題字の下（横画面では遊び方の枠の左）で、デモと同じランダムな探索を小さなボードで
  * 動かす（TODO-087）。
- * 飾りなので押しても何も起きず、音も鳴らさない。見せる盤は選んでいる盤。
+ * 飾りなので押しても何も起きず、音も鳴らさない。見せるボードは選んでいるボード。
  *
  * `audio.unlock()` はここのボタンで呼ぶ。ブラウザは操作をきっかけにしないと
  * 音を鳴らさないので、最初に必ず通る場所で済ませておく。
@@ -25,7 +25,7 @@ import {
 } from '../ui.js';
 import { boardIcon, paletteIcon } from '../icons.js';
 
-/** 盤・色の行の高さ。ボタンの上下に 1 ずつ空ける（高くする前の 46 のボタンと 48 の行と同じ）。 */
+/** ボード・色の行の高さ。ボタンの上下に 1 ずつ空ける（高くする前の 46 のボタンと 48 の行と同じ）。 */
 const CHOICE_ROW = CHOICE_ICON_HEIGHT + 2;
 
 /**
@@ -35,18 +35,18 @@ const CHOICE_ROW = CHOICE_ICON_HEIGHT + 2;
  * `はじめる`・`つづきから`・`記録` を 1 行にまとめ（`start`）、`デモ` は
  * ここに含めず画面の右下へ固定で置く（TODO-092）。
  *
- * 横画面（高さ 640）は、動く盤を遊び方の枠の左に並べ（`PREVIEW`）、
- * 盤・色のボタンを高くした（TODO-087）ぶん間隔を詰めてあり、**合わせて 572 で
+ * 横画面（高さ 640）は、動くボードを遊び方の枠の左に並べ（`PREVIEW`）、
+ * ボード・色のボタンを高くした（TODO-087）ぶん間隔を詰めてあり、**合わせて 572 で
  * 下端に 68 ほど余る**（TODO-008・TODO-026・TODO-076・TODO-092）。
  * ここへ行を足すときは、まず間隔から削ること。縦画面は余りが大きいので、
- * 動く盤を題字の下に 1 行として置き、間隔も広げてある。
+ * 動くボードを題字の下に 1 行として置き、間隔も広げてある。
  */
 const STACK = {
   portrait: [
     { key: 'title', height: 68, gap: 6 },
     { key: 'subtitle', height: 36, gap: 16 },
     { key: 'preview', height: 240, gap: 16 },
-    { key: 'howTo', height: 186, gap: 12 },
+    { key: 'howTo', height: 222, gap: 12 }, // 1 行目を 2 行に割るぶん高い（TODO-099）
     { key: 'size', height: CHOICE_ROW, gap: 10 },
     { key: 'palette', height: CHOICE_ROW, gap: 14 },
     { key: 'best', height: 30, gap: 12 },
@@ -66,9 +66,9 @@ const STACK = {
 };
 
 /**
- * 動く盤を描く場所（TODO-087）。縦画面は `STACK` の `preview` の行に幅
+ * 動くボードを描く場所（TODO-087）。縦画面は `STACK` の `preview` の行に幅
  * `width` で置く。横画面は縦が足りないので遊び方の枠の左に置き、枠の幅を
- * そのぶん詰める（高さは枠と同じ）。マスは盤ごとに、この中へ収まる大きさ
+ * そのぶん詰める（高さは枠と同じ）。マスはボードごとに、この中へ収まる大きさ
  * （`drawMiniBoard()`）。
  */
 const PREVIEW = { portrait: { width: 400, gap: 16 }, landscape: { width: 200, gap: 16 } };
@@ -95,11 +95,17 @@ const DEMO_BUTTON = {
 };
 
 /**
- * 遊び方。盤を選び直しても変わらない文言（TODO-092）。操作の 3 行は本編の
+ * 遊び方。ボードを選び直しても変わらない文言（TODO-092）。操作の 3 行は本編の
  * 下端と同じものを使う（TODO-094）。
+ * 縦画面は 1 行目が枠に収まらない。折り返しは空白でしか切れず「12」だけが
+ * 1 行に残るので、切る位置を手で決める（TODO-099）。
  */
-const HOW_TO_PLAY_TEXT = [
-  '12 種のピースを盤にすき間なく敷き詰めるパズル。',
+const HOW_TO_PLAY_LEAD = {
+  portrait: '12 種のピースをボードに\nすき間なく敷き詰めるパズル。',
+  landscape: '12 種のピースをボードにすき間なく敷き詰めるパズル。',
+};
+const howToPlayText = (orientation) => [
+  HOW_TO_PLAY_LEAD[orientation],
   '',
   ...HOW_TO_OPERATE,
 ].join('\n');
@@ -125,7 +131,7 @@ export default class TitleScene extends Phaser.Scene {
     const topOf = (key) => tops[indexOf(key)];
     const centerOf = (key) => topOf(key) + stack[indexOf(key)].height / 2;
     // 遊び方の枠は縦画面では画面幅に収まらないので、はみ出す前に詰める。
-    // 横画面は左に動く盤を並べるので、そのぶん詰めて 2 つを中央に寄せる。
+    // 横画面は左に動くボードを並べるので、そのぶん詰めて 2 つを中央に寄せる。
     const panelWidth = screen.portrait
       ? Math.min(720, screen.width - screen.margin * 2)
       : Math.min(720, screen.width - screen.margin * 2 - preview.width - preview.gap);
@@ -153,7 +159,7 @@ export default class TitleScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     createPanel(this, panelX, topOf('howTo'), panelWidth, stack[indexOf('howTo')].height);
-    this.add.text(panelX + panelWidth / 2, centerOf('howTo'), HOW_TO_PLAY_TEXT, {
+    this.add.text(panelX + panelWidth / 2, centerOf('howTo'), howToPlayText(orientation), {
       fontFamily: FONT.family,
       fontSize: `${FONT.body}px`,
       color: TEXT_COLORS.dim,
@@ -163,7 +169,7 @@ export default class TitleScene extends Phaser.Scene {
       wordWrap: { width: panelWidth - 32 },
     }).setOrigin(0.5);
 
-    // 盤と色の組を選ぶ 2 行。選べるのはここだけで、遊んでいる最中は変えられない
+    // ボードと色の組を選ぶ 2 行。選べるのはここだけで、遊んでいる最中は変えられない
     // （途中の盤面を捨てる確認を出さずに済ませるため。TODO-009）。2 行を同じ形に
     // して、どれを選んでいるかを同じ見え方で示す（TODO-015）。
     // 選択肢は文字でなく図で見せ、名前は説明に回す（TODO-046）。
@@ -173,7 +179,7 @@ export default class TitleScene extends Phaser.Scene {
     const paletteChoices = Object.values(PALETTES).map((palette) => ({
       ...palette, icon: paletteIcon(palette), tooltip: palette.label,
     }));
-    this.boardButtons = createChoiceRow(this, cx, centerOf('size'), '盤', boardChoices,
+    this.boardButtons = createChoiceRow(this, cx, centerOf('size'), 'ボード', boardChoices,
                                         (choice) => this.selectBoard(choice.key),
                                         CHOICE_ICON_HEIGHT);
     this.paletteButtons = createChoiceRow(this, cx, centerOf('palette'), '色', paletteChoices,
@@ -196,8 +202,8 @@ export default class TitleScene extends Phaser.Scene {
       fontSize: FONT.hud,
       onClick: () => this.start(),
     });
-    // 遊びかけが無い盤では押せなくする（記録の画面の `消す` と同じ見せ方）。
-    // 隠さないのは、盤を選び直すとボタンが出たり消えたりして行が動くため。
+    // 遊びかけが無いボードでは押せなくする（記録の画面の `消す` と同じ見せ方）。
+    // 隠さないのは、ボードを選び直すとボタンが出たり消えたりして行が動くため。
     this.resumeButton = createButton(this, {
       x: cx,
       y: centerOf('start'),
@@ -211,8 +217,8 @@ export default class TitleScene extends Phaser.Scene {
         this.scene.start('Game', { resume: true });
       },
     });
-    // 記録の一覧（TODO-008）。盤はあちらでも切り替えられるので、ここで
-    // 選んでいる盤に関わらず 1 つのボタンから入れる。
+    // 記録の一覧（TODO-008）。ボードはあちらでも切り替えられるので、ここで
+    // 選んでいるボードに関わらず 1 つのボタンから入れる。
     createButton(this, {
       x: cx + startStep,
       y: centerOf('start'),
@@ -227,7 +233,7 @@ export default class TitleScene extends Phaser.Scene {
       },
     });
 
-    // 盤・色・最短時間・`つづきから` を、選んでいる盤に合わせて出す。
+    // ボード・色・最短時間・`つづきから` を、選んでいるボードに合わせて出す。
     // ボタンを作ったあとに呼ぶ（`refreshBoard()` が `つづきから` を触るため）。
     this.refreshBoard();
     this.refreshPalette();
@@ -238,7 +244,7 @@ export default class TitleScene extends Phaser.Scene {
       color: TEXT_COLORS.dim,
     }).setOrigin(0.5);
 
-    // デモ（TODO-040・TODO-092）。盤と色の組は本編と同じく registry から読む。
+    // デモ（TODO-040・TODO-092）。ボードと色の組は本編と同じく registry から読む。
     // 右下に固定で置き、バージョン表示（`createVersionText()`）より上に置く。
     createButton(this, {
       x: screen.width - DEMO_BUTTON.marginRight - DEMO_BUTTON.width / 2,
@@ -257,19 +263,19 @@ export default class TitleScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-ENTER', this.start, this);
 
     createVersionText(this);
-    // 盤・色の説明。最後に作り、ほかの部品より手前に出す。
+    // ボード・色の説明。最後に作り、ほかの部品より手前に出す。
     this.tooltip = createTooltip(this);
   }
 
   /**
-   * 向きが変わったとき（TODO-095）。選んでいる盤と色は `registry` にあるので、
-   * 作り直すだけで保たれる。動く盤は始め直す（飾りなので途中を持ち越さない）。
+   * 向きが変わったとき（TODO-095）。選んでいるボードと色は `registry` にあるので、
+   * 作り直すだけで保たれる。動くボードは始め直す（飾りなので途中を持ち越さない）。
    */
   relayout() {
     this.scene.restart();
   }
 
-  /** 盤を選び直す。選んだ盤は `registry` に置き、他のシーンがそこから読む。 */
+  /** ボードを選び直す。選んだボードは `registry` に置き、他のシーンがそこから読む。 */
   selectBoard(key) {
     if (key === this.boardKey) return;
     audio.unlock();
@@ -280,7 +286,7 @@ export default class TitleScene extends Phaser.Scene {
   }
 
   /**
-   * 色の組を選び直す（TODO-015）。盤と違って localStorage にも覚えさせる
+   * 色の組を選び直す（TODO-015）。ボードと違って localStorage にも覚えさせる
    * （見た目の好みは、遊ぶたびに選び直すものではないため）。
    */
   selectPalette(key) {
@@ -293,33 +299,33 @@ export default class TitleScene extends Phaser.Scene {
     this.refreshPalette();
   }
 
-  /** 選んでいる色の組をボタンと動く盤へ反映する。 */
+  /** 選んでいる色の組をボタンと動くボードへ反映する。 */
   refreshPalette() {
     this.paletteButtons.forEach((button) => button.setSelected(button.choiceKey === this.paletteKey));
     this.drawPreview();
   }
 
-  /** 選んでいる盤に合わせて、ボタン・最短時間を出し直す（遊び方は盤で変わらない）。 */
+  /** 選んでいるボードに合わせて、ボタン・最短時間を出し直す（遊び方はボードで変わらない）。 */
   refreshBoard() {
     this.boardButtons.forEach((button) => button.setSelected(button.choiceKey === this.boardKey));
     const best = loadBest(this.boardKey);
     this.bestText.setText(best === null ? '記録なし' : `最短 ${formatTime(best)}`);
     this.bestText.setColor(best === null ? TEXT_COLORS.dim : TEXT_COLORS.accent);
-    // 遊びかけは盤ごとに分かれているので、盤を選び直すたびに見直す（TODO-030）。
+    // 遊びかけはボードごとに分かれているので、ボードを選び直すたびに見直す（TODO-030）。
     this.resumeButton.setEnabled(loadProgress(this.boardKey) !== null);
     this.startPreview();
   }
 
-  // ---- 動く盤（TODO-087） ---------------------------------------------
+  // ---- 動くボード（TODO-087） ---------------------------------------------
 
   /**
-   * 選んでいる盤で、空の盤から探索を始め直す。探し方はデモのランダム
+   * 選んでいるボードで、空のボードから探索を始め直す。探し方はデモのランダム
    * （`solveStepsRandom()`）で、全解のデータが届いてから動かす（デモと同じく
-   * 「解ける／解なし」をデータで調べるため）。届くまでは空の盤を出しておく。
+   * 「解ける／解なし」をデータで調べるため）。届くまでは空のボードを出しておく。
    *
-   * データは盤を選び直したあとや、シーンを離れたあとに届くことがある。
+   * データはボードを選び直したあとや、シーンを離れたあとに届くことがある。
    * 呼ぶたびに `previewToken` を作り直し、最後に頼んだ分だけを使う
-   * （古い分で動かすと、盤の形と探索の盤面が食い違う）。
+   * （古い分で動かすと、ボードの形と探索の盤面が食い違う）。
    */
   startPreview() {
     const token = {};
@@ -343,7 +349,7 @@ export default class TitleScene extends Phaser.Scene {
   /**
    * 1 手進める。盤面は generator の中にあるので、置いた・外したピースを
    * こちらの盤面（`previewBoard`）へ写して描き直す。解けたら少し止めて、
-   * 空の盤から探し直す（デモと同じ。TODO-054）。
+   * 空のボードから探し直す（デモと同じ。TODO-054）。
    */
   stepPreview() {
     const { value, done } = this.previewSteps.next();

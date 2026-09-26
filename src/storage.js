@@ -5,7 +5,7 @@
  * Cookie の制限など）。読み書きに失敗しても遊べるよう、ここで例外を握りつぶし、
  * 呼ぶ側には「記録が無い」ように見せる。
  *
- * 記録は盤ごとに分けて持つ（保存先は `BOARDS[key].storageKey`。TODO-009）。
+ * 記録はボードごとに分けて持つ（保存先は `BOARDS[key].storageKey`。TODO-009）。
  */
 
 import {
@@ -17,12 +17,12 @@ import {
 } from './logic.js';
 import { placementIn, solutionNumber } from './solutions.js';
 
-/** 盤のキーから盤の定義を引く。知らない盤なら既定の盤として扱う。 */
+/** ボードのキーからボードの定義を引く。知らないボードなら既定のボードとして扱う。 */
 function boardOf(boardKey) {
   return BOARDS[boardKey] || BOARDS[DEFAULT_BOARD_KEY];
 }
 
-/** 盤のキーから保存先を引く。知らない盤なら既定の盤の記録として扱う。 */
+/** ボードのキーから保存先を引く。知らないボードなら既定のボードの記録として扱う。 */
 function keyOf(boardKey) {
   return boardOf(boardKey).storageKey;
 }
@@ -81,7 +81,7 @@ export function saveBest(boardKey, ms) {
 /**
  * 選んでいるピースの色の組（TODO-015）。読めなければ既定の組を返す。
  *
- * 盤の選択（`registry` に持つだけで、起動のたびに既定へ戻る）と違って保存するのは、
+ * ボードの選択（`registry` に持つだけで、起動のたびに既定へ戻る）と違って保存するのは、
  * 見た目の好みは遊ぶたびに選び直すものではないため。知らないキー（古い版の値や
  * 手で書き換えた値）は既定へ落とす。
  */
@@ -137,7 +137,7 @@ export function shouldRecordBest(usedAuto) {
  * 盤面の文字列（`cells`）は持たず、番号だけを持つ（TODO-022）。番号から完成形を
  * 引き直せ、回転・反転しただけの解は同じ番号になるので、重複も番号で判定できる。
  * **TODO-022 より前に保存した件は `cells` を持つ**が、読むときに番号へ読み替える
- * （`migrateHistory()`）。盤の縦横は保存先のキー（`BOARDS[key].historyKey`）で
+ * （`migrateHistory()`）。ボードの縦横は保存先のキー（`BOARDS[key].historyKey`）で
  * 決まるので、1 件には持たせない。
  */
 
@@ -151,7 +151,7 @@ export function shouldRecordBest(usedAuto) {
  * 組み立てた配列など）でもよい。`board` は `BOARDS[key]` の形で、`rows` / `cols`
  * から古い `cells` の正しい長さを出す。
  *
- * 手で書き換えた値や、古い版・別の盤の値が混ざりうるので、1 件ずつ確かめて
+ * 手で書き換えた値や、古い版・別のボードの値が混ざりうるので、1 件ずつ確かめて
  * **壊れた件は黙って捨てる**（例外にしない。`loadPalette()` と同じ考え方）。
  * 番号を持つ件と古い `cells` を持つ件は**どちらも通す**。読み替えには解のデータが
  * 要るので、ここではしない。
@@ -214,7 +214,7 @@ export function migrateHistory(entries, solutions) {
 }
 
 /**
- * その盤の履歴を新しい順に返す。読めない・壊れている・localStorage が使えない
+ * そのボードの履歴を新しい順に返す。読めない・壊れている・localStorage が使えない
  * ときは空の配列（記録が無いのと同じに見せる）。
  *
  * `solutions`（`solutions.js` の読み込み済みデータ）を渡すと、古い形の件を
@@ -372,7 +372,7 @@ export function removeHistoryMany(boardKey, nos, solutions = null) {
  *
  * - 一部だけ消したとき: 消した番号を `found` と `auto` からも外す（TODO-031）。
  *   一覧から消えたものが、達成度やおまかせの側にだけ残らないようにするため
- * - その盤の記録が 1 件も残らないとき: `found` と `auto` を丸ごと消す。
+ * - そのボードの記録が 1 件も残らないとき: `found` と `auto` を丸ごと消す。
  *   履歴（50 件まで）からあふれた番号や、履歴に無いおまかせの番号まで消さないと、
  *   一覧が空なのに達成度が 0 にならず、それを消す手段も画面に無くなるため
  */
@@ -401,7 +401,7 @@ export function removeRecords(boardKey, nos, solutions) {
 
 /**
  * localStorage から読んだ値を、正しい番号だけの昇順の配列にする（純関数）。
- * `count` はその盤の解の総数で、はみ出した番号は捨てる（データを作り直して
+ * `count` はそのボードの解の総数で、はみ出した番号は捨てる（データを作り直して
  * 数が変わったときや、手で書き換えたときのため）。
  */
 export function sanitizeFound(value, count) {
@@ -421,7 +421,7 @@ export function sanitizeFound(value, count) {
   return [...seen].sort((a, b) => a - b);
 }
 
-/** その盤で見つけた解の番号を昇順で返す。読めなければ空の配列。 */
+/** そのボードで見つけた解の番号を昇順で返す。読めなければ空の配列。 */
 export function loadFound(boardKey, count) {
   try {
     return sanitizeFound(window.localStorage.getItem(boardOf(boardKey).foundKey), count);
@@ -473,7 +473,7 @@ export function removeFound(boardKey, no, count) {
   return removeNumber(boardOf(boardKey).foundKey, no, count);
 }
 
-/** その盤で見つけた解の番号を消す。履歴を消すときに一緒に呼ぶ。 */
+/** そのボードで見つけた解の番号を消す。履歴を消すときに一緒に呼ぶ。 */
 export function clearFound(boardKey) {
   try {
     window.localStorage.removeItem(boardOf(boardKey).foundKey);
@@ -490,7 +490,7 @@ export function clearFound(boardKey) {
  * ので分けて持つ。形（番号の配列）は同じなので、検証は `sanitizeFound()` を使う。
  */
 
-/** その盤でおまかせが導いた解の番号を昇順で返す。読めなければ空の配列。 */
+/** そのボードでおまかせが導いた解の番号を昇順で返す。読めなければ空の配列。 */
 export function loadAuto(boardKey, count) {
   try {
     return sanitizeFound(window.localStorage.getItem(boardOf(boardKey).autoKey), count);
@@ -521,7 +521,7 @@ export function removeAuto(boardKey, no, count) {
   return removeNumber(boardOf(boardKey).autoKey, no, count);
 }
 
-/** その盤でおまかせが導いた解の番号を消す。履歴を消すときに一緒に呼ぶ。 */
+/** そのボードでおまかせが導いた解の番号を消す。履歴を消すときに一緒に呼ぶ。 */
 export function clearAuto(boardKey) {
   try {
     window.localStorage.removeItem(boardOf(boardKey).autoKey);
@@ -531,7 +531,7 @@ export function clearAuto(boardKey) {
 }
 
 /**
- * 遊びかけの盤面（TODO-030）。盤ごとに 1 つだけ持ち、タイトルの `つづきから`
+ * 遊びかけの盤面（TODO-030）。ボードごとに 1 つだけ持ち、タイトルの `つづきから`
  * が読む。保存する形は次のとおり。
  *
  * - `ms` … そこまでの経過時間（ミリ秒）
@@ -566,9 +566,9 @@ export function clearAuto(boardKey) {
  *
  * - 12 種がそれぞれ 1 個ずつあること
  * - `cells` がそのピースの向きのどれかであること（`orientations()` と照合）
- * - 盤に置いてある分が、順に置いていって重ならないこと（`canPlace()`）
+ * - ボードに置いてある分が、順に置いていって重ならないこと（`canPlace()`）
  *
- * 12 個とも盤に載った（完成した）盤面も通す。完成したあともピースを入れ替えて
+ * 12 個ともボードに載った（完成した）盤面も通す。完成したあともピースを入れ替えて
  * 別の解を作れるようにしたため（TODO-072）。
  */
 export function sanitizeProgress(value, board) {
@@ -632,7 +632,7 @@ export function sanitizeProgress(value, board) {
   };
 }
 
-/** その盤の遊びかけを返す。無い・壊れている・読めないときは `null`。 */
+/** そのボードの遊びかけを返す。無い・壊れている・読めないときは `null`。 */
 export function loadProgress(boardKey) {
   const board = boardOf(boardKey);
   try {
@@ -661,7 +661,7 @@ export function saveProgress(boardKey, progress) {
   return sane;
 }
 
-/** その盤の遊びかけを消す。やり直したときに呼ぶ。 */
+/** そのボードの遊びかけを消す。やり直したときに呼ぶ。 */
 export function clearProgress(boardKey) {
   try {
     window.localStorage.removeItem(boardOf(boardKey).progressKey);

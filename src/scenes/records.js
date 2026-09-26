@@ -1,8 +1,8 @@
 /**
- * クリア記録の一覧（TODO-008）。盤ごとの履歴を新しい順に並べ、選んだ回の
+ * クリア記録の一覧（TODO-008）。ボードごとの履歴を新しい順に並べ、選んだ回の
  * 完成形を縮小して見せる。
  *
- * **この画面の中で盤を切り替えられる**ようにしてある（タイトルで盤を
+ * **この画面の中でボードを切り替えられる**ようにしてある（タイトルでボードを
  * 選び直させると、記録を見比べるだけで画面を 2 往復するため）。切り替えの
  * 行はタイトルと同じ `createChoiceRow`（`ui.js`）。
  *
@@ -67,7 +67,7 @@ const ROW_TEXT_WIDTH = { portrait: 570, landscape: 432 };
  * 最上段にタイトル行（`titleY`）を足したぶん、横画面は見出しから一覧までを
  * 下げ、一覧の最後の行と下段の間を詰めてある（TODO-089）。
  *
- * 盤の選択をタイトルと同じ図のボタン（`CHOICE_ICON_HEIGHT`）にし、ゴミ箱を
+ * ボードの選択をタイトルと同じ図のボタン（`CHOICE_ICON_HEIGHT`）にし、ゴミ箱を
  * 「全部選ぶ」の行へ移して少し大きくした（`trash`）ぶん、`chooseY` から下を
  * 詰め直してある（TODO-093）。横画面は一覧（左）と完成形（右）が別の列なので、
  * 一覧側の高さが増えたぶんは `rowsPerPage` を減らして吸収し、完成形の列は
@@ -126,8 +126,8 @@ const FOOT_GAP = 14;
 const PAGE_TEXT_WIDTH = 64;
 
 /**
- * 確認の枠の寸法。盤にも向きにも依らない値なので、1 つの組の `LAYOUTS` から
- * 取って固定する（この画面は盤を切り替えても組み直さないため）。
+ * 確認の枠の寸法。ボードにも向きにも依らない値なので、1 つの組の `LAYOUTS` から
+ * 取って固定する（この画面はボードを切り替えても組み直さないため）。
  */
 const CONFIRM = LAYOUTS.landscape[BOARDS['8x8'].key].confirm;
 
@@ -169,20 +169,20 @@ export default class RecordsScene extends Phaser.Scene {
 
   create() {
     this.cameras.main.setBackgroundColor(COLORS.background);
-    // 初めはタイトルで選んである盤を出す。
-    // 向きが変わって作り直したとき（TODO-095）は、見ていた盤から続ける。
+    // 初めはタイトルで選んであるボードを出す。
+    // 向きが変わって作り直したとき（TODO-095）は、見ていたボードから続ける。
     const saved = this.relayoutState;
     this.relayoutState = null;
     this.boardKey = saved ? saved.boardKey : this.registry.get(BOARD_REGISTRY_KEY);
     this.palette = PALETTES[this.registry.get(PALETTE_REGISTRY_KEY)];
     this.entries = [];
-    // 見ている盤の全解のデータ（TODO-022）。読み込むまでは null で、その間は
+    // 見ているボードの全解のデータ（TODO-022）。読み込むまでは null で、その間は
     // 完成形と達成度を出せない（一覧の日時と時間だけ先に出る）。
     this.solutions = null;
     this.found = [];
     this.page = 0;
     this.selected = 0;
-    // チェックした回の解の番号（TODO-071）。頁を送っても残し、盤を
+    // チェックした回の解の番号（TODO-071）。頁を送っても残し、ボードを
     // 切り替えたら `reload()` が作り直す。
     this.checked = new Set();
 
@@ -202,7 +202,7 @@ export default class RecordsScene extends Phaser.Scene {
     const boardChoices = Object.values(BOARDS).map((board) => ({
       ...board, icon: boardIcon(board), tooltip: `${board.label}（${board.note}）`,
     }));
-    this.boardButtons = createChoiceRow(this, cx, this.L.chooseY, '盤', boardChoices,
+    this.boardButtons = createChoiceRow(this, cx, this.L.chooseY, 'ボード', boardChoices,
                                         (choice) => this.selectBoard(choice.key),
                                         CHOICE_ICON_HEIGHT);
 
@@ -222,7 +222,7 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 向きが変わったとき（TODO-095）。見ている盤・頁・選んでいる回・チェック・
+   * 向きが変わったとき（TODO-095）。見ているボード・頁・選んでいる回・チェック・
    * 開いている確認を持ち越して作り直す。配置が向きごとに違い、部品を
    * 動かすより組み直すほうが漏れないため。
    */
@@ -385,8 +385,8 @@ export default class RecordsScene extends Phaser.Scene {
       width: CONTINUE_BUTTON.width, height: CONTINUE_BUTTON.height,
       label: 'この回を続ける', fontSize: FONT.small, onClick: () => this.confirmContinue(),
     });
-    // 達成度（TODO-022）。分母が盤で違う（8×8 は 65、6×10 は 2339）ので、
-    // 盤の名前を頭に付ける。
+    // 達成度（TODO-022）。分母がボードで違う（8×8 は 65、6×10 は 2339）ので、
+    // ボードの名前を頭に付ける。
     this.achieveText = this.add.text(
       this.L.boardBox.x + this.L.boardBox.width / 2, this.L.achieveY, '', {
         fontFamily: FONT.family,
@@ -454,7 +454,7 @@ export default class RecordsScene extends Phaser.Scene {
 
   // ---- 操作 -------------------------------------------------------------
 
-  /** 盤を切り替える。`registry` は書き換えない（見ているだけで、遊ぶ盤は別）。 */
+  /** ボードを切り替える。`registry` は書き換えない（見ているだけで、遊ぶボードは別）。 */
   selectBoard(key) {
     if (key === this.boardKey) return;
     audio.unlock();
@@ -488,7 +488,7 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 「全部選ぶ」。見えている頁だけでなく、**その盤の記録すべて**が対象
+   * 「全部選ぶ」。見えている頁だけでなく、**そのボードの記録すべて**が対象
    * （TODO-071）。既に全部選んでいれば外す。
    */
   toggleSelectAll() {
@@ -519,7 +519,7 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 選んでいる回の完成形から本編を始める（TODO-073）。遊びかけは盤ごとに
+   * 選んでいる回の完成形から本編を始める（TODO-073）。遊びかけはボードごとに
    * 1 つだけなので、あれば消えてよいかを確かめてから置き換える。
    */
   confirmContinue() {
@@ -541,8 +541,8 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 遊びかけを置き換えて本編へ移る。遊ぶ盤は `registry` で渡すので、ここで
-   * 見ている盤に書き換える（この画面で盤を切り替えただけでは書き換えない）。
+   * 遊びかけを置き換えて本編へ移る。遊ぶボードは `registry` で渡すので、ここで
+   * 見ているボードに書き換える（この画面でボードを切り替えただけでは書き換えない）。
    * `progress` を本編へ直接渡すのは、保存できない環境でも始められるようにするため。
    */
   doContinue() {
@@ -615,10 +615,10 @@ export default class RecordsScene extends Phaser.Scene {
    *
    * 完成形は番号から引くので、全解のデータが要る（TODO-022）。待つ間も
    * 一覧の日時と時間は出せるので、先に一度描いてから届いたぶんを足す。
-   * 待つ間に盤を切り替えられることがあるので、**届いたときに見ている盤が
+   * 待つ間にボードを切り替えられることがあるので、**届いたときに見ているボードが
    * 変わっていたら捨てる**。
    *
-   * チェック（`this.checked`）は盤を切り替えたら消す（TODO-071）。別の盤の番号を
+   * チェック（`this.checked`）はボードを切り替えたら消す（TODO-071）。別のボードの番号を
    * 持ち越しても意味が無いため。
    */
   reload() {

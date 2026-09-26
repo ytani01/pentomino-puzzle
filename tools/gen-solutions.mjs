@@ -1,5 +1,5 @@
 /**
- * `src/data/*.js`（盤ごとの全解）を作る（TODO-022）。**開発時に手で走らせる。**
+ * `src/data/*.js`（ボードごとの全解）を作る（TODO-022）。**開発時に手で走らせる。**
  *
  *   node tools/gen-solutions.mjs           … 作り直して書き出す
  *   node tools/gen-solutions.mjs --check   … 作り直して、今あるものと突き合わせる
@@ -21,7 +21,7 @@ import { canonicalSolutions } from './enumerate.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = path.join(ROOT, 'src', 'data');
 
-/** 1 つの盤ぶんのファイルの中身を組み立てる。並びも文言もここだけで決まる。 */
+/** 1 つのボードぶんのファイルの中身を組み立てる。並びも文言もここだけで決まる。 */
 function render(spec, result) {
   const lines = result.canonical.map((cells) => `  '${cells}',`).join('\n');
   return `/**

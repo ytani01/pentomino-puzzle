@@ -244,8 +244,8 @@ export function outlineEdges(cells) {
 }
 
 /**
- * 盤のうちピースを置けるマスを、行優先で返す（穴は含まない）。
- * 穴の無い盤（`hole: null`）は、大きさ 0 の穴として扱う。
+ * ボードのうちピースを置けるマスを、行優先で返す（穴は含まない）。
+ * 穴の無いボード（`hole: null`）は、大きさ 0 の穴として扱う。
  */
 export function boardCells(spec) {
   const hole = spec.hole || { row: 0, col: 0, rows: 0, cols: 0 };
@@ -274,14 +274,14 @@ export function createBoard(spec) {
   return { rows: spec.rows, cols: spec.cols, grid };
 }
 
-/** マスの中身。盤外は `HOLE` 扱いにして、呼ぶ側の範囲検査を省く。 */
+/** マスの中身。ボードの外は `HOLE` 扱いにして、呼ぶ側の範囲検査を省く。 */
 export function cellAt(board, row, col) {
   if (row < 0 || col < 0 || row >= board.rows || col >= board.cols) return HOLE;
   return board.grid[row * board.cols + col];
 }
 
 /**
- * 置けるかどうかと、置けない理由を返す。理由も返すのは、盤の外へ
+ * 置けるかどうかと、置けない理由を返す。理由も返すのは、ボードの外へ
  * はみ出したのか他のピースと重なったのかで、画面の警告を出し分けるため。
  */
 export function canPlace(board, cells, row, col) {
@@ -299,7 +299,7 @@ export function canPlace(board, cells, row, col) {
 }
 
 /**
- * 盤に置いたまま向きを変えるときの、次の向きを返す（TODO-023）。その場に
+ * ボードに置いたまま向きを変えるときの、次の向きを返す（TODO-023）。その場に
  * 置けない向きは飛ばし、他に無ければ今の向きを返す。
  *
  * `board` には自分を取り除いた盤面を渡す（自分のいる場所を塞がっていると
@@ -364,7 +364,7 @@ export function emptyCells(board) {
   return cells;
 }
 
-/** 盤に置かれているピース名を、盤に現れた順で返す。 */
+/** ボードに置かれているピース名を、ボードに現れた順で返す。 */
 export function placedNames(board) {
   const names = [];
   for (const value of board.grid) {
@@ -476,8 +476,8 @@ export function regionsFitPieces(board) {
 }
 
 /**
- * 置いたときに、盤の外・穴・置き済みのマスへ接する辺の数を返す（TODO-059）。
- * ランダム探索の置き場所の重み付けに使う。`cellAt()` は盤外・穴とも `HOLE` を
+ * 置いたときに、ボードの外・穴・置き済みのマスへ接する辺の数を返す（TODO-059）。
+ * ランダム探索の置き場所の重み付けに使う。`cellAt()` はボードの外・穴とも `HOLE` を
  * 返すので、`null` 以外を「接している」とみなせば 3 つを区別せずに数えられる。
  * ピース自身の内側の辺（隣り合う自分のマス）は数えない。
  */
@@ -495,7 +495,7 @@ export function touchingEdges(board, cells, row, col) {
 
 /**
  * `touchingEdges()` の数を抽選の重みにする（TODO-059）。隅や置いたピースの隣
- * ほど選ばれやすいよう、2 乗して差を広げる。接する辺が 0（盤の真ん中に
+ * ほど選ばれやすいよう、2 乗して差を広げる。接する辺が 0（ボードの真ん中に
  * 離して置く手）でも重み 0 にしないよう +1 する（全部 0 だと抽選できず、
  * そういう置き方も人はときどきする）。
  */
@@ -621,7 +621,7 @@ function shuffle(items, random) {
 }
 
 /**
- * 空の盤から深さ優先で解を探し、1 手ずつ返す（デモ用。TODO-040）。
+ * 空のボードから深さ優先で解を探し、1 手ずつ返す（デモ用。TODO-040）。
  *
  * 画面を止めずに探す様子を見せるため、探索を generator にし、呼ぶ側が
  * フレームごとに好きな手数だけ `next()` する。一番若い空きマスを埋め、
@@ -643,7 +643,7 @@ function shuffle(items, random) {
  * `place` の `cells` は探索が持つ向きの配列そのもの（写しを作らない）。
  * 書き換えると以降の探索が狂うので、受け取った側は読むだけにする。
  *
- * 探索の盤はここに閉じた作業用の配列で、**その場で書き換える**。1 万手で
+ * 探索のボードはここに閉じた作業用の配列で、**その場で書き換える**。1 万手で
  * 50ms ほどの速さを保つため（毎手作り直すと割に合わない）。本編の盤面
  * （Undo の履歴が参照するもの）とは別物なので、「盤面は書き換えず作り直す」の
  * 決まりとはぶつからない。
@@ -704,15 +704,15 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  * ピースを `DEMO.randomTightWeight` で選ばれやすくして抽選する（TODO-061。
  * 人は「この隙間に入るのはどれか」と考えてピースを選ぶため）。選んだピースが
  * 狭い所を覆えるなら、置き方はそこを覆う手だけに絞る。置き方は一様に選ばず、
- * `touchingEdges()` で数えた「盤の外・穴・置き済みのマスに接する辺の数」を
+ * `touchingEdges()` で数えた「ボードの外・穴・置き済みのマスに接する辺の数」を
  * `touchWeight()` で重みにして抽選する（人はまず端や既に置いたものへ寄せて
  * 置くため）。さらに直前に置いた手（`stack` の最後）からの `moveDistance()` が
- * 近いほど重みを大きくする（TODO-062。人は盤の上を飛び回らず近くから埋めるため）。
+ * 近いほど重みを大きくする（TODO-062。人はボードの上を飛び回らず近くから埋めるため）。
  *
  * 置いた直後に `canContinue(board)` が偽（その先に解が無い盤面）でも
  * **その場では外さない**。置ける手が尽きたら、`canContinue(board)` が真になるまで
  * 最後に置いた手から 1 手ずつ外す（スタックが空になったら止める。
- * `canContinue` が常に偽を返す盤でも外し続けないため）。
+ * `canContinue` が常に偽を返すボードでも外し続けないため）。
  * 解の無い盤面の上で置いた手（すぐ外した手も含む）が `DEMO.randomDeadLimit` 手に
  * 達したときも、尽きるのを待たずに同じく戻る（TODO-081。広い空きが残ると
  * なかなか尽きず、気づくまでに百手以上重ねていたため）。ただし次の 3 つは、
@@ -732,10 +732,10 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  *
  * 外した手は盤面ごとに `failed` に控え、選び直さない（同じ失敗を繰り返すと
  * 試行錯誤に見えないため）。盤面ごとにするのは、失敗は盤面によって変わり、
- * 戻った先の盤面でも前の失敗をまた試さないため。空の盤で全部だめになった
- * ときだけ、空の盤の控えを消して選び直す。
+ * 戻った先の盤面でも前の失敗をまた試さないため。空のボードで全部だめになった
+ * ときだけ、空のボードの控えを消して選び直す。
  *
- * 同じ深さ（盤に残るピースの数）で「詰まり」が続くと、数手まとめて外す
+ * 同じ深さ（ボードに残るピースの数）で「詰まり」が続くと、数手まとめて外す
  * （TODO-063。人は同じ所で詰まり続けると大きく崩してやり直すため）。
  * 「詰まり」に数えるのは、置ける手が尽きるか `DEMO.randomDeadLimit` に達して
  * `ok` が真になるまで戻る **行き詰まりの一続きだけ**（上限で戻るのは、尽きる
@@ -750,7 +750,7 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  *
  * 最初の solved で終わる（デモは解のたびに作り直すので、次の解は探さない）。
  *
- * 返す手、`random`・`canContinue` の受け方、盤をその場で書き換えることは
+ * 返す手、`random`・`canContinue` の受け方、ボードをその場で書き換えることは
  * `solveSteps()` と同じ。シードで手順を固定するため、乱数は `random` しか使わない。
  * `remove` にも、外した後の盤面での `canContinue(board)` を `ok` として付ける
  * （デモの HUD に出す。外した直後に解けるとは限らないため）。
@@ -773,9 +773,9 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
   const fill = (move, value) => {
     for (const [dr, dc] of move.shape) grid[(move.row + dr) * cols + (move.col + dc)] = value;
   };
-  // 今の盤面が解につながるか（空の盤は真）と、解の無い盤面で続けて置いた
-  // 手の数（TODO-081）。解のある盤面か空の盤に戻ったら 0 に戻す（空の盤で
-  // 戻さないと、canContinue が常に偽の盤では以後毎手すぐ戻ってしまう）。
+  // 今の盤面が解につながるか（空のボードは真）と、解の無い盤面で続けて置いた
+  // 手の数（TODO-081）。解のある盤面か空のボードに戻ったら 0 に戻す（空のボードで
+  // 戻さないと、canContinue が常に偽のボードでは以後毎手すぐ戻ってしまう）。
   let boardOk = true;
   let deadMoves = 0;
   // 最後に置いた手を外して盤面ごとの控えに足し、yield する形で返す（TODO-060）。
@@ -796,7 +796,7 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
       if (step.ok) break;
     }
   }
-  // 深さ（盤に残るピースの数）ごとに、その深さで行き詰まった回数を数える（TODO-063）。
+  // 深さ（ボードに残るピースの数）ごとに、その深さで行き詰まった回数を数える（TODO-063）。
   const collapseCounts = new Map();
   // 行き詰まりの一続きが終わるたびに呼ぶ。回数が閾値に達したら数手まとめて外す。
   function* maybeCollapse() {
@@ -839,7 +839,7 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     }
 
     if (choices.length === 0) {
-      if (stack.length === 0) { // 空の盤で全部だめなら、控えを消して選び直す
+      if (stack.length === 0) { // 空のボードで全部だめなら、控えを消して選び直す
         failed.clear();
         continue;
       }
@@ -966,23 +966,23 @@ export function transformBoard(board, { turns = 0, flipped = false } = {}) {
 
 /**
  * 盤面を 1 本の文字列にする。空きは `.`、穴は `HOLE`、置いてあればピース名。
- * 代表形を選ぶための比較と、盤の形が保たれるかの判定に使う。
+ * 代表形を選ぶための比較と、ボードの形が保たれるかの判定に使う。
  */
 export function boardKey(board) {
   return board.grid.map((value) => (value === null ? '.' : value)).join('');
 }
 
-/** 盤の形（大きさと穴の位置）だけを取り出した鍵。置いてあるピースは無視する。 */
+/** ボードの形（大きさと穴の位置）だけを取り出した鍵。置いてあるピースは無視する。 */
 function shapeKeyOf(board) {
   return `${board.rows}x${board.cols}:`
     + board.grid.map((value) => (value === HOLE ? HOLE : '.')).join('');
 }
 
 /**
- * その盤の**形を保つ**変換だけを返す（`SYMMETRIES` の部分集合。TODO-012）。
+ * そのボードの**形を保つ**変換だけを返す（`SYMMETRIES` の部分集合。TODO-012）。
  *
- * 盤ごとに決め打ちで書かず、実際に当てはめて穴の位置が一致するものを残すのは、
- * 盤を足したときに書き足さずに済ませるため。
+ * ボードごとに決め打ちで書かず、実際に当てはめて穴の位置が一致するものを残すのは、
+ * ボードを足したときに書き足さずに済ませるため。
  * 8×8（中央 2×2 が穴）は 8 通りすべて、6×10（穴なし）は縦横が違うので
  * 90° 回転が形を変え、恒等・180° 回転・左右反転・上下反転の 4 通りになる。
  */
@@ -994,9 +994,9 @@ export function boardSymmetries(board) {
 /**
  * 回転・反転で重なる盤面から、いつも同じ 1 つを選んで返す（TODO-012）。
  *
- * 解は、盤の形を保つ変換で写してもやはり解になる。見た目だけ違う同じ解を
+ * 解は、ボードの形を保つ変換で写してもやはり解になる。見た目だけ違う同じ解を
  * 別々に数えないよう、**写した中で `boardKey()` が一番小さいもの**を代表とする。
- * X ピースの位置で決めるやり方は、盤ごとに条件を立て直すことになるので採らない。
+ * X ピースの位置で決めるやり方は、ボードごとに条件を立て直すことになるので採らない。
  *
  * 途中の盤面にも当てはめられるが、意味を持つのは完成形どうしを見比べるとき。
  */
@@ -1017,10 +1017,10 @@ export function canonicalBoard(board) {
 /**
  * 履歴の `cells` 文字列（`boardKey()` の出力）を代表形の文字列にする（TODO-021）。
  *
- * 履歴の 1 件は文字列なので、いったん盤へ戻してから `canonicalBoard()` に通す。
+ * 履歴の 1 件は文字列なので、いったんボードへ戻してから `canonicalBoard()` に通す。
  * `storage.js` でなくここに置くのは、Phaser に依存しない計算を `logic.js` に
  * 集める規約のため。
- * `spec` は `{ rows, cols }` を持つ盤の定義（`BOARDS[key]` をそのまま渡せる）。
+ * `spec` は `{ rows, cols }` を持つボードの定義（`BOARDS[key]` をそのまま渡せる）。
  */
 export function canonicalCellsKey(cells, spec) {
   const grid = Array.from(cells, (ch) => (ch === '.' ? null : ch));

@@ -126,7 +126,7 @@ export default class ClearScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // 解の番号（TODO-022）。回転・反転しただけの解は同じ番号になる。
-    // 分母（解の総数）は盤で違う（8×8 は 65、6×10 は 2339）ので、盤の名前を添える。
+    // 分母（解の総数）はボードで違う（8×8 は 65、6×10 は 2339）ので、ボードの名前を添える。
     if (this.no !== null && this.total !== null) {
       this.add.text(cx, panelTop + PANEL_ROWS.number,
                     `正解の ${this.no} 番（${board.label} の全 ${this.total} 解）`, {
@@ -136,7 +136,7 @@ export default class ClearScene extends Phaser.Scene {
                     }).setOrigin(0.5);
     }
 
-    // 記録は盤ごとなので、最短時間の行には盤の名前を添える。おまかせを使った回は、
+    // 記録はボードごとなので、最短時間の行にはボードの名前を添える。おまかせを使った回は、
     // 最短時間を更新しなかったと伝わる言い方にする（TODO-020・TODO-088）。
     // **一覧には残る**ので「記録しない」とは言わない（TODO-024）。
     // 状態の行は、履歴に足したか・上書きしたか・前の記録のままか（TODO-072）。

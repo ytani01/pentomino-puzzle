@@ -16,8 +16,8 @@ import { loadPalette } from '../storage.js';
 /**
  * テクスチャ名。`game.js` から文字列を書かずに参照できるようにまとめておく。
  *
- * 盤によってマスの大きさが違うので、名前に大きさを含める（TODO-009）。別の名前で
- * 持てば、盤を選び直しても焼き直さず貼り直すだけで済む。大きさが同じなら同じ
+ * ボードによってマスの大きさが違うので、名前に大きさを含める（TODO-009）。別の名前で
+ * 持てば、ボードを選び直しても焼き直さず貼り直すだけで済む。大きさが同じなら同じ
  * 名前になり、そのまま共用される。
  *
  * 色の組も同じ理由で名前に入れる（TODO-015）。**単色の組ではピース名を
@@ -53,7 +53,7 @@ export default class BootScene extends Phaser.Scene {
   }
 
   create() {
-    // 選べる盤と色の組のぶんをまとめて焼く。タイトルで選び直したときに
+    // 選べるボードと色の組のぶんをまとめて焼く。タイトルで選び直したときに
     // 待たせないため（1 枚は数十 px 四方で、全部でも 30 枚ほど）。
     // デモは横画面でマスが本編より小さいので、その大きさも焼く（TODO-089）。
     // 遊んでいる途中で端末を回すと向きが変わるので、縦・横の両方を焼く（TODO-095）。
@@ -67,14 +67,14 @@ export default class BootScene extends Phaser.Scene {
       for (const palette of Object.values(PALETTES)) this.makePieceTiles(palette, cell);
     }
     this.registry.set(BOARD_REGISTRY_KEY, DEFAULT_BOARD_KEY);
-    // 色の組は前に選んだものを使う（盤と違い、遊ぶたびに選び直すものではない）。
+    // 色の組は前に選んだものを使う（ボードと違い、遊ぶたびに選び直すものではない）。
     this.registry.set(PALETTE_REGISTRY_KEY, loadPalette());
     // URL でデモを指定されたら、タイトルを飛ばす（TODO-083）。
     this.scene.start(parseDemoParams(window.location.search) ? 'Demo' : 'Title');
   }
 
   /**
-   * 盤の地（マス）と、置ける場所に出す影。色の組に依らない。
+   * ボードの地（マス）と、置ける場所に出す影。色の組に依らない。
    * 地はガラス面に見せる（TODO-094）。ガラスの組のピースと同じ描き方を、
    * 控えめな値（`BOARD_GLASS`）で使う。
    */
@@ -117,13 +117,13 @@ export default class BootScene extends Phaser.Scene {
 
   /**
    * ガラスふうの 1 マス（TODO-015）。半透明の地に、内側の明るい縁と
-   * 斜めの光の筋を重ねる。帯を割合で持つのは、盤（64px）とトレイ（20px）で
+   * 斜めの光の筋を重ねる。帯を割合で持つのは、ボード（64px）とトレイ（20px）で
    * 同じ見え方にするため。
    *
    * Graphics の塗りには切り抜きが無いので、対角に沿った帯をマスの外まで伸ばし、
    * はみ出した分は `generateTexture` の大きさで落とす。
    *
-   * `spec` を差し替えられるのは、盤の空きマス（`BOARD_GLASS`。TODO-094）も
+   * `spec` を差し替えられるのは、ボードの空きマス（`BOARD_GLASS`。TODO-094）も
    * 同じ描き方で焼くため。
    */
   makeGlassTile(key, size, color, spec = GLASS) {

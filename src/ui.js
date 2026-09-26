@@ -18,9 +18,9 @@ import { darken, pieceColor } from './scenes/boot.js';
 export const HOW_TO_OPERATE = [
   'ドラッグ … 置く / 動かす',
   'タップ … 次の向きへ（回転と裏返しを順に巡る）',
-  '盤から外す … 盤の外で離す / トレイの方へ振る',
+  'ボードから外す … ボードの外で離す / トレイの方へ振る',
 ];
-export const HOW_TO_OPERATE_SHORT = 'ドラッグで置く・タップで向きを変える・盤の外で離すと外す';
+export const HOW_TO_OPERATE_SHORT = 'ドラッグで置く・タップで向きを変える・ボードの外で離すと外す';
 
 /**
  * 右下にバージョンを出す。問い合わせのときにどの版かを画面から読めるよう、
@@ -130,10 +130,10 @@ export function drawAcrylic(g, x, y, width, height) {
     g.fillPoints(points, true);
   }
 
-  // 縁の面取り。上と左を明るく、下と右を暗くして、板が盤から浮き出て見えるように
+  // 縁の面取り。上と左を明るく、下と右を暗くして、板がボードから浮き出て見えるように
   // する（TODO-090）。ピースのマス（`TILE`）と光の向きを揃える。影を外へ落とすと
   // 周りのマスにかかるので、明暗は板の内側だけに収める。
-  // 幅は板の大きさに比例させる。記録の完成形は盤が小さく、固定の幅では面取りが板を覆う。
+  // 幅は板の大きさに比例させる。記録の完成形はボードが小さく、固定の幅では面取りが板を覆う。
   const b = Math.min(width, height) * ACRYLIC.bevel;
   const right = x + width;
   const bottom = y + height;
@@ -199,20 +199,20 @@ export function createHintBadge(scene, x, y, originX = 0) {
 }
 
 /**
- * 縮小した盤のピースの境目の太さ。マスが 20〜56px ほどまで縮むので、盤の
+ * 縮小したボードのピースの境目の太さ。マスが 20〜56px ほどまで縮むので、ボードの
  * `OUTLINE.width`（2）では輪郭として細すぎる。
  */
 const MINI_EDGE = 3;
 
-/** ピース名から定義を引く表。盤の 1 マスずつ引く。 */
+/** ピース名から定義を引く表。ボードの 1 マスずつ引く。 */
 const PIECE_BY_NAME = new Map(PIECES.map((piece) => [piece.name, piece]));
 
 /**
- * 盤を縮小して `box` の中央に描く。記録の完成形（TODO-008）とタイトルの
- * 動く盤（TODO-087）が使う。`cells` は 1 マス 1 要素（ピース名・`HOLE`・空きは
+ * ボードを縮小して `box` の中央に描く。記録の完成形（TODO-008）とタイトルの
+ * 動くボード（TODO-087）が使う。`cells` は 1 マス 1 要素（ピース名・`HOLE`・空きは
  * `null`）で、完成形の文字列でも探索の盤面の配列でもよい。
  *
- * `boot.js` のテクスチャを貼らずに塗るのは、テクスチャが盤とトレイの大きさで
+ * `boot.js` のテクスチャを貼らずに塗るのは、テクスチャがボードとトレイの大きさで
  * 焼いてあり、縮めて貼ると立体の帯や光の筋がつぶれて、かえって境目が
  * 分かりにくくなるため。**ピースの境目が見分けられること**だけを目当てに、
  * 塗りと、隣が別のピースになる辺の線だけで描く。空きのマスは 1px ずつ縮めて
@@ -281,14 +281,14 @@ export function drawMiniBoard(g, board, cells, palette, box) {
 
 /**
  * 選ぶボタン 1 個の大きさと間隔、行の頭に置くラベルの幅。
- * ラベルの幅は 1 文字ぶんに間隔を足した値。
+ * ラベルの幅は、いちばん長い「ボード」の 3 文字ぶんに間隔を足した値（TODO-099）。
  */
 const CHOICE_BUTTON = {
-  width: 150, height: 46, gap: 16, labelWidth: 48,
+  width: 150, height: 46, gap: 16, labelWidth: 96,
 };
 
 /**
- * タイトルの盤・色のボタンの高さ（TODO-087）。図で見分けるので、文字だけの
+ * タイトルのボード・色のボタンの高さ（TODO-087）。図で見分けるので、文字だけの
  * 記録の画面（`CHOICE_BUTTON.height`）より高くして図を大きく描く。
  * 横画面は縦に余りが無い（`title.js` の `STACK`）ので、この値で止めてある。
  */
@@ -302,7 +302,7 @@ export const CHOICE_ICON_HEIGHT = 58;
  * 揃える。
  *
  * 選択肢に `icon` があれば文字の代わりに図を描き、`tooltip` があれば説明を出す
- * （タイトルの盤・色。TODO-046）。図にするなら名前を説明に回すこと。
+ * （タイトルのボード・色。TODO-046）。図にするなら名前を説明に回すこと。
  * 図は大きく描くので、`height` でボタンを高くできる（TODO-087）。
  */
 export function createChoiceRow(scene, cx, y, label, choices, onSelect,
@@ -337,7 +337,7 @@ export function createChoiceRow(scene, cx, y, label, choices, onSelect,
  *
  * 戻り値の Container には `setEnabled()`・`setLabel()`・`setSelected()`・
  * `setMark()` を生やしてある。押せるかどうか（ヒントや Undo）や、どれを選んで
- * いるか（タイトルの盤の選択）を見た目に出すため。
+ * いるか（タイトルのボードの選択）を見た目に出すため。
  *
  * `align` を `'left'` にすると、ラベルを左端から `PAD` だけ空けて左寄せにし、
  * `mark`（あれば）を右端へ右寄せで置く（TODO-027）。記録の一覧の行のように
@@ -571,7 +571,7 @@ export function createTooltip(scene) {
     box.setVisible(false);
   };
   // ボタンから 1 回の移動で Canvas の外へ出ると `pointerout` が来ないので、
-  // 説明が盤の上に残らないよう `gameout` でも消す。
+  // 説明がボードの上に残らないよう `gameout` でも消す。
   scene.input.on(Phaser.Input.Events.GAME_OUT, box.hide);
   box.once(Phaser.GameObjects.Events.DESTROY, () => {
     scene.input.off(Phaser.Input.Events.GAME_OUT, box.hide);

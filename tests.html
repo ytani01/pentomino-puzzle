@@ -144,9 +144,9 @@ test('置けるマスの数はピース 12 種ぶんとちょうど同じ', () =
   assertSame(PLAYABLE_CELLS, PIECES.length * PIECE_SIZE, '60 マス');
 });
 
-test('BOARDS は 8×8 と 6×10 を持ち、既定の盤がその中にある', () => {
-  assertSame(Object.keys(BOARDS), ['8x8', '6x10'], '盤の並び');
-  assert(BOARDS[DEFAULT_BOARD_KEY], `既定の盤 ${DEFAULT_BOARD_KEY} が BOARDS に無い`);
+test('BOARDS は 8×8 と 6×10 を持ち、既定のボードがその中にある', () => {
+  assertSame(Object.keys(BOARDS), ['8x8', '6x10'], 'ボードの並び');
+  assert(BOARDS[DEFAULT_BOARD_KEY], `既定のボード ${DEFAULT_BOARD_KEY} が BOARDS に無い`);
   for (const spec of Object.values(BOARDS)) {
     assertSame(spec.rows * spec.cols - (spec.hole ? spec.hole.rows * spec.hole.cols : 0),
       PLAYABLE_CELLS, `${spec.label} の置けるマス数`);
@@ -209,20 +209,20 @@ for (const [kind, table] of [['本編', LAYOUTS], ['デモ', DEMO_LAYOUTS]]) for
       });
     });
 
-    test(`スロットは盤の側の端から詰めてある（${label}）`, () => {
-      // 盤から離れる向き（横画面は右、縦画面は下）に、どこまで広がるか。
+    test(`スロットはボードの側の端から詰めてある（${label}）`, () => {
+      // ボードから離れる向き（横画面は右、縦画面は下）に、どこまで広がるか。
       const near = (sl) => (portrait ? sl.y : sl.x) - sl.size / 2;
       const far = (sl) => (portrait ? sl.y : sl.x) + sl.size / 2;
       const start = portrait ? tray.y : tray.x;
-      assertSame(Math.min(...tray.slots.map(near)), start, '盤に一番近いスロットの端');
+      assertSame(Math.min(...tray.slots.map(near)), start, 'ボードに一番近いスロットの端');
       const largest = Math.max(...tray.slots.map((sl) => sl.size));
-      assert(Math.max(...tray.slots.map(far)) - start <= largest * 3, '盤から離れすぎている');
+      assert(Math.max(...tray.slots.map(far)) - start <= largest * 3, 'ボードから離れすぎている');
     });
 
-    test(`盤とトレイが重ならない（${label}）`, () => {
+    test(`ボードとトレイが重ならない（${label}）`, () => {
       const apart = board.x + spec.cols * board.cell <= tray.x
         || board.y + spec.rows * board.cell <= tray.y;
-      assert(apart, '盤とトレイが重なる');
+      assert(apart, 'ボードとトレイが重なる');
     });
 
     if (help) {
@@ -267,7 +267,7 @@ for (const portrait of [false, true]) {
   const demo = makeLayout({ portrait, board: spec, buttons: 7 }).hud;
 
   test(`本編とデモで HUD の段数が同じ（${label}）`, () => {
-    // 段数が違うと、デモの盤とトレイだけが上下にずれる
+    // 段数が違うと、デモのボードとトレイだけが上下にずれる
     assertSame(demo.rows, game.rows, 'HUD の段数');
   });
 
@@ -587,7 +587,7 @@ test('nextPlaceableTurn は、置けない向きを飛ばして次の置ける�
 });
 
 test('nextPlaceableTurn は、どの向きも置けなければ元の向きを返す', () => {
-  // 盤を I の縦 1 本ぶんにする。横向きは入らないので、進みようがない。
+  // ボードを I の縦 1 本ぶんにする。横向きは入らないので、進みようがない。
   const board = createBoard({ rows: 5, cols: 1, hole: null });
   const start = normalize(cellsOf('I'));
   assertSame(nextPlaceableTurn(board, start, 0, 0), start);
@@ -608,7 +608,7 @@ test('snapSpot は、塞がっていれば近くの置ける升目へ寄せる�
 
 test('snapSpot は、範囲の中に置ける升目が無ければ null', () => {
   const board = createBoard(BOARDS['8x8']);
-  // 盤から 3 升も外れた所。`range` が 1 では届かない。
+  // ボードから 3 升も外れた所。`range` が 1 では届かない。
   assertSame(snapSpot(board, cellsOf('I'), 0, -3, 1), null);
 });
 
@@ -666,7 +666,7 @@ test('outlineEdges は向きを変えても本数が変わらない', () => {
 // ---- logic：盤面 ---------------------------------------------------------
 //
 // createBoard / boardCells / canPlace / place / remove / isSolved /
-// regionsFitPieces は盤の spec を受け取るので、8×8 と 6×10 の両方で
+// regionsFitPieces はボードの spec を受け取るので、8×8 と 6×10 の両方で
 // ループして回す（TODO-009）。
 //
 // 「実際の解 1 つ」は求解して作るのをやめ、**データの 1 行目**から組み立てる
@@ -675,7 +675,7 @@ test('outlineEdges は向きを変えても本数が変わらない', () => {
 
 const BOARD_LIST = Object.values(BOARDS);
 
-/** 盤ごとの全解のデータ。動的 import と違って、テストでは両方まとめて読む。 */
+/** ボードごとの全解のデータ。動的 import と違って、テストでは両方まとめて読む。 */
 const DATA = { '8x8': SOLUTIONS_8X8, '6x10': SOLUTIONS_6X10 };
 
 /** 文献にある「本質的に異なる解」の数。データが合っているかの拠りどころ。 */
@@ -730,7 +730,7 @@ test('boardCells は 6×10 に穴が無い（60 マスすべて）', () => {
 });
 
 for (const spec of BOARD_LIST) {
-  test(`createBoard は空き ${PLAYABLE_CELLS} マスの盤を作る（${spec.label}）`, () => {
+  test(`createBoard は空き ${PLAYABLE_CELLS} マスのボードを作る（${spec.label}）`, () => {
     const board = createBoard(spec);
     assertSame(board.grid.length, spec.rows * spec.cols, 'マスの総数');
     assertSame(board.grid.filter((v) => v === null).length, PLAYABLE_CELLS, '空き');
@@ -741,13 +741,13 @@ for (const spec of BOARD_LIST) {
 
 test('6×10 は穴が無く、置けるマスがちょうど 60', () => {
   const board = createBoard(BOARDS['6x10']);
-  assertSame(board.grid.length, 60, '盤の大きさ');
+  assertSame(board.grid.length, 60, 'ボードの大きさ');
   assertSame(board.grid.filter((v) => v === HOLE).length, 0, '穴の数');
   assertSame(board.grid.filter((v) => v === null).length, 60, '空きマス');
 });
 
 for (const spec of BOARD_LIST) {
-  test(`cellAt は盤の外を穴として扱う（${spec.label}）`, () => {
+  test(`cellAt はボードの外を穴として扱う（${spec.label}）`, () => {
     const board = createBoard(spec);
     assertSame(cellAt(board, 0, 0), null);
     assertSame(cellAt(board, -1, 0), HOLE, '上へはみ出す');
@@ -767,7 +767,7 @@ for (const spec of BOARD_LIST) {
     assertSame(canPlace(board, cellsOf('I'), 0, 0), { ok: true, reason: null });
   });
 
-  test(`canPlace は盤の外を outside として断る（${spec.label}）`, () => {
+  test(`canPlace はボードの外を outside として断る（${spec.label}）`, () => {
     const board = createBoard(spec);
     assertSame(canPlace(board, cellsOf('I'), spec.rows - 1, 0).reason, 'outside', '下へはみ出す');
     assertSame(canPlace(board, cellsOf('I'), -1, 0).reason, 'outside', '上へはみ出す');
@@ -805,7 +805,7 @@ for (const spec of BOARD_LIST) {
     assertSame(after.grid.filter((v) => v === null).length, PLAYABLE_CELLS, '空きに戻っていない');
   });
 
-  test(`placedNames と emptyCells が盤の中身と合う（${spec.label}）`, () => {
+  test(`placedNames と emptyCells がボードの中身と合う（${spec.label}）`, () => {
     const board = place(createBoard(spec), 'I', cellsOf('I'), 0, 0);
     assertSame(placedNames(board), ['I']);
     assertSame(emptyCells(board).length, PLAYABLE_CELLS - PIECE_SIZE);
@@ -817,8 +817,8 @@ for (const state of boardStates) {
   const { spec, emptyBoard, solved } = state;
 
   test(`isSolved は空きマスが無いときだけ真（${spec.label}）`, () => {
-    assert(!isSolved(emptyBoard), '空の盤で真になった');
-    assert(isSolved(solved), '埋めた盤で偽になった');
+    assert(!isSolved(emptyBoard), '空のボードで真になった');
+    assert(isSolved(solved), '埋めたボードで偽になった');
   });
 }
 
@@ -830,13 +830,13 @@ for (const spec of BOARD_LIST) {
   });
 
   test(`regionsFitPieces は 5 で割り切れない塊があると偽（${spec.label}）`, () => {
-    assert(regionsFitPieces(createBoard(spec)), '空の盤で偽になった');
+    assert(regionsFitPieces(createBoard(spec)), '空のボードで偽になった');
     const board = place(createBoard(spec), 'F', cellsOf('F'), 0, 0);
     assert(!regionsFitPieces(board), '1 マスの取り残しを見逃した');
   });
 
-  test(`hasUncoverableCell は空の盤で 12 種すべて渡すと偽（${spec.label}）`, () => {
-    assert(!hasUncoverableCell(createBoard(spec), NAMES), '空の盤で真になった');
+  test(`hasUncoverableCell は空のボードで 12 種すべて渡すと偽（${spec.label}）`, () => {
+    assert(!hasUncoverableCell(createBoard(spec), NAMES), '空のボードで真になった');
   });
 
   test(`hasUncoverableCell は 1 マスだけの取り残しを覆えないと見る（${spec.label}）`, () => {
@@ -851,7 +851,7 @@ for (const spec of BOARD_LIST) {
 
 test('hasUncoverableCell は、空き領域が 5 マスちょうどでも、形が合わなければ真（TODO-077）', () => {
   // L ペントミノとぴったり同じ形（縦棒 4 マス＋右下に 1 マス）だけを空けた、
-  // このテストだけの盤（HOLE で他を塞ぐ。既存の盤の spec とは無関係）。
+  // このテストだけのボード（HOLE で他を塞ぐ。既存のボードの spec とは無関係）。
   // regionsFitPieces は大きさ（5 の倍数か）しか見ないので真のままだが、
   // 直線 5 マスの I はこの形に入らない。
   const board = {
@@ -939,7 +939,7 @@ test('selectionAfterRemoval は全部消したら先頭の頁へ', () => {
 
 group('src/logic.js — forcedPlacements');
 
-/** a と b が盤の中で辺を接しているか（隣り合う 2 つを取り除いたときの判定用）。 */
+/** a と b がボードの中で辺を接しているか（隣り合う 2 つを取り除いたときの判定用）。 */
 function touchesInBoard(board, spec, a, b) {
   return board.grid.some((value, i) => value === a && (
     (i % spec.cols > 0 && board.grid[i - 1] === b)
@@ -948,7 +948,7 @@ function touchesInBoard(board, spec, a, b) {
     || board.grid[i + spec.cols] === b));
 }
 
-/** 縦 5 マスの空きを 2 か所（列を空けて隔てる）だけ持つ盤。同じピースが 2 度当たる形を作る。 */
+/** 縦 5 マスの空きを 2 か所（列を空けて隔てる）だけ持つボード。同じピースが 2 度当たる形を作る。 */
 function dupHoleBoard(spec) {
   const grid = new Array(spec.rows * spec.cols).fill(HOLE);
   for (const col of [0, 2]) {
@@ -960,14 +960,14 @@ function dupHoleBoard(spec) {
 for (const state of boardStates) {
   const { spec, emptyBoard, solved } = state;
 
-  test(`取り除いた 1 つのピースだけを返し、置き直すと元の盤に戻る（${spec.label}）`, () => {
+  test(`取り除いた 1 つのピースだけを返し、置き直すと元のボードに戻る（${spec.label}）`, () => {
     for (const name of NAMES) {
       const board = remove(solved, name);
       const got = forcedPlacements(board, NAMES);
       assertSame(got.length, 1, `${name} を取り除いたのに ${got.length} 件返した`);
       assertSame(got[0].name, name, `${name} ではなく ${got[0].name} を返した`);
       const after = place(board, got[0].name, got[0].cells, got[0].row, got[0].col);
-      assertSame(boardKey(after), boardKey(solved), `${name} を置き直しても元の盤に戻らない`);
+      assertSame(boardKey(after), boardKey(solved), `${name} を置き直しても元のボードに戻らない`);
     }
   });
 
@@ -993,7 +993,7 @@ for (const state of boardStates) {
           assert(got.every((p) => p.name === a || p.name === b), `${a}/${b} 以外を返した`);
           let after = board;
           for (const p of got) after = place(after, p.name, p.cells, p.row, p.col);
-          assertSame(boardKey(after), boardKey(solved), `${a}/${b} を置き直しても元の盤に戻らない`);
+          assertSame(boardKey(after), boardKey(solved), `${a}/${b} を置き直しても元のボードに戻らない`);
         }
       }
     }
@@ -1005,7 +1005,7 @@ for (const state of boardStates) {
     assertSame(got[0].name, 'I', 'I 以外を返した');
   });
 
-  test(`空の盤では何も返さない（${spec.label}）`, () => {
+  test(`空のボードでは何も返さない（${spec.label}）`, () => {
     assertSame(forcedPlacements(emptyBoard, NAMES).length, 0);
   });
 }
@@ -1093,10 +1093,10 @@ for (const state of boardStates) {
   });
 
   test(`canonicalCellsKey は文字列で渡しても同じ代表形を返す（${spec.label}）`, () => {
-    // 履歴の cells は盤ではなく文字列で持つ（TODO-021）。boardKey() を経由しても
+    // 履歴の cells はボードではなく文字列で持つ（TODO-021）。boardKey() を経由しても
     // canonicalBoard() を直接使ったときと同じ代表形になることを確かめる。
     const base = boardKey(canonicalBoard(solved));
-    assertSame(canonicalCellsKey(boardKey(solved), spec), base, '盤から出した代表形と食い違う');
+    assertSame(canonicalCellsKey(boardKey(solved), spec), base, 'ボードから出した代表形と食い違う');
     for (const sym of boardSymmetries(solved)) {
       const turned = transformBoard(solved, sym);
       assertSame(canonicalCellsKey(boardKey(turned), spec), base,
@@ -1109,7 +1109,7 @@ for (const state of boardStates) {
     assertSame(boardKey(canonicalBoard(canon)), boardKey(canon), '2 度目で変わった');
   });
 
-  test(`代表形は盤の形（大きさと穴の位置）を保つ（${spec.label}）`, () => {
+  test(`代表形はボードの形（大きさと穴の位置）を保つ（${spec.label}）`, () => {
     const canon = canonicalBoard(solved);
     assertSame({ rows: canon.rows, cols: canon.cols }, { rows: spec.rows, cols: spec.cols }, '大きさ');
     const holes = (b) => b.grid.map((v, i) => (v === HOLE ? i : -1)).filter((i) => i >= 0);
@@ -1173,7 +1173,7 @@ const FAST_SEED = { '8x8': 14, '6x10': 164 };
 const OTHER_SEED = { '8x8': 1, '6x10': 1 };
 
 for (const spec of BOARD_LIST) {
-  test(`最初の解までの place/remove を空の盤へ当てはめると完成する（${spec.label}）`, () => {
+  test(`最初の解までの place/remove を空のボードへ当てはめると完成する（${spec.label}）`, () => {
     const steps = firstSolutionSteps(spec, mulberry32(FAST_SEED[spec.key]));
     let board = createBoard(spec);
     for (const step of steps) {
@@ -1184,7 +1184,7 @@ for (const spec of BOARD_LIST) {
     assertSame(placedNames(board).sort(), NAMES, '12 種すべてが揃っていない');
   });
 
-  test(`place は常に置ける位置で出て、remove は盤にあるピースだけを外す（${spec.label}）`, () => {
+  test(`place は常に置ける位置で出て、remove はボードにあるピースだけを外す（${spec.label}）`, () => {
     const steps = firstSolutionSteps(spec, mulberry32(FAST_SEED[spec.key]));
     let board = createBoard(spec);
     for (const step of steps) {
@@ -1194,7 +1194,7 @@ for (const spec of BOARD_LIST) {
         board = place(board, step.name, step.cells, step.row, step.col);
       } else if (step.type === 'remove') {
         assert(placedNames(board).includes(step.name),
-          `${step.name} は盤に無いのに remove が出た`);
+          `${step.name} はボードに無いのに remove が出た`);
         board = remove(board, step.name);
       }
     }
@@ -1318,8 +1318,8 @@ for (const state of boardStates) {
   const { spec, solutions } = state;
   const canContinue = (board) => hasSolution(solutions, board);
 
-  test(`hasSolution を渡すと、最初の解までの手を空の盤へ当てはめると完成し、ok は hasSolution と一致する（${spec.label}）`, () => {
-    // ok:true のあとの盤が必ず解けるかも、この一致で足りる（ok と
+  test(`hasSolution を渡すと、最初の解までの手を空のボードへ当てはめると完成し、ok は hasSolution と一致する（${spec.label}）`, () => {
+    // ok:true のあとのボードが必ず解けるかも、この一致で足りる（ok と
     // hasSolution(board) が毎回一致するなら ok:true は常に「解ける」を指す）。
     const steps = firstSolutionStepsWith(spec, mulberry32(FAST_SEED[spec.key]), canContinue);
     let board = createBoard(spec);
@@ -1382,13 +1382,13 @@ function randomSteps(spec, random, canContinue, limit) {
   return steps;
 }
 
-/** 5 の倍数でない（ピースで埋め切れない）閉じた空きが盤にあるか（TODO-060・068）。 */
+/** 5 の倍数でない（ピースで埋め切れない）閉じた空きがボードにあるか（TODO-060・068）。 */
 function hasUnfitClosedRegion(board) {
   return !regionsFitPieces(board);
 }
 
 /**
- * 盤に置き済みのピースと同じ形の 5 マスの閉じた空きがあるか（TODO-067）。
+ * ボードに置き済みのピースと同じ形の 5 マスの閉じた空きがあるか（TODO-067）。
  * ピースは 1 種 1 つなので、この形の空きはもう埋められない。
  */
 function hasPlacedFormClosedRegion(board) {
@@ -1396,7 +1396,7 @@ function hasPlacedFormClosedRegion(board) {
 }
 
 /**
- * 残りのどのピースの置き方でも覆えない空きマスが盤にあるか（TODO-077）。
+ * 残りのどのピースの置き方でも覆えない空きマスがボードにあるか（TODO-077）。
  * 置き済みのピースと同じ形の 5 マスの空き（`hasPlacedFormClosedRegion`）も
  * 覆えないマスを含むので、これに含まれる。
  */
@@ -1456,7 +1456,7 @@ for (const spec of BOARD_LIST) {
   });
 
   for (const [label, canContinue] of [['既定', regionsFitPieces], ['常に偽', () => false]]) {
-    test(`place は空いたマスにだけ置かれ、remove は盤にあるピースだけを外す（${label}, ${spec.label}）`, () => {
+    test(`place は空いたマスにだけ置かれ、remove はボードにあるピースだけを外す（${label}, ${spec.label}）`, () => {
       const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), canContinue, 2000);
       let board = createBoard(spec);
       for (const step of steps) {
@@ -1466,7 +1466,7 @@ for (const spec of BOARD_LIST) {
           board = place(board, step.name, step.cells, step.row, step.col);
         } else if (step.type === 'remove') {
           assert(placedNames(board).includes(step.name),
-            `${step.name} は盤に無いのに remove が出た`);
+            `${step.name} はボードに無いのに remove が出た`);
           board = remove(board, step.name);
         }
       }
@@ -1489,11 +1489,11 @@ for (const spec of BOARD_LIST) {
       assert(checked > 0, 'place が 1 度も出なかった（limit を見直すこと）');
     });
 
-    test(`置ける手が尽きて 1 手ずつ外す並び（remove の連なり）は、最後の 1 手だけが ok:true か盤が空になっており、途中の remove は ok:false（5 の倍数でない空きで即座に外れる 1 手は除く。${label}, ${spec.label}）`, () => {
-      // 1 回の while ループ（1 つの連なり）の終わりは ok:true か盤が空のどちらか。
+    test(`置ける手が尽きて 1 手ずつ外す並び（remove の連なり）は、最後の 1 手だけが ok:true かボードが空になっており、途中の remove は ok:false（5 の倍数でない空きで即座に外れる 1 手は除く。${label}, ${spec.label}）`, () => {
+      // 1 回の while ループ（1 つの連なり）の終わりは ok:true かボードが空のどちらか。
       // ok:true で終わった直後でも、外へ出た先でまた置ける手が無ければ、
       // place を挟まずに次の連なりがすぐ始まる。そのため「次が place かどうか」
-      // では連なりの区切りを判定できず、1 手ずつ ok と盤の状態で区切る。
+      // では連なりの区切りを判定できず、1 手ずつ ok とボードの状態で区切る。
       // 置いた直後に 5 の倍数でない閉じた空きができたときの remove は、置ける手が
       // 尽きた連なりとは別物（ok の真偽に関わらずその場で 1 手だけ外れる。TODO-060・068）。
       // 既定（regionsFitPieces）の判定は、ok:false の place がその場で必ず
@@ -1509,7 +1509,7 @@ for (const spec of BOARD_LIST) {
       // ピースの形の空きが 3000 手以内に起きる別の種（4）に替える
       // （このテストだけのローカルな種。FAST_SEED は他のテストと共有のため変えない）。
       const seed = (label === '既定' && spec.key === '6x10') ? 4 : FAST_SEED[spec.key];
-      // 常に偽だと DEMO.randomDeadLimit 手置くたびに盤が空まで戻り、置き済みピースの
+      // 常に偽だと DEMO.randomDeadLimit 手置くたびにボードが空まで戻り、置き済みピースの
       // 形の空きができるほど深く進まない。ここで見たいのはその場で外す手なので、
       // 上限を外して走らせる（上限そのものは TODO-081 のテストで確かめる）。
       const savedDeadLimit = DEMO.randomDeadLimit;
@@ -1561,7 +1561,7 @@ for (const spec of BOARD_LIST) {
             if (placedNames(board).length > 0) {
               if (i >= steps.length) break;
               assert(steps[i] && steps[i].type === 'remove',
-                `${step.name} を forced で外した直後、盤にまだ手があるのに次が remove でない`);
+                `${step.name} を forced で外した直後、ボードにまだ手があるのに次が remove でない`);
               board = remove(board, steps[i].name);
               i += 1;
             }
@@ -1583,7 +1583,7 @@ for (const spec of BOARD_LIST) {
           }
           continue;
         }
-        // 1 つの連なりの始まり。ok:true か盤が空になるまで 1 手ずつ確かめる。
+        // 1 つの連なりの始まり。ok:true かボードが空になるまで 1 手ずつ確かめる。
         for (;;) {
           board = remove(board, steps[i].name);
           const isRunEnd = steps[i].ok || placedNames(board).length === 0;
@@ -1592,7 +1592,7 @@ for (const spec of BOARD_LIST) {
           assertSame(steps[i - 1].ok, false, `連なりの途中の ${steps[i - 1].name} の remove の ok が false でない`);
           if (i >= steps.length) break; // limit で打ち切った末尾。連なりが本当に終わったかは分からない
           assert(steps[i] && steps[i].type === 'remove',
-            `${steps[i - 1].name} の remove（ok:false、盤に残りあり）の直後が remove でない`);
+            `${steps[i - 1].name} の remove（ok:false、ボードに残りあり）の直後が remove でない`);
         }
       }
       assert(sawRun, '選んだシード・手数で remove の連なりが一度も終わらなかった');
@@ -1604,12 +1604,12 @@ for (const spec of BOARD_LIST) {
     });
   }
 
-  test(`常に偽を返す判定だと、戻るたびに（置ける手が尽きるか DEMO.randomDeadLimit に達するか）、盤のピースがすべて外れるまで remove が続く（5 の倍数でない空きで即座に外れる 1 手は除く。${spec.label}）`, () => {
+  test(`常に偽を返す判定だと、戻るたびに（置ける手が尽きるか DEMO.randomDeadLimit に達するか）、ボードのピースがすべて外れるまで remove が続く（5 の倍数でない空きで即座に外れる 1 手は除く。${spec.label}）`, () => {
     // canContinue が常に偽なので、置ける手が尽きたときの remove の while ループは
-    // 一度も ok:true で break せず、stack が空になるまで（＝盤のピースが
+    // 一度も ok:true で break せず、stack が空になるまで（＝ボードのピースが
     // すべて外れるまで）続く。ただし、置いた直後に 5 の倍数でない閉じた空きが
     // できてその場で 1 手だけ外れる場合は、置ける手が尽きたことによる連なりでは
-    // ないので、盤が空になっている必要は無い（TODO-060・068）。
+    // ないので、ボードが空になっている必要は無い（TODO-060・068）。
     const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), () => false, 3000);
     let board = createBoard(spec);
     let sawRemoveRun = false;
@@ -1636,7 +1636,7 @@ for (const spec of BOARD_LIST) {
       assertSame(step.ok, false, `${step.name} の remove の ok が false でない`);
       if (pendingExempt > 0) {
         pendingExempt -= 1;
-        // まだ盤に手が無ければ、2 手目の remove は起きない（stack.length===0）。
+        // まだボードに手が無ければ、2 手目の remove は起きない（stack.length===0）。
         if (pendingExempt > 0 && placedNames(board).length === 0) pendingExempt = 0;
         continue;
       }
@@ -1645,7 +1645,7 @@ for (const spec of BOARD_LIST) {
       if (next.type === 'place') {
         sawRemoveRun = true;
         assertSame(placedNames(board).length, 0,
-          '常に偽の判定なのに remove の連なりの終わりで盤にピースが残っている');
+          '常に偽の判定なのに remove の連なりの終わりでボードにピースが残っている');
       }
     }
     assert(sawRemoveRun, '選んだシード・手数で remove の連なりが一度も終わらなかった');
@@ -1685,7 +1685,7 @@ for (const spec of BOARD_LIST) {
       if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
       return failedByBoard.get(key);
     };
-    const activeStack = []; // 盤に今も残っている手（置いた順。solveStepsRandom の stack と同じ並び）
+    const activeStack = []; // ボードに今も残っている手（置いた順。solveStepsRandom の stack と同じ並び）
 
     let board = createBoard(spec);
     let checked = 0;
@@ -1723,7 +1723,7 @@ for (const spec of BOARD_LIST) {
     // 残っている場面」に絞り、そのときは必ず次が place になることを見る。
     //
     // ただし、置ける手が尽きた連なり（行き詰まり）が終わるたびに、その深さ
-    // （盤に残るピース数）で何回目かを数え、DEMO.randomCollapseAfter 回目
+    // （ボードに残るピース数）で何回目かを数え、DEMO.randomCollapseAfter 回目
     // なら続けて DEMO.randomCollapseMoves 手を remove として崩す（TODO-063）。
     // 崩しの続きの remove は「次は必ず place」に当てはまらないので、手元でも
     // 同じ規則（maybeCollapse()）で崩しの発生を再現し、崩しの間は確かめない。
@@ -1747,7 +1747,7 @@ for (const spec of BOARD_LIST) {
       steps.push(step);
     }
 
-    /** 盤に残っていないピースのうち、この盤面でまだ控えていない置き方が 1 つでもあるか。 */
+    /** ボードに残っていないピースのうち、この盤面でまだ控えていない置き方が 1 つでもあるか。 */
     function hasUnfailedMove(board, failedHere) {
       const remaining = NAMES.filter((name) => !placedNames(board).includes(name));
       for (const name of remaining) {
@@ -1801,7 +1801,7 @@ for (const spec of BOARD_LIST) {
         }
         continue;
       }
-      // 置ける手が尽きた連なり（行き詰まり）の始まり。ok:true か盤が空になるまで
+      // 置ける手が尽きた連なり（行き詰まり）の始まり。ok:true かボードが空になるまで
       // 1 手ずつ外す（連なりの中身自体は上のテストで確かめる。ここでは
       // 終わった位置と、その先の崩しの有無だけを使う）。
       let runEndOk = false;
@@ -1859,7 +1859,7 @@ for (const spec of BOARD_LIST) {
   });
 
   /**
-   * 盤に残っている（置いていない）ピースのうち、この盤面でまだ控えていない
+   * ボードに残っている（置いていない）ピースのうち、この盤面でまだ控えていない
    * 置き方が 1 つでもあるか（TODO-057 の「外す連なりが ok:true で…」と同じ判定）。
    */
   function hasUnfailedMove(board, failedHere) {
@@ -2095,14 +2095,14 @@ for (const spec of BOARD_LIST) {
 group('src/logic.js — touchingEdges（TODO-059）');
 
 for (const spec of BOARD_LIST) {
-  test(`空の盤の角に置いた形は、盤の外に接する辺の数になる（${spec.label}）`, () => {
-    // X（十字）を (0,0) に置くと、上と左の腕の先がそれぞれ盤の外に 1 辺ずつ
-    // 接する（他の 3 本の腕・中心は盤の中の空きマスにしか接しない）ので 2。
+  test(`空のボードの角に置いた形は、ボードの外に接する辺の数になる（${spec.label}）`, () => {
+    // X（十字）を (0,0) に置くと、上と左の腕の先がそれぞれボードの外に 1 辺ずつ
+    // 接する（他の 3 本の腕・中心はボードの中の空きマスにしか接しない）ので 2。
     const board = createBoard(spec);
     assertSame(touchingEdges(board, cellsOf('X'), 0, 0), 2);
   });
 
-  test(`盤の外にも穴にも置き済みのマスにも接しない形は 0（${spec.label}）`, () => {
+  test(`ボードの外にも穴にも置き済みのマスにも接しない形は 0（${spec.label}）`, () => {
     const board = createBoard(spec);
     // 8×8 は中央の穴に近いので、穴からも端からも十分離れた場所を選ぶ。
     const [name, row, col] = spec.key === '8x8' ? ['I', 1, 1] : ['F', 1, 1];
@@ -2111,7 +2111,7 @@ for (const spec of BOARD_LIST) {
 
   test(`置き済みのピースの隣に置いた形は、そのぶん接する辺が増える（${spec.label}）`, () => {
     // I（縦棒 5 マス）を (0,0) に置いたあと、同じ形を隣の列 (0,1) に置くと、
-    // 左側の 5 マスすべてが先に置いた I に接し、さらに上端が盤の外に 1 辺
+    // 左側の 5 マスすべてが先に置いた I に接し、さらに上端がボードの外に 1 辺
     // 接するので 6。
     const board = place(createBoard(spec), 'I', cellsOf('I'), 0, 0);
     assertSame(touchingEdges(board, cellsOf('I'), 0, 1), 6);
@@ -2122,7 +2122,7 @@ for (const spec of BOARD_LIST) {
 
 group('src/logic.js — 置き方の重み付け（solveStepsRandom, TODO-059）');
 
-/** 空の盤で、あるピースのすべての置き方（向き×位置）の touchingEdges の一様平均。 */
+/** 空のボードで、あるピースのすべての置き方（向き×位置）の touchingEdges の一様平均。 */
 function uniformMeanTouchingEdges(spec, board, name) {
   let sum = 0;
   let count = 0;
@@ -2235,7 +2235,7 @@ for (const spec of BOARD_LIST) {
     // 6×10 でシードの組によって逆転する（reviewer 報告 TODO-068 の指摘 1）ため、
     // 置いた直後にその場で外れる手（TODO-068・067）も除いた
     // （node でシードの組を 1-5・6-10・…・46-50 の 10 通りずらして、
-    // 8×8・6×10 とも全通り成り立つことを確かめた。実測、1 盤あたり 1 秒未満）。
+    // 8×8・6×10 とも全通り成り立つことを確かめた。実測、1 ボードあたり 1 秒未満）。
     const SEEDS = 5;
     const savedPower = DEMO.randomNearPower;
     let withNear = { sum: 0, count: 0 };
@@ -2269,7 +2269,7 @@ for (const spec of BOARD_LIST) {
 group('src/logic.js — 狭い所の重み（countCellMoves, TODO-061）');
 
 test('countCellMoves は、空きマスごとにそれを覆う手の数を手で数えた値と一致する', () => {
-  // moveDistance のテスト（TODO-062）と同じく、実際の盤ではなく手で数えられる
+  // moveDistance のテスト（TODO-062）と同じく、実際のボードではなく手で数えられる
   // 小さな choices（ピースごとの手の配列の配列）を組み立てる。
   // A: (0,0) だけを覆う手・(0,1) だけを覆う手の 2 つ
   // B: (0,0) と (0,1) をどちらも覆う手が 1 つ
@@ -2600,7 +2600,7 @@ for (const state of boardStates) {
     const STEP_LIMIT = 2000000; // 安全弁（最初の解までに手を尽くしすぎたら見直す）
     let sawLimitHit = false;
     for (const seed of DEAD_LIMIT_SEEDS.map((s) => s[spec.key])) {
-      let boardOk = true; // 直前の盤面が canContinue を満たすか（空の盤は真）
+      let boardOk = true; // 直前の盤面が canContinue を満たすか（空のボードは真）
       let deadRun = 0; // 解の無い盤面の上で続けて置いた手の数（remove で ok が真になったら 0 に戻す）
       let awaitingOk = false; // deadRun が上限に達した直後、ok になるまでの区間
       let solved = false;
@@ -2643,7 +2643,7 @@ for (const state of boardStates) {
     const STEP_LIMIT = 2000000;
     let boardOk = true;
     let deadRun = 0;
-    let depth = 0; // 盤に残っているピースの数（stack.length と同じ数え方）
+    let depth = 0; // ボードに残っているピースの数（stack.length と同じ数え方）
     let triggerDepth = -1; // 上限に達した瞬間の深さ（-1 は「まだ見ていない」）
     let settleDepth = -1; // その後 ok:true になった深さ
     let pendingExtra = -1; // 崩しで、あと何手 remove が続くはずか（-1 はまだ見ていない）
@@ -2746,7 +2746,7 @@ for (const state of boardStates) {
     assertSame(canonical.length, known.canonical, '件数');
   });
 
-  test(`どの行も盤の大きさどおりの長さで、穴の位置が合っている（${spec.label}）`, () => {
+  test(`どの行もボードの大きさどおりの長さで、穴の位置が合っている（${spec.label}）`, () => {
     const holes = boardKey(createBoard(spec)).split('')
       .map((ch, i) => (ch === HOLE ? i : -1)).filter((i) => i >= 0);
     for (const cells of canonical) {
@@ -2884,7 +2884,7 @@ for (const state of boardStates) {
         && result.placement.col + dc === target[1]);
     assert(covers, `一番若い空きマス (${target}) を覆っていない`);
     assert(canPlace(board, result.placement.cells, result.placement.row, result.placement.col).ok,
-      '返ってきた置き方が盤に合わない');
+      '返ってきた置き方がボードに合わない');
   });
 
   test(`autoFrom は詰みの盤面で解なしを返す（${spec.label}）`, () => {
@@ -2916,7 +2916,7 @@ for (const state of boardStates) {
   });
 
   test(`autoFrom は避けろと言われた番号の解を選ばない（${spec.label}）`, () => {
-    // 空の盤なら候補は全解なので、1 つ避けても必ず別の解が残る。
+    // 空のボードなら候補は全解なので、1 つ避けても必ず別の解が残る。
     const first = autoFrom(solutions, emptyBoard, () => 0);
     const avoided = autoFrom(solutions, emptyBoard, () => 0, new Set([first.no]));
     assert(avoided.ok, '避けたらおまかせが出なくなった');
@@ -2944,7 +2944,7 @@ for (const state of boardStates) {
     assertSame(autoFrom(solutions, board, () => 0, new Set([1])).no, null);
   });
 
-  test(`autoFrom を最後まで繰り返すと盤が埋まる（${spec.label}）`, () => {
+  test(`autoFrom を最後まで繰り返すとボードが埋まる（${spec.label}）`, () => {
     // 遊ぶ側は 1 手ずつしか受け取らないので、12 手ぶん繰り返せることを見る。
     let board = emptyBoard;
     for (let i = 0; i < 12; i += 1) {
@@ -3172,8 +3172,8 @@ group('src/storage.js — 遊びかけの検証（sanitizeProgress）');
 
 /**
  * 全解のデータの 1 件（60 マスの文字列）から遊びかけを組み立てる。
- * `inTray` に挙げたピースだけトレイへ戻すので、盤に置いてある分は
- * 必ず重ならず、盤の中に収まっている。
+ * `inTray` に挙げたピースだけトレイへ戻すので、ボードに置いてある分は
+ * 必ず重ならず、ボードの中に収まっている。
  */
 function progressFrom(spec, cells, inTray) {
   const found = new Map();
@@ -3207,7 +3207,7 @@ for (const state of boardStates) {
   const { spec, canonical } = state;
   const sample = () => progressFrom(spec, canonical[0], ['X', 'F']);
 
-  test(`盤に 10 個・トレイに 2 個の遊びかけは通る（${spec.label}）`, () => {
+  test(`ボードに 10 個・トレイに 2 個の遊びかけは通る（${spec.label}）`, () => {
     const result = sanitizeProgress(sample(), spec);
     assert(result !== null, '正しい遊びかけを捨てた');
     assertSame(result.pieces.length, PIECES.length, 'ピースの数');
@@ -3219,12 +3219,12 @@ for (const state of boardStates) {
     assert(sanitizeProgress(JSON.stringify(sample()), spec) !== null);
   });
 
-  test(`12 個とも盤に載った（完成した）盤面も捨てずに通す（${spec.label}）`, () => {
+  test(`12 個ともボードに載った（完成した）盤面も捨てずに通す（${spec.label}）`, () => {
     // 完成したあとも続けて遊び、別の解を作れるようにした（TODO-072）。
     const result = sanitizeProgress(progressFrom(spec, canonical[0], []), spec);
     assert(result !== null, '完成した盤面を捨てた');
     assertSame(result.pieces.filter((p) => p.location === 'board').length, PIECES.length,
-      '盤に置いてある数');
+      'ボードに置いてある数');
   });
 
   test(`完成させた解の番号は、正の整数だけを重なりなく持ち越す（${spec.label}）`, () => {
@@ -3250,7 +3250,7 @@ for (const state of boardStates) {
     assertSame(sanitizeProgress(progress, spec), null);
   });
 
-  test(`盤の上で重なっていたら捨てる（${spec.label}）`, () => {
+  test(`ボードの上で重なっていたら捨てる（${spec.label}）`, () => {
     const progress = sample();
     const [first, second] = progress.pieces.filter((piece) => piece.location === 'board');
     second.row = first.row;
@@ -3259,7 +3259,7 @@ for (const state of boardStates) {
     assertSame(sanitizeProgress(progress, spec), null);
   });
 
-  test(`盤からはみ出していたら捨てる（${spec.label}）`, () => {
+  test(`ボードからはみ出していたら捨てる（${spec.label}）`, () => {
     const progress = sample();
     const target = progress.pieces.find((piece) => piece.location === 'board');
     target.row = spec.rows;
@@ -3300,11 +3300,11 @@ group('src/storage.js — 記録の 1 件から続ける遊びかけ（progressF
 for (const { spec, canonical } of boardStates) {
   const cells = canonical[2];
 
-  test(`完成形のとおりに 12 個とも盤へ並べる（${spec.label}）`, () => {
+  test(`完成形のとおりに 12 個ともボードへ並べる（${spec.label}）`, () => {
     const result = progressFromRecord({ at: 1, ms: 5000, no: 3 }, cells, spec);
     assert(result !== null, '遊びかけを作れなかった');
     assertSame(result.pieces.filter((p) => p.location === 'board').length, PIECES.length,
-      '盤に置いてある数');
+      'ボードに置いてある数');
     const grid = [...cells].map((ch) => (ch === HOLE ? HOLE : '.'));
     result.pieces.forEach((p) => p.cells.forEach(([r, c]) => {
       grid[(p.row + r) * spec.cols + (p.col + c)] = p.name;
@@ -3399,7 +3399,7 @@ test('dedupeHistory は成績が同じなら先（新しい方）を残し、番
 group('src/storage.js — 保存して読み出す');
 
 /**
- * その盤の保存先を空にして `fn` を走らせ、終わったら元の値へ戻す。
+ * そのボードの保存先を空にして `fn` を走らせ、終わったら元の値へ戻す。
  * assert が落ちても戻せるよう `finally` で書き戻す。
  */
 function withCleanStorage(spec, fn) {
@@ -3851,7 +3851,7 @@ for (const state of boardStates) {
       assert(loaded !== null, '保存したものが読めない');
       assertSame(loaded.ms, progress.ms, '経過時間');
       assertSame(loaded.pieces.filter((p) => p.location === 'board').length,
-        PIECES.length - 2, '盤に置いてある数');
+        PIECES.length - 2, 'ボードに置いてある数');
     });
   });
 

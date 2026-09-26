@@ -30,7 +30,7 @@ tools: Read, Edit, Grep, Glob, Bash, mcp__playwright__browser_navigate, mcp__pla
   関数にまとめる（`withCleanStorage()` が先例。TODO-008 でここを見落とした）
 - localStorage を触るテストは、**利用者が実際に遊んだ記録を消さないよう**
   `withCleanStorage()` を通す（対象のキーを退避し、`finally` で必ず戻す）
-- 盤ごとに回すテストは、8×8 と 6×10 の両方で回す（`BOARDS` を回す）
+- ボードごとに回すテストは、8×8 と 6×10 の両方で回す（`BOARDS` を回す）
 - Phaser と DOM に触るテストは書かない。`tests.html` の対象は
   `logic.js`・`solutions.js`・`config.js`・`storage.js`・`src/data/*.js` の計算だけ
 

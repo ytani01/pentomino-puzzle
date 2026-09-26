@@ -67,13 +67,13 @@ export function pick() {
   tone({ freq: 420, freqTo: 620, type: 'triangle', duration: 0.07, gain: 0.07 });
 }
 
-/** ピースを盤に置けた。 */
+/** ピースをボードに置けた。 */
 export function drop() {
   tone({ freq: 300, freqTo: 180, type: 'triangle', duration: 0.11, gain: 0.13 });
   tone({ freq: 600, type: 'sine', duration: 0.06, gain: 0.05 });
 }
 
-/** ピースを盤から外してトレイへ戻した。 */
+/** ピースをボードから外してトレイへ戻した。 */
 export function lift() {
   tone({ freq: 260, freqTo: 380, type: 'triangle', duration: 0.09, gain: 0.08 });
 }

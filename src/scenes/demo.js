@@ -1,9 +1,9 @@
 /**
  * デモ（TODO-040）。コンピューターがピースを置いたり外したりしながら
- * 解に至る様子を、本編と同じ盤とトレイで見せる。探し方はランダム
+ * 解に至る様子を、本編と同じボードとトレイで見せる。探し方はランダム
  * （既定。TODO-075）と深さ優先から HUD で選ぶ（TODO-050・TODO-057）。
  *
- * 盤・トレイ・ピースの描画を使い回すため `GameScene` を継承する。
+ * ボード・トレイ・ピースの描画を使い回すため `GameScene` を継承する。
  * `create()` は描画に要るものだけを組み、入力・ヒント・おまかせ・
  * 遊びかけの保存・クリアの判定は持たない。**`storage.js` は呼ばない**
  * （記録・遊びかけ・見つけた解に何も残さないため）。本編の `create()` を
@@ -21,13 +21,13 @@
  * 外す手が連なるときは、待たずに 1 フレームずつ続けて外す（`advance()` の
  * 先読み。TODO-060）。
  * 解を見つけたら `DEMO.pauseMs` だけ止まって次へ進み、タイトルへ戻るまで
- * 続ける（TODO-052）。次の解は空の盤から探し直し、置いては外す様子を毎回
+ * 続ける（TODO-052）。次の解は空のボードから探し直し、置いては外す様子を毎回
  * はじめから見せる（TODO-054）。
  * ヒント表示を入にして解く人と同じ動きで、HUD にも本編のヒント表示と同じ
  * 文字を出す（TODO-043）。解につながる手だけを選ばないのは、試行錯誤に
  * 見えなくなるため。全解のデータが届くまでは探索を始めない。
  *
- * ランダム・`animate` の速さで置くときは、盤へ滑らせる前に、トレイでの今の
+ * ランダム・`animate` の速さで置くときは、ボードへ滑らせる前に、トレイでの今の
  * 向きから置く向きまで最短の回転・裏返しで回して見せる（`playTurns()`。
  * TODO-065）。人は向きを合わせてから置くため。最速と深さ優先は回さない。
  */
@@ -66,7 +66,7 @@ const STRATEGIES = {
 /**
  * 向きが変わって作り直すとき（`relayout()`。TODO-095）に、そのまま持ち越す
  * プロパティ。本編の `RELAYOUT_KEYS`（`game.js`）と同じ作りで、控えるのも戻すのも
- * この並びを通す。盤のピースとメッセージは画面の部品に写す手順が要るので別に控える。
+ * この並びを通す。ボードのピースとメッセージは画面の部品に写す手順が要るので別に控える。
  * generator（`steps`）と先読み（`peeked`）をそのまま渡せば、探索は続きから進む。
  */
 const RELAYOUT_KEYS = [
@@ -84,17 +84,17 @@ export default class DemoScene extends GameScene {
     // 向きが変わって作り直したとき（`relayout()`。TODO-095）に控えた状態。
     const saved = this.relayoutState;
     this.relayoutState = null;
-    // 盤と色の組はタイトルで選んだもの（本編と同じ読み方）。URL で開いたときは
-    // 盤と探し方を URL から取る（TODO-083）。registry には書かない（タイトルの
+    // ボードと色の組はタイトルで選んだもの（本編と同じ読み方）。URL で開いたときは
+    // ボードと探し方を URL から取る（TODO-083）。registry には書かない（タイトルの
     // 選択を変えないため）。`scene.start()` のデータで渡さないのは、Phaser が
     // データ無しの `start()` では前回のデータを持ち越すため。
     const fromUrl = parseDemoParams(window.location.search);
     this.boardKey = fromUrl?.board ?? this.registry.get(BOARD_REGISTRY_KEY);
     this.spec = BOARDS[this.boardKey];
-    // ボタンが本編より 1 つ多い分だけ HUD が違う。盤とトレイは本編と同じ（TODO-050）。
+    // ボタンが本編より 1 つ多い分だけ HUD が違う。ボードとトレイは本編と同じ（TODO-050）。
     this.layout = DEMO_LAYOUTS[orientationOf(this)][this.boardKey];
     this.palette = PALETTES[this.registry.get(PALETTE_REGISTRY_KEY)];
-    // `drawBoard()` が穴の位置を見るためだけに持つ。探索の盤は generator の中にある。
+    // `drawBoard()` が穴の位置を見るためだけに持つ。探索のボードは generator の中にある。
     this.board = createBoard(this.spec);
 
     // 'loading'（全解のデータを待っている）・'running'（探している）・
@@ -140,7 +140,7 @@ export default class DemoScene extends GameScene {
 
     // シーンを離れたあとに届くことがある。Phaser はシーンを使い回すので、
     // 入り直したあとに前回の分が遅れて届くこともある。探索を始めたあとや
-    // 別の盤の表なら捨てる（盤のピースと食い違うため）。
+    // 別のボードの表なら捨てる（ボードのピースと食い違うため）。
     ensureSolutions(this.registry, this.spec).then((solutions) => {
       if (!this.scene.isActive() || this.state !== 'loading') return;
       if (solutions.spec.key !== this.spec.key) return;
@@ -151,7 +151,7 @@ export default class DemoScene extends GameScene {
 
   /**
    * 向きが変わったとき（TODO-095）。探索の途中・速さ・探し方・数えた手と解・
-   * 盤のピースを持ち越して作り直す。generator はそのまま渡せば続きから進む。
+   * ボードのピースを持ち越して作り直す。generator はそのまま渡せば続きから進む。
    * 回している途中（`playTurns()`）は、先に仕上げて盤面と generator を揃える。
    */
   relayout() {
@@ -185,7 +185,7 @@ export default class DemoScene extends GameScene {
     if (this.turning) return;
     this.waited += delta;
     if (this.state !== 'running') {
-      // 解のあとは空の盤から探し直す（TODO-054）。
+      // 解のあとは空のボードから探し直す（TODO-054）。
       if (this.waited >= DEMO.pauseMs) this.startSearch();
       return;
     }
@@ -212,11 +212,11 @@ export default class DemoScene extends GameScene {
   }
 
   /**
-   * generator が尽きたら黙って空の盤から探し直す（解のたびに作り直すので
+   * generator が尽きたら黙って空のボードから探し直す（解のたびに作り直すので
    * 尽きることはない。万一の備え）。先読み（`this.peeked`）が無ければ
    * ここで 1 手引く（初回や `startSearch()` 直後）。
    *
-   * ランダムで `animate` の place は、盤へ滑らせる前に置く向きまで回して
+   * ランダムで `animate` の place は、ボードへ滑らせる前に置く向きまで回して
    * 見せる（`playTurns()`。TODO-065）。回すものが無ければ（同じ向き、
    * 深さ優先、remove、最速）その場で仕上げる。
    */
@@ -246,7 +246,7 @@ export default class DemoScene extends GameScene {
   /**
    * 向きを 1 段ずつ変えて見せる（TODO-065）。トレイの位置のまま描き直し、
    * 回転か裏返しかで音を分ける。最後の段まで進んだら `finishStep()` で
-   * 盤へ滑らせる。
+   * ボードへ滑らせる。
    */
   playTurns(piece, steps, index, value, animate) {
     const step = steps[index];
@@ -311,7 +311,7 @@ export default class DemoScene extends GameScene {
     this.refreshStatus();
     // 今の手も先読みした次の手も remove のときだけ待たせない（TODO-060）。
     // `place → remove` は `pickWaitScale('place')` の間隔で待つ（置いたピースが
-    // 盤に届く前に `remove` 側の `killTweensOf()` で止められると、置いた手が
+    // ボードに届く前に `remove` 側の `killTweensOf()` で止められると、置いた手が
     // 画面にほぼ出ないため。`DEMO.speeds` の JSDoc を参照）。
     this.peeked = this.steps.next();
     const nextIsRemove = !this.peeked.done && this.peeked.value.type === 'remove';
@@ -401,7 +401,7 @@ export default class DemoScene extends GameScene {
   }
 
   /**
-   * 探し方を切り替えて空の盤から探し直す。途中から続けないのは、2 つの探し方で
+   * 探し方を切り替えて空のボードから探し直す。途中から続けないのは、2 つの探し方で
    * 盤面の辿り方が違い、今の盤面を引き継げないため。全解のデータを待っている間は
    * 探し方だけ変え、届いたときに `startSearch()` が使う。
    */
@@ -416,7 +416,7 @@ export default class DemoScene extends GameScene {
   }
 
   /**
-   * 盤のピースは滑らせずにトレイへ戻す。何枚も同時に滑らせると探索の 1 手と
+   * ボードのピースは滑らせずにトレイへ戻す。何枚も同時に滑らせると探索の 1 手と
    * 見分けがつかず、次の探索の最初の手とも重なるため。
    * 見つけた解の数は戻さない。解のたびに探し直すので、戻すと 0 か 1 にしかならない。
    * 回している途中の予約もここで仕上げる（`toggleStrategy()`・`searchNext()` の

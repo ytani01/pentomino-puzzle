@@ -44,7 +44,7 @@ const RELAYOUT_KEYS = [
   'ownsProgress', 'solvedNumbers', 'solutions', 'avoidNumbers', 'clearData',
 ];
 
-/** 重なりの順。ボタンの説明（TODO-042）は HUD の下へはみ出して盤やピースに
+/** 重なりの順。ボタンの説明（TODO-042）は HUD の下へはみ出してボードやピースに
  *  重なるので、HUD より上・確認ダイアログより下に置く。 */
 /** やり直しのボタンの説明。作り直したシーンで出し直すとき（TODO-094）にも使う。 */
 const RESTART_TIP = 'やり直し';
@@ -86,7 +86,7 @@ export default class GameScene extends Phaser.Scene {
     const saved = this.relayoutState;
     this.relayoutState = null;
 
-    // 盤はタイトルで選ぶ（TODO-009。記録画面の「この回を続ける」も始める前に
+    // ボードはタイトルで選ぶ（TODO-009。記録画面の「この回を続ける」も始める前に
     // 書き換える。TODO-073）。どちらも本編の外で書くので、ここで 1 回読めば
     // シーンが生きている間は変わらない。
     this.boardKey = this.registry.get(BOARD_REGISTRY_KEY);
@@ -107,7 +107,7 @@ export default class GameScene extends Phaser.Scene {
     this.playing = true;
     // 遊びかけを控えてよいか（TODO-030）。組み立てが済むまでは控えない。
     this.ready = false;
-    // 空の盤で遊びかけを消してよいか（TODO-094）。このシーンで盤に置いたか、
+    // 空のボードで遊びかけを消してよいか（TODO-094）。このシーンでボードに置いたか、
     // 続きから始めたときだけ真。`persist()` が見る。
     this.ownsProgress = this.resuming;
     this.pending = null;
@@ -166,7 +166,7 @@ export default class GameScene extends Phaser.Scene {
     this.input.on('wheel', this.onWheel, this);
     // シーンを離れるときに押下状態を捨てる（残すと次に来たとき掴んだままになる）。
     // あわせて、その時点の経過時間まで含めて遊びかけを控える（TODO-030）。
-    // 盤が変わったときにも控えているが、置いてから長く考えて中断すると、
+    // ボードが変わったときにも控えているが、置いてから長く考えて中断すると、
     // 考えていた時間が落ちるため。
     // `once` なのは、やり直しで `create()` を通るたびに登録が積み上がらないようにするため。
     this.events.once('shutdown', this.onShutdown, this);
@@ -177,7 +177,7 @@ export default class GameScene extends Phaser.Scene {
     if (saved) this.applyRelayout(saved);
     else if (this.resuming) this.applyProgress(this.startProgress || loadProgress(this.spec.key));
     this.refreshHud();
-    // ここから先の `refreshHud()` は、盤が変わったときに呼ばれる。
+    // ここから先の `refreshHud()` は、ボードが変わったときに呼ばれる。
     // 組み立ての最中に控えると、何も置いていない盤面で保存済みの遊びかけを
     // 消してしまう（`はじめる` を押し間違えただけで消えるのは困る）。
     this.ready = true;
@@ -529,8 +529,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 印は**トレイにいるピースだけ**に出す（TODO-025）。盤の上では置けない
-   * 向きを飛ばすので、次に何が来るかが盤の埋まり方で変わってしまう。
+   * 印は**トレイにいるピースだけ**に出す（TODO-025）。ボードの上では置けない
+   * 向きを飛ばすので、次に何が来るかがボードの埋まり方で変わってしまう。
    * 掴んでいる間も出さない（拡大率が変わって大きさが合わなくなるうえ、
    * 運んでいる最中は要らない）。
    */
@@ -589,7 +589,7 @@ export default class GameScene extends Phaser.Scene {
   /**
    * シルエットの外周の縁取りと落ち影を引き直す。向きが変わるたびに呼ぶ。
    *
-   * 盤の 1 マス（`this.layout.board.cell`）の座標系で描けば、トレイでの縮小は
+   * ボードの 1 マス（`this.layout.board.cell`）の座標系で描けば、トレイでの縮小は
    * Container の拡大率が効くので描き分けが要らない。
    * 縁は線の太さの半分だけ内側へ寄せる。外へはみ出すと隣のピースにかぶり、
    * どちらの輪郭か分からなくなるため。
@@ -658,7 +658,7 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  /** 置かれている場所（盤かトレイか）から、Container の位置と拡大率を決める。 */
+  /** 置かれている場所（ボードかトレイか）から、Container の位置と拡大率を決める。 */
   pieceTransform(piece) {
     const cell = this.layout.board.cell;
     if (piece.location === 'board') {
@@ -774,7 +774,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * ドラッグ中に向きを 1 段変える（TODO-069）。盤から外れているので
+   * ドラッグ中に向きを 1 段変える（TODO-069）。ボードから外れているので
    * `nextPlaceableTurn()` は使わず、タップの巡り方（`nextTurn()` /
    * `prevTurn()`）をそのまま使う。回す軸は**つかんでいるマス**で、指の位置
    * ではない。タッチでは `this.drag.offsetX/Y` に指からずらした 1 マスぶん
@@ -821,14 +821,14 @@ export default class GameScene extends Phaser.Scene {
     const piece = pending.piece;
     this.cancelPending();
 
-    // 掴んだ点を拡大率で割り戻して覚える。トレイの縮小表示から盤の大きさへ
+    // 掴んだ点を拡大率で割り戻して覚える。トレイの縮小表示からボードの大きさへ
     // 広がっても、指の下のマスが変わらないようにするため。
     const scale = piece.container.scaleX;
     const offsetX = (pending.startX - piece.container.x) / scale;
     const offsetY = (pending.startY - piece.container.y) / scale;
-    // 指で隠れないよう、タッチのときだけピースを盤のマス 1 個ぶんずらす。
+    // 指で隠れないよう、タッチのときだけピースをボードのマス 1 個ぶんずらす。
     // 縦画面では指の上、横画面では指の左（TODO-023）。画面の長い側へ
-    // 逃がすので、盤の端でも指を画面の外へ出さずに済む。
+    // 逃がすので、ボードの端でも指を画面の外へ出さずに済む。
     // マウスではずらさない（`pointer.wasTouch` で見分ける）。
     // ずらしたぶん（`touchShiftX/Y`）は別に持つ。`turnDrag()` が回す軸は
     // 指の位置でなくつかんでいるマスなので、回す前にこのぶんを除く（TODO-069）。
@@ -886,11 +886,11 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * ドラッグ中の Container の位置から、一番近い升目を求める。盤の外に
+   * ドラッグ中の Container の位置から、一番近い升目を求める。ボードの外に
    * あたる値もそのまま返す（近くまで来ているかは `nearBoard()` が見る）。
    *
    * 指の位置でなく Container で見る。タッチ中はピースを指からずらしてあるので、
-   * 指で見ると「ピースは盤の上に見えているのに指は盤の外」ということが起きる。
+   * 指で見ると「ピースはボードの上に見えているのに指はボードの外」ということが起きる。
    */
   nearestSpot() {
     const { x, y, cell } = this.layout.board;
@@ -902,9 +902,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * その升目が盤の近くにあるか。吸い付く範囲（`INPUT.snapRange`）だけ
-   * 盤の外まで含める。それ以上広げないのは、トレイへ運ぶ途中のピースが
-   * 盤の縁へ吸い寄せられないようにするため。
+   * その升目がボードの近くにあるか。吸い付く範囲（`INPUT.snapRange`）だけ
+   * ボードの外まで含める。それ以上広げないのは、トレイへ運ぶ途中のピースが
+   * ボードの縁へ吸い寄せられないようにするため。
    */
   nearBoard(spot) {
     const margin = INPUT.snapRange;
@@ -925,8 +925,8 @@ export default class GameScene extends Phaser.Scene {
   /**
    * 離す直前の動きが、トレイの方向への振りだったか（TODO-023）。
    * 置くときは位置を合わせるので、指が止まってから離れる。速さが残っていれば
-   * 置く気は無いと見て、盤の上で離してもトレイへ戻す。
-   * トレイは縦画面では盤の下、横画面では盤の右にある。
+   * 置く気は無いと見て、ボードの上で離してもトレイへ戻す。
+   * トレイは縦画面ではボードの下、横画面ではボードの右にある。
    */
   swipedToTray(pointer) {
     const trail = this.drag.trail;
@@ -976,7 +976,7 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
-    // 盤から離れた所で離した、または振って戻した。盤に置いてあったものは
+    // ボードから離れた所で離した、または振って戻した。ボードに置いてあったものは
     // 「外す」、トレイにあったものは元へ戻すだけ。
     if (swiped || !this.nearBoard(nearest)) {
       if (snapshot.pieces[piece.slot].location === 'board') {
@@ -991,11 +991,11 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
-    // 盤の上だが、周りを探しても置ける所が無かった。
+    // ボードの上だが、周りを探しても置ける所が無かった。
     const result = canPlace(this.board, piece.cells, nearest.row, nearest.col);
     audio.invalid();
     this.flashPiece(piece);
-    this.showMessage(result.reason === 'overlap' ? 'そこは他のピースと重なる' : 'そこは盤からはみ出す');
+    this.showMessage(result.reason === 'overlap' ? 'そこは他のピースと重なる' : 'そこはボードからはみ出す');
     this.restoreState(snapshot, true);
   }
 
@@ -1003,7 +1003,7 @@ export default class GameScene extends Phaser.Scene {
   settlePiece(piece, animate) {
     const target = this.pieceTransform(piece);
     piece.container.setDepth(DEPTH.piece);
-    // 盤とトレイのどちらへ収まるかで、向きの印を出すかが変わる。
+    // ボードとトレイのどちらへ収まるかで、向きの印を出すかが変わる。
     this.drawTurnMark(piece);
     // 前の移動が残っていると行き先を取り合うので、先に止める。
     this.tweens.killTweensOf(piece.container);
@@ -1026,14 +1026,14 @@ export default class GameScene extends Phaser.Scene {
   // ---- 向きの変更 -----------------------------------------------------
 
   /**
-   * タップ 1 つで次の向きへ進める（TODO-019）。盤の上では、その場に置けない
+   * タップ 1 つで次の向きへ進める（TODO-019）。ボードの上では、その場に置けない
    * 向きを飛ばす（TODO-023）。`turnOrder()` の並びは 90° 回転と裏返しが
    * 混ざるので、どちらになったかを見て音を選ぶ。
    */
   turnPiece(piece) {
     if (!this.playing) return;
     const onBoard = piece.location === 'board';
-    // 盤の上では、自分で今の場所を塞いでいると見なさないよう自分を除く。
+    // ボードの上では、自分で今の場所を塞いでいると見なさないよう自分を除く。
     const without = onBoard ? remove(this.board, piece.name) : null;
     const next = onBoard
       ? nextPlaceableTurn(without, piece.cells, piece.row, piece.col, piece.origin)
@@ -1099,8 +1099,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 同じ場所へ置き直した手は、戻しても盤が変わらず、押したのに何も起きない
-   * ように見える。そこで盤が変わるまで続けて戻す。
+   * 同じ場所へ置き直した手は、戻してもボードが変わらず、押したのに何も起きない
+   * ように見える。そこでボードが変わるまで続けて戻す。
    * 戻したあとは形の決まった空きを埋めない（`refreshHud()` の `fill`）ので、
    * 戻した盤面がまた埋まって元に戻ることは無い（TODO-072）。
    */
@@ -1116,12 +1116,12 @@ export default class GameScene extends Phaser.Scene {
   // ---- 遊びかけの保存（TODO-030）---------------------------------------
 
   /**
-   * 遊びかけを控える。盤が変わったとき（`refreshHud()`）と、シーンを
+   * 遊びかけを控える。ボードが変わったとき（`refreshHud()`）と、シーンを
    * 離れるときに呼ぶ。
    *
    * 1 個も置いていないときは控えずに消す。残しても `つづきから` が
    * 「はじめから」と同じになるだけで、押せるボタンが増えたぶん紛らわしい。
-   * ただし消すのは、このシーンで盤に置いたか、続きから始めたとき
+   * ただし消すのは、このシーンでボードに置いたか、続きから始めたとき
    * （`ownsProgress`）だけ（TODO-094）。何も置かずにホーム・やり直し・
    * ヒント表示を押したときや、全解のデータが届いたときに、前の遊びかけを
    * 消さないため。
@@ -1240,7 +1240,7 @@ export default class GameScene extends Phaser.Scene {
    * 待たせることも、時間切れで見つけられないことも無い（TODO-022）。
    *
    * 既に出した解（自力で見つけた解と、おまかせで導いた解）は候補から外すので、
-   * 同じ盤を何度解いても毎回同じ解へは導かれない（TODO-016）。
+   * 同じボードを何度解いても毎回同じ解へは導かれない（TODO-016）。
    */
   useAuto() {
     const left = this.pieces.filter((piece) => piece.location === 'tray').length;
@@ -1292,7 +1292,7 @@ export default class GameScene extends Phaser.Scene {
 
   /**
    * 残りのピースで最後まで置けるかを出す。全解のデータを線形になめるだけで
-   * 0.1ms もかからないので、**盤が変わったその場で調べる**（TODO-022）。
+   * 0.1ms もかからないので、**ボードが変わったその場で調べる**（TODO-022）。
    */
   runHint() {
     if (!this.hinting) return;
@@ -1311,7 +1311,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 同じ盤を最初から。遊びかけは捨てる（TODO-030）。ただし何も置かずに
+   * 同じボードを最初から。遊びかけは捨てる（TODO-030）。ただし何も置かずに
    * 押したときは、前の遊びかけを残す（`persist()` と同じく `ownsProgress` を見る。TODO-094）。
    *
    * `playing` を先に偽にするのは、シーンを離れるときの控え（`onShutdown()`）に、
@@ -1327,7 +1327,7 @@ export default class GameScene extends Phaser.Scene {
     this.scene.restart({ resume: false, restartTip: this.input.activePointer.wasTouch });
   }
 
-  /** 盤に 1 つも置いていないか。置いていなければ、失うものが無いので確認を出さない（TODO-094）。 */
+  /** ボードに 1 つも置いていないか。置いていなければ、失うものが無いので確認を出さない（TODO-094）。 */
   boardIsEmpty() {
     return this.pieces.every((piece) => piece.location === 'tray');
   }
@@ -1361,7 +1361,7 @@ export default class GameScene extends Phaser.Scene {
   /**
    * タイトルへ戻る前の確認。HUD のボタンとタイトル行（`createTitleBar()`）の両方から来る。
    *
-   * 盤に何も置いていなければ、失うものが無いので確認せずに戻る（TODO-094）。
+   * ボードに何も置いていなければ、失うものが無いので確認せずに戻る（TODO-094）。
    * 前の遊びかけは `persist()` が残す。
    */
   confirmToTitle() {
@@ -1404,7 +1404,7 @@ export default class GameScene extends Phaser.Scene {
 
   // ---- 進行 -----------------------------------------------------------
 
-  /** トレイから盤へ滑らせて置く。おまかせと自動で埋める手（TODO-044）が使う。 */
+  /** トレイからボードへ滑らせて置く。おまかせと自動で埋める手（TODO-044）が使う。 */
   slideIn({ name, cells, row, col }) {
     const piece = this.pieces.find((entry) => entry.name === name);
     piece.cells = cells;
@@ -1437,22 +1437,22 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * 盤が変わるところ（置く・外す・向きを変える・戻す・おまかせ・ヒント表示を入にする）は
+   * ボードが変わるところ（置く・外す・向きを変える・戻す・おまかせ・ヒント表示を入にする）は
    * どれもここを通るので、形の決まった空きを埋める（TODO-044）・解の有無を調べ直す・
    * 遊びかけを控える処理を、ここにまとめてある。埋めるのを先にするのは、残りの数・
    * ボタン・解の有無・控えを、埋めたあとの盤面で出すため。
    *
    * 埋めるのは `fill` が真のとき、つまりピースを置いたとき（手で置く・おまかせ）と
    * ヒント表示を入にしたときだけ。外す・戻す・向きを変えるときは埋めない。
-   * 外した穴はそのピースの形なので、埋めると外す前の盤へすぐ戻り、完成した盤から
+   * 外した穴はそのピースの形なので、埋めると外す前のボードへすぐ戻り、完成したボードから
    * ピースを外して入れ替えられなくなるため（TODO-072）。
    */
   refreshHud(fill = false) {
     const filled = fill && this.fillForced();
     const left = this.pieces.filter((piece) => piece.location === 'tray').length;
     this.remainText.setText(`残り ${left}`);
-    // 完成した解の知らせ（TODO-072）は、盤が完成でなくなるまで出しておく。
-    // 完成した盤からできるのは外す手だけなので、残りが出たら消せば足りる。
+    // 完成した解の知らせ（TODO-072）は、ボードが完成でなくなるまで出しておく。
+    // 完成したボードからできるのは外す手だけなので、残りが出たら消せば足りる。
     if (left > 0) this.recordText.setText('');
     this.undoButton.setEnabled(this.playing && this.history.length > 0);
     // 全解のデータが届くまでは、おまかせもヒント表示も出せない（TODO-022）。
@@ -1540,10 +1540,10 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * クリア表示の「続ける」から呼ばれる（TODO-072）。盤は完成した並びのまま、
-   * 時計を動かして遊べるようにする。同じ盤を二度完成と見なさないよう、
+   * クリア表示の「続ける」から呼ばれる（TODO-072）。ボードは完成した並びのまま、
+   * 時計を動かして遊べるようにする。同じボードを二度完成と見なさないよう、
    * `checkSolved()` は呼ばない（次に置いたときに呼ばれる）。
-   * HUD の知らせは盤が変わるまで残すので、`refreshHud()` は通さず
+   * HUD の知らせはボードが変わるまで残すので、`refreshHud()` は通さず
    * ボタンの状態だけ戻す。
    */
   continuePlay() {
