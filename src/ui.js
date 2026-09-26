@@ -6,7 +6,7 @@
  */
 
 import {
-  ACRYLIC, COLORS, FONT, HINT_BADGE, HOLE, NEON, PIECES, TEXT_COLORS, TILE, TOOLTIP,
+  ACRYLIC, COLORS, FONT, HINT_BADGE, HOLE, ICON, NEON, PIECES, TEXT_COLORS, TILE, TOOLTIP,
   VERSION, screenOf,
 } from './config.js';
 import { darken, pieceColor } from './scenes/boot.js';
@@ -349,6 +349,10 @@ export function createChoiceRow(scene, cx, y, label, choices, onSelect,
  * 分かりにくいので、`tooltip` に説明を渡すと、マウスでは載せたとき、タッチでは
  * 押したときに `scene.tooltip`（`createTooltip()` で作る。1 シーンに 1 つ）へ出す。
  * `setIcon()`・`setTooltip()` で差し替えられる。
+ *
+ * `caption` を渡すと、アイコンを少し上へずらし、下に小さく名前を添える。
+ * 説明を見なくても違いが分かってほしいボタン（デモの探し方）で使う（TODO-097）。
+ * `setCaption()` で差し替えられる。
  */
 
 /** 左寄せのボタンで、ラベル・印と枠の間に空ける分。 */
@@ -360,6 +364,7 @@ export function createButton(scene, options) {
     fontSize = FONT.body, align = 'center', mark = '',
   } = options;
   let { icon = null, tooltip = null } = options;
+  const { caption = '' } = options;
 
   const container = scene.add.container(x, y);
   const face = scene.add.graphics();
@@ -376,7 +381,13 @@ export function createButton(scene, options) {
     fontSize: `${Math.round(fontSize * 0.85)}px`,
     color: TEXT_COLORS.dim,
   }).setOrigin(1, 0.5);
-  container.add([face, iconGraphics, text, markText]);
+  const captionText = scene.add.text(0, height / 2 - 3, caption, {
+    fontFamily: FONT.family,
+    fontSize: `${ICON.captionSize}px`,
+    color: TEXT_COLORS.normal,
+  }).setOrigin(0.5, 1);
+  if (caption) iconGraphics.y = -ICON.captionShift;
+  container.add([face, iconGraphics, text, markText, captionText]);
 
   container.enabled = true;
   container.hovered = false;
@@ -402,6 +413,7 @@ export function createButton(scene, options) {
     if (!container.enabled) color = TEXT_COLORS.disabled;
     else if (container.selected) color = TEXT_COLORS.accent;
     text.setColor(color);
+    captionText.setColor(color);
     // アイコンも文字と同じ規則で色を変える。Graphics は数値の色を取るので
     // `TEXT_COLORS` に対応する `COLORS` の値を使う。
     let iconColor = COLORS.text;
@@ -467,6 +479,10 @@ export function createButton(scene, options) {
   container.setIcon = (value) => {
     icon = value;
     redraw();
+    return container;
+  };
+  container.setCaption = (value) => {
+    captionText.setText(value);
     return container;
   };
   container.setTooltip = (value) => {

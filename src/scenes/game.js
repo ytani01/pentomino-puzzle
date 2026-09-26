@@ -367,7 +367,7 @@ export default class GameScene extends Phaser.Scene {
    * ボタンはアイコンで、説明はホバー／タップで出す（TODO-042）。説明の枠は
    * シーンに 1 つ要り、本編とデモの両方が通るのはここだけなので、ここで作る。
    *
-   * @param {{icon: Function, tooltip: string, onClick: Function}[]} items
+   * @param {{icon: Function, tooltip: string, caption?: string, onClick: Function}[]} items
    */
   createHudButtons(items) {
     this.tooltip = createTooltip(this).setDepth(DEPTH.tooltip);
@@ -391,6 +391,7 @@ export default class GameScene extends Phaser.Scene {
         height: hud.buttonHeight,
         icon: item.icon,
         tooltip: item.tooltip,
+        caption: item.caption,
         onClick: item.onClick,
       }).setDepth(DEPTH.hud);
     });

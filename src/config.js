@@ -734,10 +734,15 @@ export const INPUT = {
  * - `size` … アイコンを収める正方形の一辺。ボタンの高さ（56）に対して上下に
  *   余白が残る大きさ。`Scale.FIT` で 0.5 倍まで縮むので、線は太めにする
  * - `lineWidth` … 線の太さ
+ * - `captionSize` … アイコンの下に添える名前の文字の大きさ（デモの探し方。TODO-097）。
+ *   ボタンに収めるのを優先し、実寸では読みにくくてもよい（利用者が決めた）
+ * - `captionShift` … 名前を添えるとき、アイコンを上へずらす分
  */
 export const ICON = {
   size: 28,
   lineWidth: 3,
+  captionSize: 12,
+  captionShift: 6,
 };
 
 /**

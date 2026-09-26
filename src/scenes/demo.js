@@ -48,10 +48,19 @@ import GameScene, { DEPTH } from './game.js';
 /** 速さの並び。HUD のボタンの前半 3 つと同じ順。 */
 const SPEEDS = ['slow', 'fast', 'fastest'];
 
-/** 探し方ごとの generator とボタンの見た目。ボタンは今の探し方を見せる（音のボタンと同じ）。 */
+/**
+ * 探し方ごとの generator とボタンの見た目。ボタンは今の探し方を見せる（音のボタンと同じ）。
+ * 画面での呼び方は、深さ優先を「機械的」、ランダムを「人間的」にする。アルゴリズムの
+ * 用語は一般のプレーヤーに通じにくく、動きの違い（ランダムは人の置き方に似せてある。
+ * TODO-059・TODO-065）のほうが伝わるため（TODO-097）。
+ */
 const STRATEGIES = {
-  depth: { solve: solveSteps, icon: ICONS.depthFirst, tooltip: '探し方: 深さ優先' },
-  random: { solve: solveStepsRandom, icon: ICONS.random, tooltip: '探し方: ランダム' },
+  depth: {
+    solve: solveSteps, icon: ICONS.depthFirst, caption: '機械的', tooltip: '探し方: 機械的',
+  },
+  random: {
+    solve: solveStepsRandom, icon: ICONS.random, caption: '人間的', tooltip: '探し方: 人間的',
+  },
 };
 
 /**
@@ -331,7 +340,7 @@ export default class DemoScene extends GameScene {
     const hud = this.layout.hud;
     createTitleBar(this, this.layout.title.y, () => this.goToTitle()).setDepth(DEPTH.hud);
     // 探し方を切り替えるボタンはアイコンだけなので、2 種類あることをここで伝える（TODO-089）。
-    this.add.text(this.layout.width / 2, this.layout.note.y, '探し方は「深さ優先」と「ランダム」の 2 種類', {
+    this.add.text(this.layout.width / 2, this.layout.note.y, '探し方は「機械的」と「人間的」の 2 種類', {
       fontFamily: FONT.family,
       fontSize: `${FONT.small}px`,
       color: TEXT_COLORS.dim,
@@ -400,7 +409,7 @@ export default class DemoScene extends GameScene {
     audio.button();
     this.strategy = this.strategy === 'depth' ? 'random' : 'depth';
     const face = STRATEGIES[this.strategy];
-    this.strategyButton.setIcon(face.icon).setTooltip(face.tooltip);
+    this.strategyButton.setIcon(face.icon).setCaption(face.caption).setTooltip(face.tooltip);
     // 見つけた解の数は探し方ごとに数え直す。
     this.solvedCount = 0;
     if (this.solutions) this.startSearch();
