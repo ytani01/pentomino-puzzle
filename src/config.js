@@ -187,6 +187,8 @@ export const COLORS = {
   ghost: 0xffffff,
   danger: 0xff5555,
   success: 0x3fbf6e,
+  // デモで解けたときの札（TODO-103）。緑・赤の札より目立たせる。
+  solved: 0xffc93c,
   text: 0xe8ecf4,
   textDim: 0x8d97b0,
   accent: 0x6fd3f2,
@@ -210,6 +212,8 @@ export const TEXT_COLORS = {
   accent: '#6fd3f2',
   danger: '#ff5555',
   disabled: '#5b6480',
+  // 明るい地（`COLORS.solved`）の上の文字。白では読みにくいため（TODO-103）。
+  onBright: '#181b26',
 };
 
 /**
@@ -788,7 +792,7 @@ export const TOOLTIP = {
 };
 
 /**
- * ヒント表示の「解ける／解なし」の札（`createHintBadge()`。TODO-045）の寸法。
+ * ヒント表示の「解ける／解なし」とデモの「解けた！」の札（`createHintBadge()`。TODO-045・TODO-103）の寸法。
  *
  * 幅は文字（`FONT.hud`）に合わせて実行時に決めるので、ここには高さと
  * 余白だけを置く。`height` は HUD 1 段（`HUD_ROW` = 76）に収まる値。
@@ -797,6 +801,8 @@ export const HINT_BADGE = {
   height: 40,
   padX: 16,
   radius: 8,
+  // デモの「解けた！」の札を点滅させる半周期（TODO-103）。
+  blinkMs: 500,
 };
 
 /**

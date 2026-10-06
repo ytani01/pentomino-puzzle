@@ -66,7 +66,7 @@ const STRATEGIES = {
 /**
  * 向きが変わって作り直すとき（`relayout()`。TODO-095）に、そのまま持ち越す
  * プロパティ。本編の `RELAYOUT_KEYS`（`game.js`）と同じ作りで、控えるのも戻すのも
- * この並びを通す。ボードのピースとメッセージは画面の部品に写す手順が要るので別に控える。
+ * この並びを通す。ボードのピースは画面の部品に写す手順が要るので別に控える。
  * generator（`steps`）と先読み（`peeked`）をそのまま渡せば、探索は続きから進む。
  */
 const RELAYOUT_KEYS = [
@@ -103,7 +103,7 @@ export default class DemoScene extends GameScene {
     this.steps = null;
     this.solutions = null;
     this.strategy = fromUrl?.strategy ?? 'random';
-    // 直前に置いた手が解につながるか。null は表示を空にする（解けたとき）。
+    // 直前に置いた手が解につながるか。解けたら 'solved' にして「解けた！」の札を出す（TODO-103）。
     this.hintState = 'ok';
     this.speed = DEMO.defaultSpeed;
     this.tried = 0;
@@ -130,7 +130,6 @@ export default class DemoScene extends GameScene {
     // 指のカーソルを出さない。`createPieces()` がマスごとに付けている。
     for (const piece of this.pieces) piece.tiles.forEach((tile) => tile.disableInteractive());
     this.createHud();
-    this.createMessage();
     if (saved) this.applyRelayout(saved);
     this.refreshHud();
     // URL で直接開くとタイトルのボタンを通らないので、ここで音を使えるようにする
@@ -161,19 +160,17 @@ export default class DemoScene extends GameScene {
       pieces: this.pieces.map(({ cells, location, row, col }) => ({
         cells, location, row, col,
       })),
-      message: this.messageText.text,
     };
     this.scene.restart();
   }
 
-  /** `relayout()` で控えたピースの位置とメッセージを、組み直した画面へ写す。 */
+  /** `relayout()` で控えたピースの位置を、組み直した画面へ写す。 */
   applyRelayout(saved) {
     this.pieces.forEach((piece, index) => {
       Object.assign(piece, saved.pieces[index]);
       this.refreshPiece(piece);
       this.settlePiece(piece, false);
     });
-    this.messageText.setText(saved.message);
   }
 
   update(_time, delta) {
@@ -322,11 +319,9 @@ export default class DemoScene extends GameScene {
   onSolved() {
     this.state = 'solved';
     this.solvedCount += 1;
-    // 本編がトレイの残り 0 で消すのに合わせる。
-    this.hintState = null;
+    // 試した手と並べて見せるため、ボードの下でなく HUD の右端の札に出す（TODO-103）。
+    this.hintState = 'solved';
     audio.fanfare();
-    // 止まっている間は出したままにしたいので、時間で消える `showMessage()` は使わない。
-    this.messageText.setText(`解けた！ ${this.tried.toLocaleString('en-US')} 手目`);
     this.refreshHud();
   }
 
@@ -449,7 +444,6 @@ export default class DemoScene extends GameScene {
     this.waitScale = 1;
     // 前の generator の先読みを持ち越さない（TODO-060）。
     this.peeked = null;
-    this.messageText.setText('');
     this.refreshHud();
   }
 

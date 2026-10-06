@@ -153,7 +153,7 @@ export function drawAcrylic(g, x, y, width, height) {
 
 /**
  * ヒント表示の「解ける／解なし」の札（TODO-045）。本編とデモの両方が使うので
- * ここに置き、文言（`ok`→解ける、`dead`→解なし）の対応もここだけに持つ。
+ * ここに置き、文言（`ok`→解ける、`dead`→解なし、`solved`→解けた！）の対応もここだけに持つ。
  *
  * 角丸の帯 + 文字で、`ok` は緑（`COLORS.success`）、`dead` は赤（`COLORS.danger`）。
  * 幅は `setState()` のたびに文字を測り直して決める（2 つの文言は同じ文字数だが、
@@ -161,6 +161,9 @@ export function drawAcrylic(g, x, y, width, height) {
  *
  * `originX` は 0 で `x` を左端、1 で右端に固定する（本編は左寄せ、デモは
  * 右寄せで置くため）。`state` に `null` を渡すと帯ごと隠す。
+ *
+ * `solved`（解けた！）はデモだけが使う。HUD の同じ位置に出すので札を
+ * 共有し、目立つように明るい地にして点滅させる（TODO-103）。
  */
 export function createHintBadge(scene, x, y, originX = 0) {
   const face = scene.add.graphics();
@@ -170,17 +173,30 @@ export function createHintBadge(scene, x, y, originX = 0) {
     color: TEXT_COLORS.normal,
   }).setOrigin(0.5, 0.5);
 
-  const TEXT = { ok: '解ける', dead: '解なし' };
-  const FILL = { ok: COLORS.success, dead: COLORS.danger };
+  const TEXT = { ok: '解ける', dead: '解なし', solved: '解けた！' };
+  const FILL = { ok: COLORS.success, dead: COLORS.danger, solved: COLORS.solved };
 
   const badge = {};
+  let current;
   badge.setState = (state) => {
+    // デモは 1 手ごとに呼ぶので、同じ状態なら点滅を始め直さない。
+    if (state === current) return badge;
+    current = state;
     face.clear();
+    scene.tweens.killTweensOf([face, label]);
+    face.setAlpha(1);
+    label.setAlpha(1);
     if (!state) {
       label.setText('');
       return badge;
     }
     label.setText(TEXT[state]);
+    label.setColor(state === 'solved' ? TEXT_COLORS.onBright : TEXT_COLORS.normal);
+    if (state === 'solved') {
+      scene.tweens.add({
+        targets: [face, label], alpha: 0.25, duration: HINT_BADGE.blinkMs, yoyo: true, repeat: -1,
+      });
+    }
     const width = label.width + HINT_BADGE.padX * 2;
     const left = originX === 0 ? x : x - width;
     label.setPosition(left + width / 2, y);
