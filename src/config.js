@@ -814,9 +814,10 @@ export const HINT_BADGE = {
  *   最速は間隔が 1 フレームしか無いので滑らせない
  * - `pauseMs` … 解を見つけた・出し切ったあと、次へ進むまで止まる時間。
  *   タイトルへ戻るまで見続けられるよう、止まったままにはしない（TODO-052）
- * - `randomJitter` … ランダムの探し方だけ、1 手ごとの待ち時間に掛ける揺らぎの
- *   幅（TODO-059）。`intervalMs × (1 ± randomJitter)` の範囲で 1 手ごとに引き直す。
- *   一定間隔だと機械的に見えるため。値は仮で、画面で見て決める
+ * - `randomWaitMin` ・ `randomWaitMax` … ランダムの探し方だけ、1 手ごとの待ち時間に
+ *   掛ける倍率の範囲（TODO-059）。`intervalMs × [randomWaitMin, randomWaitMax]` の
+ *   一様な値を 1 手ごとに引き直す。一定間隔だと機械的に見えるため。人は考え込む
+ *   手もあるので、上は大きく取る（ゆっくりで 200〜2000ms。値は利用者が決めた。TODO-102）
  * - `randomRemoveMultiplier` … ランダムで 1 手外したあとの待ち時間に掛ける
  *   倍率（TODO-059）。外す（考え直す）ところは、置くところより間を空けた方が
  *   人の試行錯誤に見えるため。ただし、次も外す手のときは待たずに続けて
@@ -853,9 +854,10 @@ export const DEMO = {
     fast: { intervalMs: 200, animate: true },
     fastest: { intervalMs: 0, animate: false },
   },
-  defaultSpeed: 'fast',
+  defaultSpeed: 'slow',
   pauseMs: 10000,
-  randomJitter: 0.5,
+  randomWaitMin: 0.5,
+  randomWaitMax: 5,
   randomRemoveMultiplier: 2,
   randomNearPower: 2,
   randomTightWeight: 10,

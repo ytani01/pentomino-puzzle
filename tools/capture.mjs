@@ -271,7 +271,7 @@ async function shot(page, name) {
     return true;
   }, null, { polling: 'raf' });
   await annotate(page, 'Demo', [
-    { n: 'A', at: 's.statusText', text: '試した手・見つけた解', side: 'top', dist: 52 },
+    { n: 'A', at: 's.statusText', text: '試した手・見つけた解・探し方', side: 'top', dist: 52 },
     { n: 'B', at: BADGE, text: '解ける／解なし', side: 'top', dist: 14 },
     ...[1, 2, 3, 4, 5, 6, 7].map((n) => ({ n, at: `s.buttons[${n - 1}]`, side: 'bottom', dist: 14 })),
   ]);

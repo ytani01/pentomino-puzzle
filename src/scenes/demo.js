@@ -207,8 +207,8 @@ export default class DemoScene extends GameScene {
    */
   pickWaitScale(moveType) {
     if (this.strategy !== 'random') return 1;
-    const jitter = 1 + (Math.random() * 2 - 1) * DEMO.randomJitter;
-    return moveType === 'remove' ? DEMO.randomRemoveMultiplier * jitter : jitter;
+    const scale = DEMO.randomWaitMin + Math.random() * (DEMO.randomWaitMax - DEMO.randomWaitMin);
+    return moveType === 'remove' ? DEMO.randomRemoveMultiplier * scale : scale;
   }
 
   /**
@@ -334,7 +334,8 @@ export default class DemoScene extends GameScene {
 
   /**
    * 本編と同じ枠とボタンの並び（`createHudButtons()`）。1 段目の文字には
-   * 本編の時間と残りの代わりに、試した手と見つけた解の数を出す。
+   * 本編の時間と残りの代わりに、試した手と見つけた解の数と今の探し方を出す
+   * （探し方のボタンは押すと変わるので、今どちらかを文字でも見せる。TODO-102）。
    */
   createHud() {
     const hud = this.layout.hud;
@@ -380,11 +381,16 @@ export default class DemoScene extends GameScene {
     this.nextButton.setEnabled(this.state === 'solved');
   }
 
-  /** 1 段目の文字だけ。1 手ごとに呼ぶ。 */
+  /**
+   * 1 段目の文字だけ。1 手ごとに呼ぶ。縦画面は HUD が狭く、試した手が 5 桁になると
+   * 右端の札に隠れるので、言い回しを詰める（TODO-102）。
+   */
   refreshStatus() {
-    this.statusText.setText(
-      `試した手 ${this.tried.toLocaleString('en-US')}　見つけた解 ${this.solvedCount}`,
-    );
+    const tried = this.tried.toLocaleString('en-US');
+    const { caption } = STRATEGIES[this.strategy];
+    this.statusText.setText(this.layout.portrait
+      ? `手 ${tried}　解 ${this.solvedCount}　${caption}`
+      : `試した手 ${tried}　見つけた解 ${this.solvedCount}　探し方 ${caption}`);
     this.hintBadge.setState(this.hintState);
   }
 
@@ -412,6 +418,8 @@ export default class DemoScene extends GameScene {
     this.strategyButton.setIcon(face.icon).setCaption(face.caption).setTooltip(face.tooltip);
     // 見つけた解の数は探し方ごとに数え直す。
     this.solvedCount = 0;
+    // 全解のデータを待っている間は `startSearch()` を通らないので、ここで書き換える。
+    this.refreshStatus();
     if (this.solutions) this.startSearch();
   }
 
