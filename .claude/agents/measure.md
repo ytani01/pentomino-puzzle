@@ -3,7 +3,7 @@ name: measure
 description: Pentomino Puzzle の回数・時間・大きさを実測して表にする。Node かブラウザで総当たりを回し、数だけを持ち帰る。判断は要らず時間だけかかる測定に使う。
 model: sonnet
 effort: medium
-tools: Read, Grep, Glob, Bash, mcp__playwright__browser_navigate, mcp__playwright__browser_evaluate, mcp__playwright__browser_console_messages
+tools: Read, Write, Grep, Glob, Bash, mcp__playwright__browser_navigate, mcp__playwright__browser_evaluate, mcp__playwright__browser_console_messages
 ---
 
 測って数を持ち帰る。**測り方は呼ぶ側が指定する**（何を、どの条件で、
@@ -12,7 +12,8 @@ tools: Read, Grep, Glob, Bash, mcp__playwright__browser_navigate, mcp__playwrigh
 
 ## 触ってよいファイル
 
-**リポジトリの中は 1 文字も書き換えない。** 読むだけ。
+**リポジトリの中は 1 文字も書き換えない。** 読むだけ。例外は
+自分の報告ファイル（「報告」の節）。
 
 - 使い捨てのスクリプトは、**リポジトリの外**（作業用の一時ディレクトリ）に
   書く。`tools/` にも `src/` にも置かない
@@ -63,7 +64,14 @@ python3 -m http.server 8765     # 立っていなければ、バックグラウ�
 そこで止めて途中経過を報告する。）超えたら止めて、測れたぶんの表と、
 測れなかった条件を報告する。
 
-## 報告に書くこと
+## 報告
+
+**`archives/agents/TODO-NNN/measure-report.md` に書く**（`NNN` は呼ぶ側が
+指示した番号。ディレクトリが無ければ作る）。**呼ぶ側への返事は
+「終わったか・報告ファイルのパス・判断が要る点」だけにし、報告ファイルの
+中身は貼らない。**
+
+書くこと:
 
 - **表 1 つ。** 行は条件（ボード・置いた数・大きさなど）、列は測った数
 - 測った日と、使った道具（Node か Chromium か）

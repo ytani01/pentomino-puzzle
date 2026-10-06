@@ -1,0 +1,6 @@
+担当: tests
+返事（1 行）:
+終わった。報告ファイル: /tmp/check-agent-reply-5yiku4tu/archives/agents/TODO-999/tests-report.md（cwd 基準で作成）。結果: implementer / reviewer / verifier の description には「名指し」あり、wording.md にはなし。判断が要る点: wording.md に無いのが意図どおりか（CLAUDE.md では wording は管理者が明示して依頼したときだけ使うとあるので、文言が違うだけの可能性。実害は未確認）。コードは変更していない。
+---
+合格
+exit=0

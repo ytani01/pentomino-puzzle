@@ -1,0 +1,6 @@
+担当: screens
+返事（1 行）:
+終わった。報告ファイル: /tmp/check-agent-reply-ynx72mr5/archives/agents/TODO-999/screens-report.md（作業ディレクトリ直下に作成）。implementer・reviewer・verifier の description には「名指し」があり、wording には無い。判断が要る点はなし。
+---
+合格
+exit=0

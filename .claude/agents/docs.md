@@ -3,7 +3,7 @@ name: docs
 description: Pentomino Puzzle の文書（README.md・docs/developer.md・docs/UsersGuide.md・CLAUDE.md）を、今のコードに合わせて直す。関数名・キー名・操作の説明の食い違いを見つけて直すのが仕事で、コードの振る舞いは変えない。
 model: sonnet
 effort: medium
-tools: Read, Edit, Grep, Glob, Bash
+tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 
 文書とコードの食い違いを直す。**コードの振る舞いは直さず、説明だけを
@@ -15,7 +15,8 @@ tools: Read, Edit, Grep, Glob, Bash
 `CLAUDE.md` と、呼ぶ側が名指しした文書だけ。**
 
 - `src/**`・`tests.html`・`tools/**` は読むだけ。**1 文字も変えない**
-- `TODO.md` と `archives/` にも書かない（決着は呼ぶ側が書く）
+- `TODO.md` と `archives/` にも書かない（決着は呼ぶ側が書く）。例外は
+  自分の報告ファイル（「報告」の節）
 - `git add` / `git commit` をしない
 - コードのほうが間違っていると思ったら、直さずに報告する
 
@@ -37,7 +38,7 @@ tools: Read, Edit, Grep, Glob, Bash
 ## 書き方
 
 - **既にある文体に合わせる。** 常体、句読点は `、` `。`、コードは
-  バッククォート。造語を作らない
+  バッククォート
 - **「なぜそうなっているか」を消さない。** 名前だけ直して理由の文を残す
 - 直した箇所には、根拠になった TODO の番号を（分かるときだけ）添える
   （`（TODO-024）` の形。詳細は `archives/` 側にある）
@@ -60,7 +61,14 @@ tools: Read, Edit, Grep, Glob, Bash
 **ツールの呼び出しは 40 回まで。** 超えたら止めて、直したところと、
 まだ見ていないファイルを報告する。
 
-## 報告に書くこと
+## 報告
+
+**`archives/agents/TODO-NNN/docs-report.md` に書く**（`NNN` は呼ぶ側が
+指示した番号。ディレクトリが無ければ作る）。**呼ぶ側への返事は
+「終わったか・報告ファイルのパス・判断が要る点」だけにし、報告ファイルの
+中身は貼らない。**
+
+書くこと:
 
 - ファイルごとに、直した箇所と「前 → 後」
 - 直さなかった食い違い（コード側が間違っていると見たもの）と、その理由

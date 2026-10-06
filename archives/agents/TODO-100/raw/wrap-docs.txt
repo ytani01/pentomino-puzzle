@@ -1,0 +1,6 @@
+担当: docs
+返事（1 行）:
+終わった。報告ファイル: /tmp/check-agent-reply-j7gs_gvs/archives/agents/TODO-999/docs-report.md（作業ディレクトリ直下に作成）。結果は、implementer・reviewer・verifier の description に「名指し」があり、wording には無い（「明示して依頼したときだけ」という別の言い方）。判断が要る点なし。
+---
+合格
+exit=0

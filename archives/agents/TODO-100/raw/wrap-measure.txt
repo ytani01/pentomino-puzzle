@@ -1,0 +1,6 @@
+担当: measure
+返事（1 行）:
+終わりました。報告ファイルは /tmp/check-agent-reply-ck9z708f/archives/agents/TODO-999/measure-report.md です（作業ディレクトリ基準で作成）。結果は、implementer、reviewer、verifier の description に「名指し」があり、wording には無い、というものです。判断が要る点はありません。
+---
+合格
+exit=0
