@@ -612,7 +612,11 @@ push したときだけ。
 - **`CLAUDE.md` の規約は定義に書き写さない。** 担当も起動時に `CLAUDE.md` を
   読み込むので、写すと同じものが 2 か所に残ってずれる（TODO-100）
 - **定義を直したら `~/.claude/bin/check-agent-reply.py` で、返事が短いかを
-  確かめる**（別プロセスの `claude -p` が最新の定義を読むので、再起動は要らない）
+  確かめる**（別プロセスの `claude -p` が最新の定義を読むので、再起動は要らない）。
+  このリポジトリの定義は `--project .` を付けないと見えない
+  （例: `~/.claude/bin/check-agent-reply.py --project . --agent docs`）。
+  TODO-100 で代わりに使ったラッパー（`archives/agents/TODO-100/check-with-agents.py`）は
+  もう要らない
 - **Claude Code は起動時にしか `.claude/agents/` を読まない。**
   足したり直したりしたら再起動が要る
 
