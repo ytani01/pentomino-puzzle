@@ -13,11 +13,11 @@
 |------|------|------|
 | 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / low）+ tests（Sonnet 5.5 / low） |
 
-- [ ] `loadFound` / `addFound` / `clearFound` と `loadAuto` / `addAuto` / `clearAuto` の
+- [x] `loadFound` / `addFound` / `clearFound` と `loadAuto` / `addAuto` / `clearAuto` の
       中身を、保存先のキーを引数に取る内部関数（今の `removeNumber()` と同じ形）へ寄せる
-- [ ] `window.localStorage` の読み書きを囲む try/catch（10 か所ほど）を、読む・書く・消すの
+- [x] `window.localStorage` の読み書きを囲む try/catch（10 か所ほど）を、読む・書く・消すの
       内部関数に寄せる。失敗しても遊べる理由のコメントは、呼ぶ側に残す
-- [ ] `sanitizeHistory()` / `sanitizeFound()` / `sanitizeProgress()` の先頭にある
+- [x] `sanitizeHistory()` / `sanitizeFound()` / `sanitizeProgress()` の先頭にある
       「文字列なら `JSON.parse`、だめなら空」を 1 つにする
 
 挙動は変えない。export の名前と引数は変えず、呼ぶ側（`game.js`・`records.js`・

@@ -28,6 +28,54 @@ function keyOf(boardKey) {
 }
 
 /**
+ * localStorage から文字列を読む。無ければ `null`、localStorage が使えない
+ * （例外になる）ときは `undefined`。
+ *
+ * 例外を外へ出さないのはここだけ（読み・書き・消すの 3 つ）で、使えないときに
+ * どう見せるかは呼ぶ側が決める。`null` と `undefined` を分けるのは、使えないときに
+ * だけ書き込みを諦める呼ぶ側（`removeNumber()`）があるため。
+ */
+function readItem(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch (error) {
+    return undefined;
+  }
+}
+
+/** localStorage へ文字列を書く。書けなくても例外にせず、何もしない。 */
+function writeItem(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch (error) {
+    // 書けないときの扱いは、呼ぶ側のコメントに書く。
+  }
+}
+
+/** localStorage から消す。消せなくても例外にせず、何もしない。 */
+function removeItem(key) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch (error) {
+    // 消せないときの扱いは、呼ぶ側のコメントに書く。
+  }
+}
+
+/**
+ * 保存された値が文字列なら `JSON.parse` する（`sanitize*()` の入口）。パース済みの値は
+ * そのまま返す。途中で切れた・別物が入っているときは `undefined`。`undefined` は
+ * どの `sanitize*()` でも「配列でも連想配列でもない」として捨てられる。
+ */
+function parseStored(value) {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    return undefined;
+  }
+}
+
+/**
  * 最短時間。記録が無い、または読めなければ `null`。
  *
  * 保存した値のほか、履歴のうちおまかせを使っていない回（`a` の無い件）も見る。
@@ -36,13 +84,10 @@ function keyOf(boardKey) {
  */
 export function loadBest(boardKey) {
   let best = null;
-  try {
-    const raw = window.localStorage.getItem(keyOf(boardKey));
-    const ms = Number(raw);
-    if (raw !== null && Number.isFinite(ms) && ms > 0) best = ms;
-  } catch (error) {
-    // 読めなくても、履歴から出せればそれを使う。
-  }
+  // 読めなくても（`undefined`）、履歴から出せればそれを使う。
+  const raw = readItem(keyOf(boardKey));
+  const ms = Number(raw);
+  if (raw !== null && Number.isFinite(ms) && ms > 0) best = ms;
   let fromHistory = false;
   for (const entry of loadHistory(boardKey)) {
     if (entry.a !== true && (best === null || entry.ms < best)) {
@@ -52,13 +97,8 @@ export function loadBest(boardKey) {
   }
   // 履歴から出した最短は保存値へ書き戻す。書かないと、その回を記録から消したときや
   // 履歴が `HISTORY_LIMIT` からあふれたときに、最短が延びてしまう。
-  if (fromHistory) {
-    try {
-      window.localStorage.setItem(keyOf(boardKey), String(Math.round(best)));
-    } catch (error) {
-      // 書けなくても、今回の値は返せる。
-    }
-  }
+  // 書けなくても、今回の値は返せる。
+  if (fromHistory) writeItem(keyOf(boardKey), String(Math.round(best)));
   return best;
 }
 
@@ -70,11 +110,8 @@ export function loadBest(boardKey) {
 export function saveBest(boardKey, ms) {
   const previous = loadBest(boardKey);
   if (previous !== null && previous <= ms) return { best: previous, updated: false };
-  try {
-    window.localStorage.setItem(keyOf(boardKey), String(Math.round(ms)));
-  } catch (error) {
-    // 保存できなくても、その回の結果は表示できる。
-  }
+  // 保存できなくても、その回の結果は表示できる。
+  writeItem(keyOf(boardKey), String(Math.round(ms)));
   return { best: ms, updated: true };
 }
 
@@ -86,21 +123,14 @@ export function saveBest(boardKey, ms) {
  * 手で書き換えた値）は既定へ落とす。
  */
 export function loadPalette() {
-  try {
-    const key = window.localStorage.getItem(PALETTE_STORAGE_KEY);
-    return PALETTES[key] ? key : DEFAULT_PALETTE_KEY;
-  } catch (error) {
-    return DEFAULT_PALETTE_KEY;
-  }
+  const key = readItem(PALETTE_STORAGE_KEY);   // 読めなければ `undefined`（既定へ落ちる）
+  return PALETTES[key] ? key : DEFAULT_PALETTE_KEY;
 }
 
 /** 選んだ色の組を覚える。保存できなくても、その回の見た目は変わる。 */
 export function savePalette(key) {
-  try {
-    window.localStorage.setItem(PALETTE_STORAGE_KEY, key);
-  } catch (error) {
-    // 覚えられなくても遊べる。次の起動で既定へ戻るだけ。
-  }
+  // 覚えられなくても遊べる。次の起動で既定へ戻るだけ。
+  writeItem(PALETTE_STORAGE_KEY, key);
 }
 
 /**
@@ -160,14 +190,7 @@ export function shouldRecordBest(usedAuto) {
  * 直す。知らない鍵や `a: 1` のような値を保存へ戻さないため（TODO-024）。
  */
 export function sanitizeHistory(value, board) {
-  let parsed = value;
-  if (typeof value === 'string') {
-    try {
-      parsed = JSON.parse(value);
-    } catch (error) {
-      return [];   // 途中で切れた・別物が入っている。
-    }
-  }
+  const parsed = parseStored(value);
   if (!Array.isArray(parsed)) return [];
   const length = board.rows * board.cols;
   return parsed.filter((entry) => (
@@ -223,12 +246,9 @@ export function migrateHistory(entries, solutions) {
  */
 export function loadHistory(boardKey, solutions = null) {
   const board = boardOf(boardKey);
-  try {
-    const entries = sanitizeHistory(window.localStorage.getItem(board.historyKey), board);
-    return dedupeHistory(migrateHistory(entries, solutions));
-  } catch (error) {
-    return [];
-  }
+  // 読めなければ `undefined` で、`sanitizeHistory()` が空の配列にする。
+  const entries = sanitizeHistory(readItem(board.historyKey), board);
+  return dedupeHistory(migrateHistory(entries, solutions));
 }
 
 /**
@@ -285,11 +305,8 @@ export function recordClear(boardKey, entry, solutions = null) {
   const found = existing.find((item) => item.no === entry.no);
   if (found && !isBetterClear(entry, found)) return 'kept';
   const list = [entry, ...existing.filter((item) => item !== found)];
-  try {
-    window.localStorage.setItem(board.historyKey, JSON.stringify(sanitizeHistory(list, board)));
-  } catch (error) {
-    // 保存できなくても、その回の表示は出せる。
-  }
+  // 保存できなくても、その回の表示は出せる。
+  writeItem(board.historyKey, JSON.stringify(sanitizeHistory(list, board)));
   return found ? 'improved' : 'new';
 }
 
@@ -338,11 +355,8 @@ export function removeHistoryMany(boardKey, nos, solutions = null) {
   const board = boardOf(boardKey);
   const set = new Set(nos);
   const next = loadHistory(boardKey, solutions).filter((entry) => !set.has(entry.no));
-  try {
-    window.localStorage.setItem(board.historyKey, JSON.stringify(next));
-  } catch (error) {
-    // 消せなくても、その場の一覧は消したあとの形で出せる。
-  }
+  // 消せなくても、その場の一覧は消したあとの形で出せる。
+  writeItem(board.historyKey, JSON.stringify(next));
   return next;
 }
 
@@ -385,14 +399,7 @@ export function removeRecords(boardKey, nos, solutions) {
  * 数が変わったときや、手で書き換えたときのため）。
  */
 export function sanitizeFound(value, count) {
-  let parsed = value;
-  if (typeof value === 'string') {
-    try {
-      parsed = JSON.parse(value);
-    } catch (error) {
-      return [];
-    }
-  }
+  const parsed = parseStored(value);
   if (!Array.isArray(parsed)) return [];
   const seen = new Set();
   for (const no of parsed) {
@@ -401,46 +408,44 @@ export function sanitizeFound(value, count) {
   return [...seen].sort((a, b) => a - b);
 }
 
-/** そのボードで見つけた解の番号を昇順で返す。読めなければ空の配列。 */
-export function loadFound(boardKey, count) {
-  try {
-    return sanitizeFound(window.localStorage.getItem(boardOf(boardKey).foundKey), count);
-  } catch (error) {
-    return [];
-  }
+/**
+ * 番号の配列を読む。読めなければ空の配列。
+ * `foundKey`（達成度）と `autoKey`（おまかせで避ける番号）で処理が同じなので、
+ * 保存先を引数に取る（以下 `addNumber()`・`removeNumber()` も同じ）。
+ */
+function loadNumbers(storeKey, count) {
+  return sanitizeFound(readItem(storeKey), count);
 }
 
 /** 番号を 1 つ足して保存し、保存後の配列を返す。既にあれば何もしない。 */
-export function addFound(boardKey, no, count) {
-  const existing = loadFound(boardKey, count);
+function addNumber(storeKey, no, count) {
+  const existing = loadNumbers(storeKey, count);
   if (existing.includes(no)) return existing;
   const next = sanitizeFound([...existing, no], count);
-  try {
-    window.localStorage.setItem(boardOf(boardKey).foundKey, JSON.stringify(next));
-  } catch (error) {
-    // 保存できなくても、その回のクリアは表示できる。
-  }
+  writeItem(storeKey, JSON.stringify(next));
   return next;
 }
 
+/** そのボードで見つけた解の番号を昇順で返す。読めなければ空の配列。 */
+export function loadFound(boardKey, count) {
+  return loadNumbers(boardOf(boardKey).foundKey, count);
+}
+
 /**
- * 番号を 1 つだけ外して保存し、保存後の配列を返す（TODO-031）。
- * `foundKey`（達成度）と `autoKey`（おまかせで避ける番号）で処理が同じなので、
- * 保存先を引数に取る。
+ * 番号を 1 つ足して保存し、保存後の配列を返す。既にあれば何もしない。
+ * 保存できなくても、その回のクリアは表示できる。
  */
+export function addFound(boardKey, no, count) {
+  return addNumber(boardOf(boardKey).foundKey, no, count);
+}
+
+/** 番号を 1 つだけ外して保存し、保存後の配列を返す（TODO-031）。 */
 function removeNumber(storeKey, no, count) {
-  let existing;
-  try {
-    existing = sanitizeFound(window.localStorage.getItem(storeKey), count);
-  } catch (error) {
-    return [];
-  }
-  const next = existing.filter((entry) => entry !== no);
-  try {
-    window.localStorage.setItem(storeKey, JSON.stringify(next));
-  } catch (error) {
-    // 消せなくても、その場の達成度は消したあとの数で出せる。
-  }
+  const raw = readItem(storeKey);
+  if (raw === undefined) return [];   // localStorage が使えない。書き込みも見込めない。
+  const next = sanitizeFound(raw, count).filter((entry) => entry !== no);
+  // 消せなくても、その場の達成度は消したあとの数で出せる。
+  writeItem(storeKey, JSON.stringify(next));
   return next;
 }
 
@@ -455,11 +460,7 @@ export function removeFound(boardKey, no, count) {
 
 /** そのボードで見つけた解の番号を消す。履歴を消すときに一緒に呼ぶ。 */
 export function clearFound(boardKey) {
-  try {
-    window.localStorage.removeItem(boardOf(boardKey).foundKey);
-  } catch (error) {
-    // 消せなくても実害は無い。
-  }
+  removeItem(boardOf(boardKey).foundKey);   // 消せなくても実害は無い。
 }
 
 /**
@@ -472,24 +473,15 @@ export function clearFound(boardKey) {
 
 /** そのボードでおまかせが導いた解の番号を昇順で返す。読めなければ空の配列。 */
 export function loadAuto(boardKey, count) {
-  try {
-    return sanitizeFound(window.localStorage.getItem(boardOf(boardKey).autoKey), count);
-  } catch (error) {
-    return [];
-  }
+  return loadNumbers(boardOf(boardKey).autoKey, count);
 }
 
-/** 番号を 1 つ足して保存し、保存後の配列を返す。既にあれば何もしない。 */
+/**
+ * 番号を 1 つ足して保存し、保存後の配列を返す。既にあれば何もしない。
+ * 保存できなくても、そのおまかせ自体は出せている。
+ */
 export function addAuto(boardKey, no, count) {
-  const existing = loadAuto(boardKey, count);
-  if (existing.includes(no)) return existing;
-  const next = sanitizeFound([...existing, no], count);
-  try {
-    window.localStorage.setItem(boardOf(boardKey).autoKey, JSON.stringify(next));
-  } catch (error) {
-    // 保存できなくても、そのおまかせ自体は出せている。
-  }
-  return next;
+  return addNumber(boardOf(boardKey).autoKey, no, count);
 }
 
 /**
@@ -503,11 +495,7 @@ export function removeAuto(boardKey, no, count) {
 
 /** そのボードでおまかせが導いた解の番号を消す。履歴を消すときに一緒に呼ぶ。 */
 export function clearAuto(boardKey) {
-  try {
-    window.localStorage.removeItem(boardOf(boardKey).autoKey);
-  } catch (error) {
-    // 消せなくても実害は無い。
-  }
+  removeItem(boardOf(boardKey).autoKey);   // 消せなくても実害は無い。
 }
 
 /**
@@ -552,14 +540,7 @@ export function clearAuto(boardKey) {
  * 別の解を作れるようにしたため（TODO-072）。
  */
 export function sanitizeProgress(value, board) {
-  let parsed = value;
-  if (typeof value === 'string') {
-    try {
-      parsed = JSON.parse(value);
-    } catch (error) {
-      return null;
-    }
-  }
+  const parsed = parseStored(value);
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
   if (typeof parsed.ms !== 'number' || !Number.isFinite(parsed.ms) || parsed.ms < 0) return null;
   if (!Array.isArray(parsed.pieces) || parsed.pieces.length !== PIECES.length) return null;
@@ -615,11 +596,8 @@ export function sanitizeProgress(value, board) {
 /** そのボードの遊びかけを返す。無い・壊れている・読めないときは `null`。 */
 export function loadProgress(boardKey) {
   const board = boardOf(boardKey);
-  try {
-    return sanitizeProgress(window.localStorage.getItem(board.progressKey), board);
-  } catch (error) {
-    return null;
-  }
+  // 読めなければ `undefined` で、`sanitizeProgress()` が `null` にする。
+  return sanitizeProgress(readItem(board.progressKey), board);
 }
 
 /**
@@ -633,21 +611,14 @@ export function saveProgress(boardKey, progress) {
     clearProgress(boardKey);
     return null;
   }
-  try {
-    window.localStorage.setItem(board.progressKey, JSON.stringify(sane));
-  } catch (error) {
-    // 保存できなくても、その回は最後まで遊べる（続きから始められないだけ）。
-  }
+  // 保存できなくても、その回は最後まで遊べる（続きから始められないだけ）。
+  writeItem(board.progressKey, JSON.stringify(sane));
   return sane;
 }
 
 /** そのボードの遊びかけを消す。やり直したときに呼ぶ。 */
 export function clearProgress(boardKey) {
-  try {
-    window.localStorage.removeItem(boardOf(boardKey).progressKey);
-  } catch (error) {
-    // 消せなくても実害は無い。
-  }
+  removeItem(boardOf(boardKey).progressKey);   // 消せなくても実害は無い。
 }
 
 /**
