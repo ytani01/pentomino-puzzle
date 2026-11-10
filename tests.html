@@ -3581,6 +3581,17 @@ for (const state of boardStates) {
     });
   });
 
+  test(`removeHistoryMany は古い形の件も、番号へ読み替えてから消せる（${spec.label}）`, () => {
+    withCleanStorage(spec, () => {
+      window.localStorage.setItem(spec.historyKey, JSON.stringify([
+        { at: 2000, ms: 200, cells: canonical[1] },
+        { at: 1000, ms: 100, cells: canonical[0] },
+      ]));
+      removeHistoryMany(spec.key, [2], solutions);
+      assertSame(loadHistory(spec.key, solutions), [{ at: 1000, ms: 100, no: 1 }]);
+    });
+  });
+
   test(`removeFound / removeAuto は指した番号だけを外す（${spec.label}）`, () => {
     withCleanStorage(spec, () => {
       addFound(spec.key, 1, total);
