@@ -72,10 +72,10 @@ TODO-105 のあとに着手する（確認ダイアログの文字が `ui.js` �
 |------|------|------|
 | 見込み | Opus 5.5 / effort medium | implementer（Opus 5.5 / medium）+ reviewer（Opus 5.5 / medium）+ screens（Sonnet 5.5 / low） |
 
-- [ ] `src/scenes/game.js` の `drawPieceEdges()` と `src/icons.js` の `paletteIcon()` にある、
+- [x] `src/scenes/game.js` の `drawPieceEdges()` と `src/icons.js` の `paletteIcon()` にある、
       凹んだ角を探す処理と、外周を内側へ寄せて引く処理（ネオンは角も埋める）を 1 つの関数に
       して両方から呼ぶ
-- [ ] `docs/developer.md` と `CLAUDE.md` の説明を直す
+- [x] `docs/developer.md` と `CLAUDE.md` の説明を直す
 
 挙動は変えない。本編は原点が (0, 0)・1 マスが `layout.board.cell`、アイコンは原点が
 `left`/`top`・1 マスが `CHOICE_ICON.pieceCell`・光の太さに `glowScale` が掛かる。この差は

@@ -14,7 +14,7 @@ import {
 import {
   boardKey, canPlace, createBoard, darken, flip, forcedPlacements, formatTime, isSolved,
   nextPlaceableTurn, nextTurn, pieceColor, prevTurn,
-  normalize, outlineEdges, place, remove, rotateCw, sameShape, shapeSize, snapSpot, turnOrder,
+  normalize, place, remove, rotateCw, sameShape, shapeSize, snapSpot, turnOrder,
   turnPivot,
 } from '../logic.js';
 import {
@@ -29,7 +29,7 @@ import {
   createButton, createHintBadge, createPanel, createTitleBar, createTooltip,
   drawAcrylic, HOW_TO_OPERATE, HOW_TO_OPERATE_SHORT,
 } from '../ui.js';
-import { ICONS } from '../icons.js';
+import { ICONS, strokePieceEdges } from '../icons.js';
 import { TEX } from './boot.js';
 
 /**
@@ -591,56 +591,11 @@ export default class GameScene extends Phaser.Scene {
    *
    * ボードの 1 マス（`this.layout.board.cell`）の座標系で描けば、トレイでの縮小は
    * Container の拡大率が効くので描き分けが要らない。
-   * 縁は線の太さの半分だけ内側へ寄せる。外へはみ出すと隣のピースにかぶり、
-   * どちらの輪郭か分からなくなるため。
-   *
-   * ネオンのにじみ（`piece.glow`。TODO-039）も、太い線を内側へ寄せて重ねる。
-   * 内側へ寄せた線は凹の角で端どうしが届かず、線の太さ四方が欠ける。芯の
-   * 細さでは見えないが、にじみの太さでは見えるので、にじみだけその正方形を
-   * 埋める（他の色の組の見た目を変えないため）。
+   * 縁とネオンのにじみ（`piece.glow`。TODO-039）は、どちらも `strokePieceEdges()`
+   * （`icons.js`）で内側へ寄せて引く。凹の角を埋めるのはにじみだけ。
    */
   drawPieceEdges(piece) {
     const cell = this.layout.board.cell;
-    const has = new Set(piece.cells.map(([row, col]) => `${row},${col}`));
-    const edges = outlineEdges(piece.cells);
-    // 凹の角 = 格子点を囲む 4 マスのうち 3 つが埋まっている所。空いた 1 マスが
-    // 上下・左右のどちら側かも持つ。
-    const concaveCorners = [];
-    if (piece.glow) {
-      const size = shapeSize(piece.cells);
-      for (let row = 0; row <= size.rows; row += 1) {
-        for (let col = 0; col <= size.cols; col += 1) {
-          const around = [[-1, -1], [-1, 0], [0, -1], [0, 0]]
-            .filter(([dr, dc]) => !has.has(`${row + dr},${col + dc}`));
-          if (around.length !== 1) continue;
-          const [[dr, dc]] = around;
-          concaveCorners.push([row, col, dr === -1, dc === -1]);
-        }
-      }
-    }
-    const stroke = (graphics, width, color, alpha, fillCorners = false) => {
-      const inset = width / 2;
-      if (fillCorners) {
-        graphics.fillStyle(color, alpha);
-        for (const [row, col, missingUp, missingLeft] of concaveCorners) {
-          // 欠けるのは、空いたマスと対角にあるマスの、角に接した所。
-          graphics.fillRect(col * cell - (missingLeft ? 0 : width),
-                            row * cell - (missingUp ? 0 : width), width, width);
-        }
-      }
-      graphics.lineStyle(width, color, alpha);
-      for (const [r1, c1, r2, c2] of edges) {
-        // 内側は、辺に接するマスがある側。
-        const horizontal = r1 === r2;
-        const dr = horizontal && has.has(`${r1},${c1}`) ? inset : -inset;
-        const dc = !horizontal && has.has(`${r1},${c1}`) ? inset : -inset;
-        const x = horizontal ? 0 : dc;
-        const y = horizontal ? dr : 0;
-        graphics.lineBetween(c1 * cell + x, r1 * cell + y,
-                             c2 * cell + x, r2 * cell + y);
-      }
-    };
-
     piece.shadow.clear();
     piece.shadow.fillStyle(OUTLINE.shadowColor, OUTLINE.shadowAlpha);
     for (const [row, col] of piece.cells) {
@@ -649,12 +604,14 @@ export default class GameScene extends Phaser.Scene {
     }
 
     piece.outline.clear();
-    stroke(piece.outline, this.palette.outlineWidth,
-           darken(piece.color, this.palette.outlineDarken), 1);
+    strokePieceEdges(piece.outline, piece.cells, 0, 0, cell, this.palette.outlineWidth,
+                     darken(piece.color, this.palette.outlineDarken), 1);
 
     if (piece.glow) {
       piece.glow.clear();
-      for (const layer of NEON.glow) stroke(piece.glow, layer.width, piece.color, layer.alpha, true);
+      for (const layer of NEON.glow) {
+        strokePieceEdges(piece.glow, piece.cells, 0, 0, cell, layer.width, piece.color, layer.alpha, true);
+      }
     }
   }
 

@@ -242,13 +242,58 @@ export function boardIcon(board) {
 }
 
 /**
+ * ピースの外周を、線の太さの半分だけ内側へ寄せて引く。本編のピース
+ * （`game.js` の `drawPieceEdges()`）と色の選択肢の見本（`paletteIcon()`）で共通。
+ * 原点 `(left, top)` と 1 マスの大きさ `cell` で、どちらの座標系にも合わせる。
+ *
+ * 内側へ寄せるのは、外へはみ出すと隣のピースにかぶり、どちらの輪郭か
+ * 分からなくなるため。
+ *
+ * 内側へ寄せた線は凹の角で端どうしが届かず、線の太さ四方が欠ける。芯の
+ * 細さでは見えないが、ネオンのにじみの太さでは見えるので、`fillCorners` の
+ * ときだけその正方形を埋める（他の色の組の見た目を変えないため）。
+ */
+export function strokePieceEdges(g, cells, left, top, cell, width, color, alpha, fillCorners = false) {
+  const has = new Set(cells.map(([row, col]) => `${row},${col}`));
+  const inset = width / 2;
+  if (fillCorners) {
+    g.fillStyle(color, alpha);
+    // 凹の角 = 格子点を囲む 4 マスのうち 3 つが埋まっている所。空いた 1 マスが
+    // 上下・左右のどちら側かで、欠ける所が決まる。
+    const size = shapeSize(cells);
+    for (let row = 0; row <= size.rows; row += 1) {
+      for (let col = 0; col <= size.cols; col += 1) {
+        const around = [[-1, -1], [-1, 0], [0, -1], [0, 0]]
+          .filter(([dr, dc]) => !has.has(`${row + dr},${col + dc}`));
+        if (around.length !== 1) continue;
+        const [[dr, dc]] = around;
+        // 欠けるのは、空いたマスと対角にあるマスの、角に接した所。
+        g.fillRect(left + col * cell - (dc === -1 ? 0 : width),
+                   top + row * cell - (dr === -1 ? 0 : width), width, width);
+      }
+    }
+  }
+  g.lineStyle(width, color, alpha);
+  for (const [r1, c1, r2, c2] of outlineEdges(cells)) {
+    // 内側は、辺に接するマスがある側。
+    const horizontal = r1 === r2;
+    const dr = horizontal && has.has(`${r1},${c1}`) ? inset : -inset;
+    const dc = !horizontal && has.has(`${r1},${c1}`) ? inset : -inset;
+    const x = horizontal ? 0 : dc;
+    const y = horizontal ? dr : 0;
+    g.lineBetween(left + c1 * cell + x, top + r1 * cell + y,
+                  left + c2 * cell + x, top + r2 * cell + y);
+  }
+}
+
+/**
  * タイトルで選ぶ色の組の見本（TODO-046）。ピース F・W・X を並べて描く（TODO-087）。
  * 塗り・マスの区切り・外周の色と太さは、ボードのマス目（`boot.js`）とピースの
- * 外周（`game.js`）に揃える。外周は本編と同じく線の太さの半分だけ内側へ寄せる。
+ * 外周（`game.js`）に揃える。外周は本編と同じ `strokePieceEdges()` で引く。
  * 12 色の立体感、ガラスの光の筋は、この大きさでは潰れるので描かない。
  *
- * ネオンのにじみは、本編（`game.js` の `drawPieceEdges()`）と同じ描き方で
- * 外周の内側へ重ねる（TODO-092）。太さは `NEON.glow` を見本の 1 マスとの比
+ * ネオンのにじみは、本編（`game.js` の `drawPieceEdges()`）と同じ
+ * `strokePieceEdges()` で外周の内側へ重ねる（TODO-092）。太さは `NEON.glow` を見本の 1 マスとの比
  * （`CHOICE_ICON.glowScale`）で縮める。明滅はしない（1 枚絵の見本なので）。
  *
  * マス目テクスチャを縮めて貼らないのは、蛍光の組の光る縁が細くなって暗く沈むため。
@@ -260,7 +305,6 @@ export function paletteIcon(palette) {
     pieceCell: cell, pieceGap: gap, pieces, glowScale,
   } = CHOICE_ICON;
   const size = cell * 3;
-  const half = palette.outlineWidth / 2;
   return (g) => {
     pieces.forEach((name, i) => {
       const piece = PIECES.find((p) => p.name === name);
@@ -272,39 +316,11 @@ export function paletteIcon(palette) {
                   palette.glass ? GLASS.fillAlpha : 1);
       for (const [row, col] of piece.cells) g.fillRect(left + col * cell, top + row * cell, cell, cell);
 
-      // ネオンのにじみ。凹の角の欠け（`drawPieceEdges()` と同じ理由）を、
-      // 芯より先に埋めておく。
+      // ネオンのにじみ。凹の角の欠けを、芯より先に埋めておく。
       if (palette.neon) {
-        const shape = shapeSize(piece.cells);
-        const edges = outlineEdges(piece.cells);
-        const concaveCorners = [];
-        for (let row = 0; row <= shape.rows; row += 1) {
-          for (let col = 0; col <= shape.cols; col += 1) {
-            const around = [[-1, -1], [-1, 0], [0, -1], [0, 0]]
-              .filter(([dr, dc]) => !has(row + dr, col + dc));
-            if (around.length !== 1) continue;
-            const [[dr, dc]] = around;
-            concaveCorners.push([row, col, dr === -1, dc === -1]);
-          }
-        }
         for (const layer of NEON.glow) {
-          const width = layer.width * glowScale;
-          const inset = width / 2;
-          g.fillStyle(color, layer.alpha);
-          for (const [row, col, missingUp, missingLeft] of concaveCorners) {
-            g.fillRect(left + col * cell - (missingLeft ? 0 : width),
-                      top + row * cell - (missingUp ? 0 : width), width, width);
-          }
-          g.lineStyle(width, color, layer.alpha);
-          for (const [r1, c1, r2, c2] of edges) {
-            const horizontal = r1 === r2;
-            const dr = horizontal && has(r1, c1) ? inset : -inset;
-            const dc = !horizontal && has(r1, c1) ? inset : -inset;
-            const x = horizontal ? 0 : dc;
-            const y = horizontal ? dr : 0;
-            g.lineBetween(left + c1 * cell + x, top + r1 * cell + y,
-                          left + c2 * cell + x, top + r2 * cell + y);
-          }
+          strokePieceEdges(g, piece.cells, left, top, cell,
+                           layer.width * glowScale, color, layer.alpha, true);
         }
       }
 
@@ -319,15 +335,8 @@ export function paletteIcon(palette) {
         if (has(row + 1, col)) g.lineBetween(x, y + cell, x + cell, y + cell);
       }
 
-      g.lineStyle(palette.outlineWidth, darken(color, palette.outlineDarken), 1);
-      for (const [row, col] of piece.cells) {
-        const x = left + col * cell;
-        const y = top + row * cell;
-        if (!has(row - 1, col)) g.lineBetween(x, y + half, x + cell, y + half);
-        if (!has(row + 1, col)) g.lineBetween(x, y + cell - half, x + cell, y + cell - half);
-        if (!has(row, col - 1)) g.lineBetween(x + half, y, x + half, y + cell);
-        if (!has(row, col + 1)) g.lineBetween(x + cell - half, y, x + cell - half, y + cell);
-      }
+      strokePieceEdges(g, piece.cells, left, top, cell, palette.outlineWidth,
+                       darken(color, palette.outlineDarken), 1);
     });
   };
 }
