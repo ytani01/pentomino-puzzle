@@ -123,13 +123,24 @@ export function turnOrder(cells, origin = null) {
 }
 
 /**
+ * `turnOrder()` の並びと、その中での今の向きの位置を返す。次・前・置ける次の
+ * 向きを引く 3 つの関数（`nextTurn()`・`prevTurn()`・`nextPlaceableTurn()`）が
+ * 同じ引き方をするので、正規化と比べ方を 1 か所に揃えるため。
+ * `shape` は正規化した今の向き（置ける向きが無いとき、そのまま返すのに使う）。
+ */
+function turnPosition(cells, origin) {
+  const order = turnOrder(cells, origin);
+  const shape = normalize(cells);
+  const index = order.findIndex((known) => sameShape(known, shape));
+  return { order, shape, index };
+}
+
+/**
  * 今の向きの次を返す。並びの最後まで来たら先頭へ戻る。
  * X のように向きが 1 通りしかないピースは、同じ向きがそのまま返る。
  */
 export function nextTurn(cells, origin = null) {
-  const order = turnOrder(cells, origin);
-  const shape = normalize(cells);
-  const index = order.findIndex((known) => sameShape(known, shape));
+  const { order, index } = turnPosition(cells, origin);
   return order[(index + 1) % order.length];
 }
 
@@ -138,9 +149,7 @@ export function nextTurn(cells, origin = null) {
  * 向きへ戻すため（TODO-069）。`nextTurn()` と同じ並びを逆に辿る。
  */
 export function prevTurn(cells, origin = null) {
-  const order = turnOrder(cells, origin);
-  const shape = normalize(cells);
-  const index = order.findIndex((known) => sameShape(known, shape));
+  const { order, index } = turnPosition(cells, origin);
   return order[(index - 1 + order.length) % order.length];
 }
 
@@ -344,9 +353,7 @@ export function canPlace(board, cells, row, col) {
  * 置ける向きまでタップし続けることになるため。
  */
 export function nextPlaceableTurn(board, cells, row, col, origin = null) {
-  const order = turnOrder(cells, origin);
-  const shape = normalize(cells);
-  const start = order.findIndex((known) => sameShape(known, shape));
+  const { order, shape, index: start } = turnPosition(cells, origin);
   for (let step = 1; step <= order.length; step += 1) {
     const candidate = order[(start + step) % order.length];
     if (canPlace(board, candidate, row, col).ok) return candidate;

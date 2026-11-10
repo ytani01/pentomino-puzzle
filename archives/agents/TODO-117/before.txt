@@ -1,0 +1,12 @@
+8x8 default seed=1 steps=600 randomCalls=781 sha=86a0d3073cb7933e last={"type":"place","name":"T","cells":[[0,0],[0,1],[0,2],[1,1],[2,1]],"row":0,"col":1,"ok":true}
+8x8 default seed=14 steps=600 randomCalls=786 sha=d53a58067a59e8f4 last={"type":"place","name":"T","cells":[[0,0],[1,0],[1,1],[1,2],[2,0]],"row":0,"col":3,"ok":false}
+8x8 default seed=164 steps=600 randomCalls=785 sha=92f896348a39d73f last={"type":"remove","name":"T","ok":true}
+8x8 solutions seed=1 steps=331 randomCalls=445 sha=abbeacc9794c2df6 last={"type":"solved"}
+8x8 solutions seed=14 steps=600 randomCalls=838 sha=bac3e69e3a18fa62 last={"type":"remove","name":"T","ok":false}
+8x8 solutions seed=164 steps=255 randomCalls=369 sha=1dab33e48c4378a2 last={"type":"solved"}
+6x10 default seed=1 steps=600 randomCalls=750 sha=4a525c2e6db60634 last={"type":"remove","name":"T","ok":true}
+6x10 default seed=14 steps=600 randomCalls=790 sha=75bada4bda55bcb7 last={"type":"place","name":"V","cells":[[0,2],[1,2],[2,0],[2,1],[2,2]],"row":1,"col":5,"ok":false}
+6x10 default seed=164 steps=600 randomCalls=772 sha=dfa7f995da731358 last={"type":"remove","name":"F","ok":true}
+6x10 solutions seed=1 steps=600 randomCalls=818 sha=274c4a7e956e8a11 last={"type":"remove","name":"F","ok":false}
+6x10 solutions seed=14 steps=600 randomCalls=836 sha=b56a948d0c330d27 last={"type":"remove","name":"P","ok":false}
+6x10 solutions seed=164 steps=77 randomCalls=113 sha=387469c315a6489d last={"type":"solved"}

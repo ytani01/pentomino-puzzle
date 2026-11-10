@@ -59,6 +59,15 @@ export function moveDistance(a, b) {
 }
 
 /**
+ * 手が覆うマスを `"row,col"` の並びで返す。マスごとに数を数えたり、狭い所を
+ * 覆うかを見たりする 3 か所（`countCellMoves()`・`singlePieceCell()`・
+ * `moveCoversCell()`）で、マスの鍵の作り方を揃えるため。
+ */
+function moveCellKeys(move) {
+  return move.shape.map(([dr, dc]) => `${move.row + dr},${move.col + dc}`);
+}
+
+/**
  * `choices`（残りの全ピースの置ける手。ピースごとの手の配列の配列）から、
  * 空きマスごとに、そのマスを覆う手の数を数える。デモのランダムで
  * 「狭い所」（一番少ないマス）を選ぶため（TODO-061）。`tests.html` から
@@ -68,8 +77,7 @@ export function countCellMoves(choices) {
   const counts = new Map();
   for (const moves of choices) {
     for (const move of moves) {
-      for (const [dr, dc] of move.shape) {
-        const key = `${move.row + dr},${move.col + dc}`;
+      for (const key of moveCellKeys(move)) {
         counts.set(key, (counts.get(key) || 0) + 1);
       }
     }
@@ -93,8 +101,7 @@ export function singlePieceCell(choices, random) {
   const cells = new Map(); // "row,col" → { pick, count }。pick は 2 種類目が出たら -1
   choices.forEach((moves, pick) => {
     for (const move of moves) {
-      for (const [dr, dc] of move.shape) {
-        const key = `${move.row + dr},${move.col + dc}`;
+      for (const key of moveCellKeys(move)) {
         const cell = cells.get(key);
         if (!cell) {
           cells.set(key, { pick, count: 1 });
@@ -116,7 +123,7 @@ export function singlePieceCell(choices, random) {
 
 /** `move` が空きマス `cellKey`（`"row,col"`）を覆うか。 */
 function moveCoversCell(move, cellKey) {
-  return move.shape.some(([dr, dc]) => `${move.row + dr},${move.col + dc}` === cellKey);
+  return moveCellKeys(move).includes(cellKey);
 }
 
 /**
@@ -230,6 +237,83 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
 }
 
 /**
+ * `solveStepsRandom()` の今の盤面で、残りのピース（`unused`）ごとに置ける手を集める。
+ * 置ける手の無いピースは入れない。控え（`failed`）にある手は除く。
+ *
+ * 探索の状態（スタックや行き詰まりの数）に触らない部分を外に出し、
+ * `solveStepsRandom()` 本体を状態の出し入れだけで読めるようにするため。
+ * 手の `key`（`名前:向き:行:列`）は控えに入れる鍵で、ここでしか組み立てない。
+ */
+function placeableMoves(board, shapes, unused, failed) {
+  const { rows, cols } = board;
+  const choices = [];
+  for (const name of unused) {
+    const moves = [];
+    shapes.get(name).forEach((shape, turn) => {
+      for (let row = 0; row < rows; row += 1) {
+        for (let col = 0; col < cols; col += 1) {
+          const key = `${name}:${turn}:${row}:${col}`;
+          if (!failed.has(key) && canPlace(board, shape, row, col).ok) {
+            moves.push({
+              name, shape, row, col, key,
+            });
+          }
+        }
+      }
+    });
+    if (moves.length > 0) choices.push(moves);
+  }
+  return choices;
+}
+
+/**
+ * `solveStepsRandom()` で次に置く手を選ぶ。選ぶ順は、詰めて置く手（5 マスの穴に
+ * 合うピース。TODO-066）→ 1 種類のピースしか入らないマス（TODO-082）→
+ * 狭い所（TODO-061）で、最後に置き方を重みで抽選する（TODO-059・062）。
+ * 理由はそれぞれ `solveStepsRandom()` の説明にある。
+ *
+ * `placeableMoves()` と同じく、探索の状態に触らない部分を外に出したもの。
+ * **`random` を呼ぶ順番と回数は、出す前と同じに保つ**（同じ種から同じ手順を
+ * 出すため。テストとデモの再現がこれに頼る）。`last` は直前に置いた手で、
+ * 最初の手なら `undefined`。`forced` は詰めて置く手を選んだか（置いて解なしなら
+ * 前の手もまとめて外すのに使う）。
+ */
+function chooseMove(board, choices, unused, last, random) {
+  // 手は `choices` から拾うので、鍵の組み立てと `failed` の除外は `placeableMoves()` の 1 か所で済む。
+  const forcedFound = forcedPlacements(board, unused);
+  const forced = choices.flat().filter((m) => forcedFound.some(
+    (f) => f.name === m.name && f.row === m.row && f.col === m.col && sameShape(f.cells, m.shape),
+  ));
+  if (forced.length > 0) {
+    return { move: forced[Math.floor(random() * forced.length)], forced: true };
+  }
+  let movesForName;
+  const single = singlePieceCell(choices, random);
+  if (single) {
+    // 1 種類のピースしか入らないマスがあれば、そのピースでそこを覆う（TODO-082）。
+    movesForName = choices[single.pick].filter((m) => moveCoversCell(m, single.cellKey));
+  } else {
+    // 「狭い所」（覆える手が一番少ない空きマス）を覆えるピースを選ばれやすくし、
+    // 選んだら狭い所を覆う置き方に絞る（TODO-061）。
+    const tightCell = pickTightCell(countCellMoves(choices), random);
+    const covering = choices.map((moves) => moves.filter((m) => moveCoversCell(m, tightCell)));
+    const pick = pickWeighted(
+      choices.map((_, i) => i),
+      covering.map((moves) => (moves.length > 0 ? DEMO.randomTightWeight : 1)),
+      random,
+    );
+    movesForName = covering[pick].length > 0 ? covering[pick] : choices[pick];
+  }
+  // 重みは選んだピースの置き方の分だけ数える。直前に置いた手からの近さも掛け、
+  // 近くから順に埋めていく（TODO-062）。最初の手なら距離の項は掛けない。
+  const weights = movesForName.map((m) => {
+    const touch = touchWeight(touchingEdges(board, m.shape, m.row, m.col));
+    return last ? touch / (1 + moveDistance(m, last)) ** DEMO.randomNearPower : touch;
+  });
+  return { move: pickWeighted(movesForName, weights, random), forced: false };
+}
+
+/**
  * `solveSteps()` のランダム版（デモで探し方を選べるようにするため。TODO-057）。
  *
  * 速く解くためではなく、人が試行錯誤しながら置いていく様子を見せるため。
@@ -295,7 +379,7 @@ export function* solveSteps(spec, random, canContinue = regionsFitPieces) {
  */
 export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) {
   const board = createBoard(spec);
-  const { rows, cols, grid } = board;
+  const { cols, grid } = board;
   const shapes = new Map(PIECES.map((piece) => [piece.name, orientations(piece.cells)]));
   const unused = PIECES.map((piece) => piece.name);
   const stack = [];
@@ -307,7 +391,6 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
     return failedByBoard.get(key);
   };
-  const pickOne = (items) => items[Math.floor(random() * items.length)];
   const fill = (move, value) => {
     for (const [dr, dc] of move.shape) grid[(move.row + dr) * cols + (move.col + dc)] = value;
   };
@@ -358,23 +441,7 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
       return;
     }
     const failed = failedOf(boardKey(board));
-    const choices = [];
-    for (const name of unused) {
-      const moves = [];
-      shapes.get(name).forEach((shape, turn) => {
-        for (let row = 0; row < rows; row += 1) {
-          for (let col = 0; col < cols; col += 1) {
-            const key = `${name}:${turn}:${row}:${col}`;
-            if (!failed.has(key) && canPlace(board, shape, row, col).ok) {
-              moves.push({
-                name, shape, row, col, key,
-              });
-            }
-          }
-        }
-      });
-      if (moves.length > 0) choices.push(moves);
-    }
+    const choices = placeableMoves(board, shapes, unused, failed);
 
     if (choices.length === 0) {
       if (stack.length === 0) { // 空のボードで全部だめなら、控えを消して選び直す
@@ -387,43 +454,7 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
       continue;
     }
 
-    // 5 マスの穴に合うピースがあれば、抽選より先にそれで埋める（TODO-066）。
-    // 手は `choices` から拾うので、鍵の組み立てと `failed` の除外は上の 1 か所で済む。
-    const forcedFound = forcedPlacements(board, unused);
-    const forced = choices.flat().filter((m) => forcedFound.some(
-      (f) => f.name === m.name && f.row === m.row && f.col === m.col && sameShape(f.cells, m.shape),
-    ));
-    let move;
-    if (forced.length > 0) {
-      move = pickOne(forced);
-    } else {
-      let movesForName;
-      const single = singlePieceCell(choices, random);
-      if (single) {
-        // 1 種類のピースしか入らないマスがあれば、そのピースでそこを覆う（TODO-082）。
-        movesForName = choices[single.pick].filter((m) => moveCoversCell(m, single.cellKey));
-      } else {
-        // 「狭い所」（覆える手が一番少ない空きマス）を覆えるピースを選ばれやすくし、
-        // 選んだら狭い所を覆う置き方に絞る（TODO-061）。
-        const tightCell = pickTightCell(countCellMoves(choices), random);
-        const covering = choices.map((moves) => moves.filter((m) => moveCoversCell(m, tightCell)));
-        const pick = pickWeighted(
-          choices.map((_, i) => i),
-          covering.map((moves) => (moves.length > 0 ? DEMO.randomTightWeight : 1)),
-          random,
-        );
-        movesForName = covering[pick].length > 0 ? covering[pick] : choices[pick];
-      }
-      // 重みは選んだピースの置き方の分だけ数える。直前に置いた手（stack の最後）
-      // からの近さも掛け、近くから順に埋めていく（TODO-062）。最初の手
-      // （スタックが空）なら距離の項は掛けない。
-      const last = stack[stack.length - 1];
-      const weights = movesForName.map((m) => {
-        const touch = touchWeight(touchingEdges(board, m.shape, m.row, m.col));
-        return last ? touch / (1 + moveDistance(m, last)) ** DEMO.randomNearPower : touch;
-      });
-      move = pickWeighted(movesForName, weights, random);
-    }
+    const { move, forced } = chooseMove(board, choices, unused, stack[stack.length - 1], random);
     if (!boardOk) deadMoves += 1;
     fill(move, move.name);
     unused.splice(unused.indexOf(move.name), 1);
@@ -433,7 +464,7 @@ export function* solveStepsRandom(spec, random, canContinue = regionsFitPieces) 
     yield {
       type: 'place', name: move.name, cells: move.shape, row: move.row, col: move.col, ok,
     };
-    if (forced.length > 0 && !ok) {
+    if (forced && !ok) {
       // 穴に合うピースはそれしか無いので、埋めて解なしなら埋める前の盤面が
       // すでに解なし。その手と、その前に置いた手をまとめて外す（TODO-066）。
       // その場外しは「詰まり」に数えない（TODO-063。下の 2 つも同じ）。

@@ -17,6 +17,23 @@ import {
 } from './logic.js';
 import { placementIn, solutionNumber } from './solutions.js';
 
+/**
+ * 解の番号として使える値か（正の整数）。保存から読んだ値は手で書き換えられて
+ * いることがあるので、番号を受け入れる所（履歴・見つけた解・遊びかけ）で
+ * 同じ基準で検査するため。
+ */
+function isPositiveInteger(value) {
+  return Number.isInteger(value) && value > 0;
+}
+
+/**
+ * 日時や経過時間として使える値か（正の有限な数）。`isPositiveInteger()` と
+ * 同じく、保存から読んだ値を同じ基準で検査するため。
+ */
+function isPositiveNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
 /** ボードのキーからボードの定義を引く。知らないボードなら既定のボードとして扱う。 */
 function boardOf(boardKey) {
   return BOARDS[boardKey] || BOARDS[DEFAULT_BOARD_KEY];
@@ -93,7 +110,7 @@ export function loadBest(boardKey) {
   // 読めなくても（`undefined`）、履歴から出せればそれを使う。
   const raw = readItem(keyOf(boardKey));
   const ms = Number(raw);
-  if (raw !== null && Number.isFinite(ms) && ms > 0) best = ms;
+  if (raw !== null && isPositiveNumber(ms)) best = ms;
   let fromHistory = false;
   for (const entry of loadHistory(boardKey)) {
     if (entry.a !== true && (best === null || entry.ms < best)) {
@@ -201,13 +218,13 @@ export function sanitizeHistory(value, board) {
   const length = board.rows * board.cols;
   return parsed.filter((entry) => (
     entry !== null && typeof entry === 'object'
-    && typeof entry.at === 'number' && Number.isFinite(entry.at) && entry.at > 0
-    && typeof entry.ms === 'number' && Number.isFinite(entry.ms) && entry.ms > 0
-    && ((Number.isInteger(entry.no) && entry.no > 0)
+    && isPositiveNumber(entry.at)
+    && isPositiveNumber(entry.ms)
+    && (isPositiveInteger(entry.no)
       || (typeof entry.cells === 'string' && entry.cells.length === length))
   )).slice(0, HISTORY_LIMIT).map((entry) => {
     // 番号と `cells` の両方があれば番号を採る（`migrateHistory()` と同じ）。
-    const item = Number.isInteger(entry.no) && entry.no > 0
+    const item = isPositiveInteger(entry.no)
       ? { at: entry.at, ms: entry.ms, no: entry.no }
       : { at: entry.at, ms: entry.ms, cells: entry.cells };
     if (entry.a === true) item.a = true;
@@ -230,7 +247,7 @@ export function migrateHistory(entries, solutions) {
   if (!solutions) return entries;
   const migrated = [];
   for (const entry of entries) {
-    if (Number.isInteger(entry.no) && entry.no > 0) {
+    if (isPositiveInteger(entry.no)) {
       migrated.push(entry);
       continue;
     }
@@ -413,7 +430,7 @@ export function sanitizeFound(value, count) {
   if (!Array.isArray(parsed)) return [];
   const seen = new Set();
   for (const no of parsed) {
-    if (Number.isInteger(no) && no > 0 && no <= count) seen.add(no);
+    if (isPositiveInteger(no) && no <= count) seen.add(no);
   }
   return [...seen].sort((a, b) => a - b);
 }
@@ -601,7 +618,7 @@ export function sanitizeProgress(value, board) {
   // そのプレーで完成させた解の番号（TODO-072）。無ければ空とみなす。
   // 解の総数はここでは分からないので、正の整数かだけを見て、重なりを落とす。
   const solved = Array.isArray(parsed.solved)
-    ? [...new Set(parsed.solved.filter((no) => Number.isInteger(no) && no > 0))]
+    ? [...new Set(parsed.solved.filter(isPositiveInteger))]
     : [];
 
   return {

@@ -1,0 +1,12 @@
+const { chromium } = await import(process.env.PLAYWRIGHT);
+const browser = await chromium.launch();
+const page = await browser.newPage();
+const errors = [];
+page.on('pageerror', (e) => errors.push(String(e)));
+await page.goto(process.env.URL, { waitUntil: 'commit' });
+await page.waitForFunction(() => /通った|失敗/.test(document.getElementById('summary')?.textContent ?? ''), null, { timeout: 300000 });
+console.log(await page.textContent('#summary'));
+const fails = await page.$$eval('.fail', (els) => els.map((e) => e.textContent).slice(0, 20));
+console.log(fails.join('\n'));
+console.log('errors:', errors);
+await browser.close();

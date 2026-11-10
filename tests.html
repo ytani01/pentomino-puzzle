@@ -1157,10 +1157,12 @@ function mulberry32(seed) {
 /**
  * 最初の解が見つかるまでの手を集めて返す。手数が上限を超えたら探索が
  * 壊れているとみなして打ち切る（無限ループでテストごと固まらないため）。
+ * `canContinue` を省く（`undefined`）と `solveSteps()` の既定の判定になる
+ * （TODO-043 のテストは全解のデータの判定を渡す）。
  */
-function firstSolutionSteps(spec, random, limit = 1000000) {
+function firstSolutionSteps(spec, random, canContinue = undefined, limit = 1000000) {
   const steps = [];
-  for (const step of solveSteps(spec, random)) {
+  for (const step of solveSteps(spec, random, canContinue)) {
     steps.push(step);
     if (step.type === 'solved') return steps;
     if (steps.length > limit) throw new Error('手数の上限を超えた');
@@ -1280,7 +1282,7 @@ for (const spec of BOARD_LIST) {
 test('random に常に 0 を返す関数を渡しても例外にならず解に至る', () => {
   const zero = () => 0;
   for (const spec of BOARD_LIST) {
-    const steps = firstSolutionSteps(spec, zero, 5000000);
+    const steps = firstSolutionSteps(spec, zero, undefined, 5000000);
     assertSame(steps[steps.length - 1].type, 'solved', `${spec.label} で解に至らなかった`);
   }
 });
@@ -1289,19 +1291,8 @@ test('random に常に 0 を返す関数を渡しても例外にならず解に�
 //
 // デモがヒント表示と同じ動きをするため、solveSteps は「置いたあと先へ進む
 // かどうか」を第 3 引数の canContinue で外から受ける（既定は regionsFitPieces）。
-// 判定の結果は place の手に ok として載る。firstSolutionSteps を canContinue
-// も渡せるように拡張して使い回す。
-
-/** firstSolutionSteps に canContinue も渡せるようにしたもの。 */
-function firstSolutionStepsWith(spec, random, canContinue, limit = 1000000) {
-  const steps = [];
-  for (const step of solveSteps(spec, random, canContinue)) {
-    steps.push(step);
-    if (step.type === 'solved') return steps;
-    if (steps.length > limit) throw new Error('手数の上限を超えた');
-  }
-  throw new Error('解に至らずに探索が終わった');
-}
+// 判定の結果は place の手に ok として載る。firstSolutionSteps に canContinue
+// を渡して使い回す。
 
 for (const spec of BOARD_LIST) {
   test(`canContinue を渡さないと、place の ok は regionsFitPieces と一致する（${spec.label}）`, () => {
@@ -1325,7 +1316,7 @@ for (const state of boardStates) {
   test(`hasSolution を渡すと、最初の解までの手を空のボードへ当てはめると完成し、ok は hasSolution と一致する（${spec.label}）`, () => {
     // ok:true のあとのボードが必ず解けるかも、この一致で足りる（ok と
     // hasSolution(board) が毎回一致するなら ok:true は常に「解ける」を指す）。
-    const steps = firstSolutionStepsWith(spec, mulberry32(FAST_SEED[spec.key]), canContinue);
+    const steps = firstSolutionSteps(spec, mulberry32(FAST_SEED[spec.key]), canContinue);
     let board = createBoard(spec);
     let falseCount = 0;
     for (let i = 0; i < steps.length; i += 1) {
@@ -1384,6 +1375,28 @@ function randomSteps(spec, random, canContinue, limit) {
     if (steps.length >= limit) break;
   }
   return steps;
+}
+
+/**
+ * 手（`place` の手や `forcedPlacements()` の結果）を名前・形・位置の文字列にする。
+ * 控えた置き方ともう一度出た置き方を比べるため。いくつものテストが同じ形で
+ * 比べるので、ここに 1 つだけ置く。
+ */
+function sigOf(step) {
+  return `${step.name}:${JSON.stringify(step.cells)}:${step.row}:${step.col}`;
+}
+
+/**
+ * `solveStepsRandom()` の控え（盤面ごとの、外した置き方の集合）を手元で
+ * 再現するための入れ物を作る。盤面の鍵を渡すと、その盤面の集合を返す
+ * （無ければ作る）。テストごとに新しい入れ物を使うため、関数で作る。
+ */
+function createFailedOf() {
+  const failedByBoard = new Map(); // boardKey(盤面) -> Set(置き方の組)
+  return (key) => {
+    if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
+    return failedByBoard.get(key);
+  };
 }
 
 /** 5 の倍数でない（ピースで埋め切れない）閉じた空きがボードにあるか（TODO-060・068）。 */
@@ -1683,12 +1696,7 @@ for (const spec of BOARD_LIST) {
     // 控え（failedByBoard）を再現し、控えた（盤面, 置き方）の組がもう一度
     // place として出てきたら失敗とみなす。
     const STEPS = 8000;
-    const sigOf = (step) => `${step.name}:${JSON.stringify(step.cells)}:${step.row}:${step.col}`;
-    const failedByBoard = new Map(); // boardKey(盤面) -> Set(置き方の組)
-    const failedOf = (key) => {
-      if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
-      return failedByBoard.get(key);
-    };
+    const failedOf = createFailedOf();
     const activeStack = []; // ボードに今も残っている手（置いた順。solveStepsRandom の stack と同じ並び）
 
     let board = createBoard(spec);
@@ -1736,12 +1744,7 @@ for (const spec of BOARD_LIST) {
     // hasUnfitClosedRegion・hasUncoverableCellOnBoard）で見分ける（上の
     // 「置ける手が尽きて 1 手ずつ外す並び…」のテストと同じ分け方）。
     const STEPS = 4000;
-    const sigOf = (step) => `${step.name}:${JSON.stringify(step.cells)}:${step.row}:${step.col}`;
-    const failedByBoard = new Map();
-    const failedOf = (key) => {
-      if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
-      return failedByBoard.get(key);
-    };
+    const failedOf = createFailedOf();
     const activeStack = [];
     const steps = [];
     let taken = 0;
@@ -1900,12 +1903,7 @@ for (const spec of BOARD_LIST) {
     // 同じやり方で再現して判定し、まだ控えていない置き方が残っている場面に
     // 絞ることで、置ける手が尽きたことによる remove ではないと言える。
     const STEPS = 6000;
-    const sigOf = (step) => `${step.name}:${JSON.stringify(step.cells)}:${step.row}:${step.col}`;
-    const failedByBoard = new Map();
-    const failedOf = (key) => {
-      if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
-      return failedByBoard.get(key);
-    };
+    const failedOf = createFailedOf();
     const activeStack = [];
     const steps = [];
     let taken = 0;
@@ -2002,15 +2000,10 @@ for (const spec of BOARD_LIST) {
     // TODO-061 の検討 1。最初の 1 件で止めると「必ず」の名前と合わない）。
     const SEED_START = 1;
     const SEED_COUNT = 5;
-    const sigOf = (name, cells, row, col) => `${name}:${JSON.stringify(cells)}:${row}:${col}`;
     let sawForced = false;
     for (let seed = SEED_START; seed < SEED_START + SEED_COUNT; seed += 1) {
       const steps = randomSteps(spec, mulberry32(seed), regionsFitPieces, 1200);
-      const failedByBoard = new Map();
-      const failedOf = (key) => {
-        if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
-        return failedByBoard.get(key);
-      };
+      const failedOf = createFailedOf();
       const activeStack = [];
       let board = createBoard(spec);
       for (const step of steps) {
@@ -2018,15 +2011,15 @@ for (const spec of BOARD_LIST) {
           const unused = NAMES.filter((name) => !placedNames(board).includes(name));
           const failedHere = failedOf(boardKey(board));
           const forced = forcedPlacements(board, unused)
-            .filter((found) => !failedHere.has(sigOf(found.name, found.cells, found.row, found.col)));
+            .filter((found) => !failedHere.has(sigOf(found)));
           if (forced.length > 0) {
             sawForced = true;
-            const placedSig = sigOf(step.name, step.cells, step.row, step.col);
-            assert(forced.some((found) => sigOf(found.name, found.cells, found.row, found.col) === placedSig),
+            const placedSig = sigOf(step);
+            assert(forced.some((found) => sigOf(found) === placedSig),
               `${step.name} を置く前に合う手（${forced.map((f) => f.name).join(', ')}）があったのに、それ以外を置いた`);
           }
           board = place(board, step.name, step.cells, step.row, step.col);
-          activeStack.push(sigOf(step.name, step.cells, step.row, step.col));
+          activeStack.push(sigOf(step));
         } else {
           board = remove(board, step.name);
           failedOf(boardKey(board)).add(activeStack.pop());
@@ -2343,11 +2336,7 @@ for (const spec of BOARD_LIST) {
     // 覆う」という絞り込みの結果を確かめられる（node で seed 1〜20、
     // 8×8・6×10 とも成り立つことを確かめた）。
     const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces, 1500);
-    const failedByBoard = new Map();
-    const failedOf = (key) => {
-      if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
-      return failedByBoard.get(key);
-    };
+    const failedOf = createFailedOf();
     const activeStack = [];
     let board = createBoard(spec);
     let checked = 0;
@@ -2396,11 +2385,7 @@ for (const spec of BOARD_LIST) {
 function sumTightCoverage(spec, seed, limit) {
   let board = createBoard(spec);
   const activeStack = [];
-  const failedByBoard = new Map();
-  const failedOf = (key) => {
-    if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
-    return failedByBoard.get(key);
-  };
+  const failedOf = createFailedOf();
   let covered = 0;
   let total = 0;
   let taken = 0;
@@ -2550,11 +2535,7 @@ for (const spec of BOARD_LIST) {
     // 複数ピースにまたがる場面は、上の「狭い所を…唯一絞れる場面では…」と同じ
     // 理由で除く（singlePieceCandidates() が null を返す）。
     const steps = randomSteps(spec, mulberry32(FAST_SEED[spec.key]), regionsFitPieces, 1500);
-    const failedByBoard = new Map();
-    const failedOf = (key) => {
-      if (!failedByBoard.has(key)) failedByBoard.set(key, new Set());
-      return failedByBoard.get(key);
-    };
+    const failedOf = createFailedOf();
     const activeStack = [];
     let board = createBoard(spec);
     let checked = 0;
