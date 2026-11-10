@@ -63,14 +63,14 @@ Chromium を動かして撮る。TODO-034）。
 | `index.html` | HTML / CSS、Phaser の読み込み、起動できなかったときの案内 |
 | `src/main.js` | Phaser の設定とシーンの登録。画面の向きが変わったら内部解像度を切り替え、動いているシーンを作り直す（TODO-095） |
 | `src/config.js` | 盤面の定義、12 種のピースの形と色、マスの大きさ、レイアウト（縦・横の 2 組。今の向きは registry。TODO-095） |
-| `src/logic.js` | 向きの生成・正規化、配置判定、盤面の更新、対称な解の代表形（TODO-012）、時間の整形、ピースの色の決定 `pieceColor()` と縁取り用に暗くする `darken()`（純関数）、ヒント表示で自動で置く手 `forcedPlacements()`（TODO-044）、URL でデモを開くパラメータの読み取り `parseDemoParams()`（TODO-083） |
+| `src/logic.js` | 向きの生成・正規化、配置判定、盤面の更新、対称な解の代表形（TODO-012）、時間の整形、ピースの色の決定 `pieceColor()` と縁取り用に暗くする `darken()`（純関数）、向きを変える印の種類と位置 `turnMarkKind()`・`turnMarkCenter()`（TODO-114）、ヒント表示で自動で置く手 `forcedPlacements()`（TODO-044）、URL でデモを開くパラメータの読み取り `parseDemoParams()`（TODO-083） |
 | `src/search.js` | デモ用に 1 手ずつ返す探索 `solveSteps()`（深さ優先。TODO-040）・`solveStepsRandom()`（ランダム。TODO-057）と、その抽選の重みの計算 `touchingEdges()`・`moveDistance()`・`countCellMoves()`・`singlePieceCell()`。本編の判定と分けて読めるよう `logic.js` から分けた（TODO-113）。`search.js` は `logic.js` を読むが、`logic.js` は `search.js` を読まない（循環させない） |
 | `src/solutions.js` | 全解のデータの読み込み（動的 import）と、盤面との照合・おまかせ（TODO-022） |
 | `src/data/8x8.js` ・ `src/data/6x10.js` | ボードごとの全解（代表形 65 件 / 2339 件）。**手で書き換えない** |
 | `src/audio.js` | 効果音の合成。最初のユーザー操作で `unlock()` を呼ぶ |
 | `src/storage.js` | クリア記録（最短時間・履歴・見つけた解の番号・おまかせで導いた解の番号）、色の組（TODO-015）、遊びかけの盤面（TODO-030）の保存（失敗しても遊べるようにする） |
 | `src/ui.js` | ボタンと枠の組み立て。5 つのシーンが同じ見た目を使うため。HUD のボタンの説明（ツールチップ。TODO-042）。8×8 の穴に嵌めるアクリルの板 `drawAcrylic()`（本編と記録の完成形で共通。TODO-051）。縮小したボード `drawMiniBoard()`（記録の完成形とタイトルの動くボードで共通。TODO-087）。操作の説明の文言 `HOW_TO_OPERATE`（タイトルと本編の下端で共通。TODO-094） |
-| `src/icons.js` | HUD のボタンのアイコン。Graphics API の線画（TODO-042）。タイトルのボード・色の選択肢の図（TODO-046）。ピースの外周とネオンのにじみを内側へ寄せて引く `strokePieceEdges()`（本編の `drawPieceEdges()` と色の見本で共通。TODO-111） |
+| `src/icons.js` | HUD のボタンのアイコン。Graphics API の線画（TODO-042）。タイトルのボード・色の選択肢の図（TODO-046）。ピースの外周とネオンのにじみを内側へ寄せて引く `strokePieceEdges()`（本編の `drawPieceEdges()` と色の見本で共通。TODO-111）。向きを変える印の線画 `strokeTurnMark()`（本編のトレイのピース。TODO-114） |
 | `src/scenes/boot.js` | マス目テクスチャの生成。ピースの色ごとに 1 枚 |
 | `src/scenes/title.js` | タイトル。題字の下（横画面は遊び方の枠の左）でデモのランダムな探索を小さなボードで動かす（飾り。TODO-087） |
 | `src/scenes/game.js` | 本編。Phaser とのつなぎに徹し、判定は `logic.js` に任せる |

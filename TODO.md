@@ -72,14 +72,14 @@ TODO-105 のあとに着手する（確認ダイアログの文字が `ui.js` �
 |------|------|------|
 | 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ reviewer（Sonnet 5.5 / medium）+ tests（Sonnet 5.5 / low）+ screens（Sonnet 5.5 / low） |
 
-- [ ] `src/scenes/game.js` の `turnMarkKind()` と `turnMarkCenter()`（Phaser に依らない計算）を
+- [x] `src/scenes/game.js` の `turnMarkKind()` と `turnMarkCenter()`（Phaser に依らない計算）を
       `src/logic.js` へ移す。中心はマスの単位で返し、1 マスの大きさは呼ぶ側で掛ける
-- [ ] `strokeArrowHead()`・`strokeRotateMark()`・`strokeFlipMark()` と、`drawTurnMark()` の
+- [x] `strokeArrowHead()`・`strokeRotateMark()`・`strokeFlipMark()` と、`drawTurnMark()` の
       縁取り・本線の 2 回描きを、`src/icons.js` の 1 つの関数（Graphics・種類・中心・
       1 マスの大きさを受け取る）にする
 - [ ] `tests.html` に移した 2 つの計算のテストを足す（種類は回転・裏返し・X の null、
       中心は U のように外接矩形の真ん中が空いている形）
-- [ ] `docs/developer.md` と `CLAUDE.md` の説明を直す
+- [x] `docs/developer.md` と `CLAUDE.md` の説明を直す
 
 `game.js` が 1555 行あり、Phaser とのつなぎでない部分を出す。挙動は変えない。印を出す条件
 （トレイにいるピースだけ・掴んでいる間は出さない）は `drawTurnMark()` に残す。

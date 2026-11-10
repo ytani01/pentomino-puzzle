@@ -10,7 +10,7 @@
  * U 字、やり直しは閉じかけた円にして見分けられるようにする。
  */
 
-import { CHOICE_ICON, GLASS, ICON, NEON, PIECES, TILE } from './config.js';
+import { CHOICE_ICON, GLASS, ICON, NEON, PIECES, TILE, TURN_MARK } from './config.js';
 import { boardCells, darken, outlineEdges, pieceColor, shapeSize } from './logic.js';
 
 const U = ICON.size / 2;
@@ -283,6 +283,56 @@ export function strokePieceEdges(g, cells, left, top, cell, width, color, alpha,
     const y = horizontal ? dr : 0;
     g.lineBetween(left + c1 * cell + x, top + r1 * cell + y,
                   left + c2 * cell + x, top + r2 * cell + y);
+  }
+}
+
+/** 矢じり。`angle` は進む向きで、そこから開いた 2 本の線で描く。 */
+function strokeArrowHead(g, x, y, angle, cell) {
+  const size = TURN_MARK.headSize * cell;
+  const spread = Phaser.Math.DegToRad(150);
+  for (const sign of [1, -1]) {
+    const a = angle + spread * sign;
+    g.lineBetween(x, y, x + Math.cos(a) * size, y + Math.sin(a) * size);
+  }
+}
+
+/** 回転の印。時計回りの円弧に、進む先を指す矢じりを付ける。 */
+function strokeRotateMark(g, center, cell) {
+  const radius = TURN_MARK.radius * cell;
+  const from = Phaser.Math.DegToRad(-130);
+  const to = Phaser.Math.DegToRad(110);
+  g.beginPath();
+  g.arc(center.x, center.y, radius, from, to, false);
+  g.strokePath();
+  // 角度が増える向き（画面では時計回り）の接線は、その角度の 90° 先。
+  strokeArrowHead(g, center.x + Math.cos(to) * radius,
+                  center.y + Math.sin(to) * radius, to + Math.PI / 2, cell);
+}
+
+/** 左右反転の印。左右に開いた両向きの矢印。 */
+function strokeFlipMark(g, center, cell) {
+  const length = TURN_MARK.arrowLength * cell;
+  g.lineBetween(center.x - length, center.y, center.x + length, center.y);
+  strokeArrowHead(g, center.x + length, center.y, 0, cell);
+  strokeArrowHead(g, center.x - length, center.y, Math.PI, cell);
+}
+
+/**
+ * 次のタップで何が起きるかの印（本編のトレイのピースに重ねる）を、`kind`
+ * （`'rotate'` か `'flip'`。`turnMarkKind()`）に応じて `center`（画面の座標）へ
+ * 引く。`cell` は 1 マスの大きさ。
+ *
+ * 暗い縁取りを先に太く敷き、その上へ白い本線を重ねる。ピースの色の濃淡に
+ * よらず読めるようにするため。
+ */
+export function strokeTurnMark(g, kind, center, cell) {
+  for (const pass of [
+    { color: TURN_MARK.edgeColor, alpha: TURN_MARK.edgeAlpha, width: TURN_MARK.edgeWidth },
+    { color: TURN_MARK.color, alpha: TURN_MARK.alpha, width: TURN_MARK.width },
+  ]) {
+    g.lineStyle(pass.width * cell, pass.color, pass.alpha);
+    if (kind === 'rotate') strokeRotateMark(g, center, cell);
+    else strokeFlipMark(g, center, cell);
   }
 }
 

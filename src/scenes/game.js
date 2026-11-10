@@ -9,13 +9,13 @@
 
 import {
   BACKDROP, BOARDS, BOARD_REGISTRY_KEY, CLEAR_DELAY_MS, COLORS, FONT, INPUT, LAYOUTS, NEON,
-  OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, TURN_MARK, orientationOf,
+  OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, orientationOf,
 } from '../config.js';
 import {
   boardKey, canPlace, createBoard, darken, flip, forcedPlacements, formatTime, isSolved,
   nextPlaceableTurn, nextTurn, pieceColor, prevTurn,
-  normalize, place, remove, rotateCw, sameShape, shapeSize, snapSpot, turnOrder,
-  turnPivot,
+  normalize, place, remove, sameShape, shapeSize, snapSpot, turnOrder,
+  turnMarkCenter, turnMarkKind, turnPivot,
 } from '../logic.js';
 import {
   autoFrom, ensureSolutions, hasSolution, solutionNumber,
@@ -29,7 +29,7 @@ import {
   createButton, createHintBadge, createPanel, createTitleBar, createTooltip,
   drawAcrylic, HOW_TO_OPERATE, HOW_TO_OPERATE_SHORT,
 } from '../ui.js';
-import { ICONS, strokePieceEdges } from '../icons.js';
+import { ICONS, strokePieceEdges, strokeTurnMark } from '../icons.js';
 import { TEX } from './boot.js';
 
 /**
@@ -492,40 +492,11 @@ export default class GameScene extends Phaser.Scene {
   // ---- 次のタップで何が起きるかの印（TODO-025）-------------------------
 
   /**
-   * 次のタップでこのピースがどう変わるかを返す。`turnOrder()` の並びは
-   * 定義の向きを起点にすると「回転が続いて、裏返しが 1 回」に揃うので、
-   * 回転か裏返しかを見分ければ足りる（上下反転は並びに出てこない）。
-   *
-   * V のように回転でも裏返しでも同じ向きになる遷移があるので、回転で
-   * 説明できるものは回転とする。X は向きが 1 通りなので null（印を出さない）。
+   * 次のタップで何が起きるかの種類。`tools/capture.mjs` が画面の外から
+   * 呼ぶので、`logic.js` の関数を包んだメソッドを残してある。
    */
   turnMarkKind(piece) {
-    const next = nextTurn(piece.cells, piece.origin);
-    if (sameShape(next, piece.cells)) return null;
-    if (sameShape(next, rotateCw(piece.cells))) return 'rotate';
-    return 'flip';
-  }
-
-  /**
-   * 印を置くマスの中心。外接矩形の真ん中は U のように空いていることが
-   * あるので、そこへ一番近い**埋まっているマス**を選ぶ（印がピースから
-   * 外れて浮かないように）。
-   */
-  turnMarkCenter(piece) {
-    const cell = this.layout.board.cell;
-    const size = shapeSize(piece.cells);
-    let best = piece.cells[0];
-    let bestDistance = Infinity;
-    for (const [row, col] of piece.cells) {
-      const dx = col + 0.5 - size.cols / 2;
-      const dy = row + 0.5 - size.rows / 2;
-      const distance = dx * dx + dy * dy;
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        best = [row, col];
-      }
-    }
-    return { x: (best[1] + 0.5) * cell, y: (best[0] + 0.5) * cell };
+    return turnMarkKind(piece.cells, piece.origin);
   }
 
   /**
@@ -542,48 +513,9 @@ export default class GameScene extends Phaser.Scene {
     const kind = this.turnMarkKind(piece);
     if (kind === null) return;
 
-    const center = this.turnMarkCenter(piece);
     const cell = this.layout.board.cell;
-    // 暗い縁取りを先に太く敷き、その上へ白い本線を重ねる。
-    for (const pass of [
-      { color: TURN_MARK.edgeColor, alpha: TURN_MARK.edgeAlpha, width: TURN_MARK.edgeWidth },
-      { color: TURN_MARK.color, alpha: TURN_MARK.alpha, width: TURN_MARK.width },
-    ]) {
-      g.lineStyle(pass.width * cell, pass.color, pass.alpha);
-      if (kind === 'rotate') this.strokeRotateMark(g, center);
-      else this.strokeFlipMark(g, center);
-    }
-  }
-
-  /** 矢じり。`angle` は進む向きで、そこから開いた 2 本の線で描く。 */
-  strokeArrowHead(g, x, y, angle) {
-    const size = TURN_MARK.headSize * this.layout.board.cell;
-    const spread = Phaser.Math.DegToRad(150);
-    for (const sign of [1, -1]) {
-      const a = angle + spread * sign;
-      g.lineBetween(x, y, x + Math.cos(a) * size, y + Math.sin(a) * size);
-    }
-  }
-
-  /** 回転の印。時計回りの円弧に、進む先を指す矢じりを付ける。 */
-  strokeRotateMark(g, center) {
-    const radius = TURN_MARK.radius * this.layout.board.cell;
-    const from = Phaser.Math.DegToRad(-130);
-    const to = Phaser.Math.DegToRad(110);
-    g.beginPath();
-    g.arc(center.x, center.y, radius, from, to, false);
-    g.strokePath();
-    // 角度が増える向き（画面では時計回り）の接線は、その角度の 90° 先。
-    this.strokeArrowHead(g, center.x + Math.cos(to) * radius,
-                         center.y + Math.sin(to) * radius, to + Math.PI / 2);
-  }
-
-  /** 左右反転の印。左右に開いた両向きの矢印。 */
-  strokeFlipMark(g, center) {
-    const length = TURN_MARK.arrowLength * this.layout.board.cell;
-    g.lineBetween(center.x - length, center.y, center.x + length, center.y);
-    this.strokeArrowHead(g, center.x + length, center.y, 0);
-    this.strokeArrowHead(g, center.x - length, center.y, Math.PI);
+    const center = turnMarkCenter(piece.cells);
+    strokeTurnMark(g, kind, { x: center.x * cell, y: center.y * cell }, cell);
   }
 
   /**

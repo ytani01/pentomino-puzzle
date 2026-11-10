@@ -224,6 +224,43 @@ export function shapeSize(cells) {
 }
 
 /**
+ * 次のタップでこのピースがどう変わるかを返す。`turnOrder()` の並びは
+ * 定義の向きを起点にすると「回転が続いて、裏返しが 1 回」に揃うので、
+ * 回転か裏返しかを見分ければ足りる（上下反転は並びに出てこない）。
+ *
+ * V のように回転でも裏返しでも同じ向きになる遷移があるので、回転で
+ * 説明できるものは回転とする。X は向きが 1 通りなので null（印を出さない）。
+ */
+export function turnMarkKind(cells, origin = null) {
+  const next = nextTurn(cells, origin);
+  if (sameShape(next, cells)) return null;
+  if (sameShape(next, rotateCw(cells))) return 'rotate';
+  return 'flip';
+}
+
+/**
+ * 印を置くマスの中心を、マスの単位（左上のマスの左上が `{x: 0, y: 0}`）で返す。
+ * 外接矩形の真ん中は U のように空いていることがあるので、そこへ一番近い
+ * **埋まっているマス**を選ぶ（印がピースから外れて浮かないように）。
+ * 1 マスの大きさは呼ぶ側が掛ける。
+ */
+export function turnMarkCenter(cells) {
+  const size = shapeSize(cells);
+  let best = cells[0];
+  let bestDistance = Infinity;
+  for (const [row, col] of cells) {
+    const dx = col + 0.5 - size.cols / 2;
+    const dy = row + 0.5 - size.rows / 2;
+    const distance = dx * dx + dy * dy;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = [row, col];
+    }
+  }
+  return { x: best[1] + 0.5, y: best[0] + 0.5 };
+}
+
+/**
  * シルエットの外周にあたる辺を返す。1 本は `[行1, 列1, 行2, 列2]` で、
  * マスの格子を単位とした線分（マス 1 個は `[0,0]`〜`[1,1]` の正方形）。
  *
