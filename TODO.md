@@ -1,7 +1,7 @@
 # TODO
 
-**残っている項目: TODO-105、TODO-106、TODO-107。** これまでに 104 件を決着させた。
-新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-108` から。**
+**残っている項目: TODO-105、TODO-106、TODO-107、TODO-108。** これまでに 104 件を決着させた。
+新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-109` から。**
 
 ## TODO-105. 確認ダイアログの組み立てを ui.js にまとめる
 
@@ -59,6 +59,25 @@
 
 **無駄を省く工夫:** 文書だけの項目なので担当を立てない。シーンに色の直書きが無いことは
 確かめ済み（`game.js` の透明な当たり判定の `0x000000` だけ）で、調べ直さない。
+
+## TODO-108. 文字のスタイルの組み立てを ui.js の 1 つの関数にまとめる
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / low）+ reviewer（Sonnet 5.5 / medium）+ screens（Sonnet 5.5 / low） |
+
+- [ ] `{ fontFamily: FONT.family, fontSize: \`${FONT.x}px\`, color }` を返す関数を `src/ui.js` に
+      置き、`this.add.text()` / `scene.add.text()` の 35 か所を差し替える
+      （対象は `rg -n "fontFamily: FONT.family" src`）
+- [ ] `docs/developer.md` と `CLAUDE.md` の `src/ui.js` の説明に足す
+
+挙動は変えない。`align`・`lineSpacing`・`wordWrap`・`padding` を足している箇所と、
+`color` を付けていない箇所（`title.js` の `bestText`）、`FONT` に無い大きさ
+（`clear.js` の `TIME_FONT`、`ICON.captionSize`、`createButton()` の 0.85 倍）は、
+差し替えたあとも同じスタイルになること。
+
+**無駄を省く工夫:** reviewer は差し替えの前後でスタイルのキーと値が同じかを差分で見る。
+画面は 5 つのシーンを 1 枚ずつ（縦・横のどちらか片方）で足りる。`tests.html` は流さない。
 
 ## 完了済み
 
