@@ -120,3 +120,14 @@ GitHub 上での設定・公開手順は
 
 `TODO.md` に項目を立ててから着手する（決着したものは `archives/todo/` へ）。
 詳しくはユーザー全体の `CLAUDE.md` に従う。
+
+### 担当への依頼
+
+- **worktree は使わない。** 担当は 1 人ずつトップの作業ツリーで動かす
+- 依頼に書くコマンドは次のとおり。確かめる範囲は変えたところに合わせて選ぶ
+  - 画面とテストはローカルサーバ経由で見る（「実行と確認」）。
+    `tests.html` は `tests`、画面は `screens` に頼める
+  - `src/logic.js` の向きの生成か `src/config.js` のピース定義を変えたときだけ、
+    `node tools/gen-solutions.mjs --check` を流させる
+- このリポジトリの定義（`tests`・`screens`・`docs`・`measure`）の受け持ちは
+  [docs/developer.md](docs/developer.md#サブエージェントの定義)にある（TODO-104）
