@@ -23,7 +23,7 @@
 （縦・横のどちらか片方）で足りる。4 種類の確認を全部は開かない。`tests.html` は流さない
 （`logic.js` に触らない）。
 
-## TODO-106. storage.js の番号の保存（見つけた解・おまかせの解）を 1 組にまとめる
+## TODO-106. storage.js の読み書きの繰り返しをまとめる
 
 |      | main | 担当 |
 |------|------|------|
@@ -31,6 +31,10 @@
 
 - [ ] `loadFound` / `addFound` / `clearFound` と `loadAuto` / `addAuto` / `clearAuto` の
       中身を、保存先のキーを引数に取る内部関数（今の `removeNumber()` と同じ形）へ寄せる
+- [ ] `window.localStorage` の読み書きを囲む try/catch（10 か所ほど）を、読む・書く・消すの
+      内部関数に寄せる。失敗しても遊べる理由のコメントは、呼ぶ側に残す
+- [ ] `sanitizeHistory()` / `sanitizeFound()` / `sanitizeProgress()` の先頭にある
+      「文字列なら `JSON.parse`、だめなら空」を 1 つにする
 
 挙動は変えない。export の名前と引数は変えず、呼ぶ側（`game.js`・`records.js`・
 `tests.html`）には触らない。
@@ -48,7 +52,8 @@
       数値はシーンの先頭に置く。複数の画面で使う数値と、色は `src/config.js`」と直す
 - [ ] `docs/developer.md` に同じ主張があれば揃える
 
-`records.js`・`title.js`・`clear.js` の先頭に配置の数値（合わせて 150 行ほど）があり、
+`records.js`・`title.js`・`clear.js` の先頭に配置の数値（合わせて 150 行ほど）があり
+（`ui.js` にも `CHOICE_BUTTON` などその部品だけの数値がある。同じ扱いにする）、
 規約と食い違っている。`config.js` へ移さず規約のほうを直すと決めた（2026-11-10。
 移しても `config.js` が 1000 行を超えるだけで、読む場所が画面から離れる）。コードは動かさない。
 
