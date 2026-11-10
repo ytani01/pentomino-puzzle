@@ -1,6 +1,6 @@
 # TODO
 
-**残っている項目: TODO-105、TODO-106、TODO-108、TODO-114、TODO-115。** これまでに 110 件を決着させた。
+**残っている項目: TODO-105、TODO-106、TODO-108、TODO-115。** これまでに 111 件を決着させた。
 新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-116` から。**
 
 **着手の順番:** 同じ箇所に触る項目は TODO-109 → 110 → 111 → 114 と、TODO-105 → 108 → 115 の
@@ -65,28 +65,6 @@
 **無駄を省く工夫:** reviewer は差し替えの前後でスタイルのキーと値が同じかを差分で見る。
 画面は 5 つのシーンを 1 枚ずつ（縦・横のどちらか片方）で足りる。`tests.html` は流さない。
 TODO-105 のあとに着手する（確認ダイアログの文字が `ui.js` へ移ってから差し替える）。
-
-## TODO-114. 向きを変える印の計算と描画を game.js から出す
-
-|      | main | 担当 |
-|------|------|------|
-| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ reviewer（Sonnet 5.5 / medium）+ tests（Sonnet 5.5 / low）+ screens（Sonnet 5.5 / low） |
-
-- [x] `src/scenes/game.js` の `turnMarkKind()` と `turnMarkCenter()`（Phaser に依らない計算）を
-      `src/logic.js` へ移す。中心はマスの単位で返し、1 マスの大きさは呼ぶ側で掛ける
-- [x] `strokeArrowHead()`・`strokeRotateMark()`・`strokeFlipMark()` と、`drawTurnMark()` の
-      縁取り・本線の 2 回描きを、`src/icons.js` の 1 つの関数（Graphics・種類・中心・
-      1 マスの大きさを受け取る）にする
-- [x] `tests.html` に移した 2 つの計算のテストを足す（種類は回転・裏返し・X の null、
-      中心は U のように外接矩形の真ん中が空いている形）
-- [x] `docs/developer.md` と `CLAUDE.md` の説明を直す
-
-`game.js` が 1555 行あり、Phaser とのつなぎでない部分を出す。挙動は変えない。印を出す条件
-（トレイにいるピースだけ・掴んでいる間は出さない）は `drawTurnMark()` に残す。
-
-**無駄を省く工夫:** 画面は、トレイに回転の印と裏返しの印の両方が見える 1 枚を、直す前後で
-撮り比べる（向きは片方）。TODO-111 のあとに着手する（`game.js` の隣り合う箇所と
-`icons.js` の import に触る）。
 
 ## TODO-115. title.js と clear.js の長い create() を部品ごとのメソッドに分ける
 
