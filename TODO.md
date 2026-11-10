@@ -1,7 +1,7 @@
 # TODO
 
-**残っている項目: TODO-105、TODO-106、TODO-107、TODO-108、TODO-109、TODO-110、TODO-111、TODO-112、TODO-114。** これまでに 104 件を決着させた。
-新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-115` から。**
+**残っている項目: TODO-105、TODO-106、TODO-107、TODO-108、TODO-109、TODO-110、TODO-111、TODO-112、TODO-114、TODO-115。** これまでに 104 件を決着させた。
+新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-116` から。**
 
 ## TODO-105. 確認ダイアログの組み立てを ui.js にまとめる
 
@@ -178,6 +178,24 @@ TODO-110 のあとに着手する（同じ import の行に触る）。
 **無駄を省く工夫:** 画面は、トレイに回転の印と裏返しの印の両方が見える 1 枚を、直す前後で
 撮り比べる（向きは片方）。TODO-111 のあとに着手する（`game.js` の隣り合う箇所と
 `icons.js` の import に触る）。
+
+## TODO-115. title.js と clear.js の長い create() を部品ごとのメソッドに分ける
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ reviewer（Opus 5.5 / medium）+ screens（Sonnet 5.5 / low） |
+
+- [ ] `src/scenes/title.js` の `create()`（156 行）を、`game.js`・`records.js` と同じく
+      部品ごとの `createXxx()` に分ける
+- [ ] `src/scenes/clear.js` の `create()`（128 行）も同じく分ける
+
+挙動は変えない。部品を作る順番（重なりの順）と、縦に積む位置の計算（`stackTops()` に渡す
+行と結果）は保つ。分け方（どこで切るか・メソッドの名前）は implementer に任せ、
+JSDoc の「なぜ」は切った先へ一緒に動かす。
+
+**無駄を省く工夫:** 画面はタイトルとクリア表示を縦・横 1 枚ずつ、直す前後で撮り比べる
+（配置が向きで違うので両方要る）。`tests.html` は流さない。TODO-108 のあとに着手する
+（同じ `add.text()` の行に触る）。
 
 ## 完了済み
 
