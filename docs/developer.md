@@ -46,6 +46,7 @@ src/
   main.js             Phaser の起動
   config.js           盤面・ピース・色・レイアウトの定数
   logic.js            Phaser に依存しない計算（tests.html の対象）
+  search.js           デモの探索（深さ優先・ランダム）。同上
   solutions.js        全解のデータの読み込みと照合（tests.html の対象）
   data/
     8x8.js            8×8 の全解（65 件）。tools/gen-solutions.mjs が作る
@@ -98,7 +99,9 @@ PLAYWRIGHT=$(dirname "$(rg -l '"version": "1\.63\.0"' \
 ### 3 層の分け方
 
 - **Phaser に依存しない計算** — `src/logic.js`（向きの生成・配置判定・盤面の
-  更新・代表形・ピースの色）と `src/solutions.js`（全解のデータの読み込みと照合）。
+  更新・代表形・ピースの色）、`src/search.js`（デモの探索。本編の判定と分けて
+  読めるよう `logic.js` から分けてあり、`logic.js` を読む）と `src/solutions.js`
+  （全解のデータの読み込みと照合）。
   `tests.html` から直接検証する
 - **全解のデータ** — `src/data/8x8.js` / `src/data/6x10.js`。あらかじめ
   数え上げて持つ（詳しくは[全解のデータ](#全解のデータ)）
@@ -117,6 +120,7 @@ flowchart LR
   end
   subgraph calc["Phaser に依存しない計算"]
     Logic["src/logic.js"]
+    Search["src/search.js"]
     Sol["src/solutions.js"]
   end
   Storage["src/storage.js"]
@@ -126,14 +130,17 @@ flowchart LR
   Scenes -. "グローバル" .-> Phaser
   Scenes --> UI
   Scenes --> Logic
+  Scenes --> Search
   Scenes --> Sol
   Scenes --> Storage
   UI --> Logic
   Storage --> Logic
+  Search --> Logic
   Storage --> Sol
   Sol --> Logic
   Sol -. "動的 import" .-> Data
   Tests --> Logic
+  Tests --> Search
   Tests --> Sol
   Tests --> Storage
   Tests --> Data
@@ -314,7 +321,7 @@ python3 -m http.server 8765
 #   http://localhost:8765/tests.html
 ```
 
-`src/logic.js` の計算（向きの生成・配置判定・盤面の更新）、`src/solutions.js` の
+`src/logic.js` の計算（向きの生成・配置判定・盤面の更新）、`src/search.js` のデモの探索、`src/solutions.js` の
 照合とおまかせ、`src/storage.js` の記録、`src/config.js` のピース定義、そして
 `src/data/*.js`（全解のデータ）を検査する。Phaser には触れない。
 

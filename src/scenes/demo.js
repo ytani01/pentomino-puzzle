@@ -9,7 +9,7 @@
  * （記録・遊びかけ・見つけた解に何も残さないため）。本編の `create()` を
  * 通らないので、遊びかけを控える shutdown の処理も登録されない。
  *
- * 探索は `logic.js` の `solveSteps()`（深さ優先）か `solveStepsRandom()`
+ * 探索は `search.js` の `solveSteps()`（深さ優先）か `solveStepsRandom()`
  * （ランダム）の generator で、`update()` が速さに応じた間隔で 1 手ずつ進める
  * （ランダムは手ごとに間隔を揺らす。`pickWaitScale()`。TODO-059）。
  * 1 フレームに 1 手までなので画面は止まらない。
@@ -36,9 +36,8 @@ import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, DEMO, DEMO_LAYOUTS, FONT, PALETTES,
   PALETTE_REGISTRY_KEY, TEXT_COLORS, orientationOf,
 } from '../config.js';
-import {
-  createBoard, orientationSteps, parseDemoParams, solveSteps, solveStepsRandom,
-} from '../logic.js';
+import { createBoard, orientationSteps, parseDemoParams } from '../logic.js';
+import { solveSteps, solveStepsRandom } from '../search.js';
 import { ensureSolutions, hasSolution } from '../solutions.js';
 import * as audio from '../audio.js';
 import { createHintBadge, createPanel, createTitleBar } from '../ui.js';

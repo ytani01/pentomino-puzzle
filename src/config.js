@@ -828,7 +828,7 @@ export const HINT_BADGE = {
  *   人の試行錯誤に見えるため。ただし、次も外す手のときは待たずに続けて
  *   動かすので掛からない（`demo.js` の `advance()`。TODO-060）
  * - `randomNearPower` … ランダムで置き方を抽選するとき、直前に置いた手からの
- *   距離（`logic.js` の `moveDistance()`）で重みを弱める強さ（TODO-062）。
+ *   距離（`search.js` の `moveDistance()`）で重みを弱める強さ（TODO-062）。
  *   重みに `1 / (1 + distance) ** randomNearPower` を掛け、近いほど選ばれやすく
  *   する（人はボードの上を飛び回らず近くから埋めるため）。値は画面で見て
  *   利用者が決めた（TODO-074）

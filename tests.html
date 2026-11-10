@@ -31,7 +31,7 @@
 <body>
 <h1>Pentomino Puzzle — テスト</h1>
 <p class="note">
-  <code>src/logic.js</code>・<code>src/solutions.js</code>・<code>src/config.js</code> の計算と、
+  <code>src/logic.js</code>・<code>src/search.js</code>・<code>src/solutions.js</code>・<code>src/config.js</code> の計算と、
   <code>src/data/*.js</code>（全解のデータ）を確かめる。Phaser にも DOM にも触らない部分だけが対象。
 </p>
 <div id="summary">実行中…</div>
@@ -46,10 +46,13 @@ import {
   boardCells, createBoard, cellAt, canPlace, place, remove,
   emptyCells, placedNames, isSolved, emptyRegionSizes, regionsFitPieces, formatTime,
   clampSelection, selectionAfterRemoval,
-  forcedPlacements, hasUncoverableCell, touchingEdges, moveDistance, countCellMoves, singlePieceCell,
+  forcedPlacements, hasUncoverableCell,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
-  solveSteps, solveStepsRandom, parseDemoParams, darken, pieceColor,
+  parseDemoParams, darken, pieceColor,
 } from './src/logic.js';
+import {
+  touchingEdges, moveDistance, countCellMoves, singlePieceCell, solveSteps, solveStepsRandom,
+} from './src/search.js';
 import {
   autoFrom, buildSolutions, consistentSolutions, hasSolution, placementIn,
   solutionCells, solutionNumber,
@@ -1135,9 +1138,9 @@ for (const state of boardStates) {
   });
 }
 
-// ---- logic：試行錯誤の探索（solveSteps, TODO-040）------------------------
+// ---- search：試行錯誤の探索（solveSteps, TODO-040）------------------------
 
-group('src/logic.js — 試行錯誤の探索（solveSteps, TODO-040）');
+group('src/search.js — 試行錯誤の探索（solveSteps, TODO-040）');
 
 /** テスト用の擬似乱数（mulberry32）。シードを固定すれば手順が再現できる。 */
 function mulberry32(seed) {
@@ -1281,7 +1284,7 @@ test('random に常に 0 を返す関数を渡しても例外にならず解に�
   }
 });
 
-// ---- logic：solveSteps に渡す canContinue（TODO-043）----------------------
+// ---- search：solveSteps に渡す canContinue（TODO-043）----------------------
 //
 // デモがヒント表示と同じ動きをするため、solveSteps は「置いたあと先へ進む
 // かどうか」を第 3 引数の canContinue で外から受ける（既定は regionsFitPieces）。
@@ -1367,7 +1370,7 @@ for (const spec of BOARD_LIST) {
   });
 }
 
-// ---- logic：ランダムの探索（solveStepsRandom, TODO-057）--------------------
+// ---- search：ランダムの探索（solveStepsRandom, TODO-057）--------------------
 //
 // 解に着くことは確かめない（永遠に解に着かなくてよいと決めてある）。
 // 最初の数百〜数千手だけを集めて、手順の再現性と、place/remove の整合を見る。
@@ -1441,7 +1444,7 @@ function makeFailAfterForcedFill() {
   };
 }
 
-group('src/logic.js — ランダムの探索（solveStepsRandom, TODO-057）');
+group('src/search.js — ランダムの探索（solveStepsRandom, TODO-057）');
 
 for (const spec of BOARD_LIST) {
   const solutionsForSpec = boardStates.find((state) => state.spec.key === spec.key).solutions;
@@ -2087,12 +2090,12 @@ for (const spec of BOARD_LIST) {
   });
 }
 
-// ---- logic：touchingEdges（TODO-059）--------------------------------------
+// ---- search：touchingEdges（TODO-059）--------------------------------------
 //
 // solveStepsRandom() の重み付けに使う値そのものを、手で数えた期待値と
 // 突き合わせる。
 
-group('src/logic.js — touchingEdges（TODO-059）');
+group('src/search.js — touchingEdges（TODO-059）');
 
 for (const spec of BOARD_LIST) {
   test(`空のボードの角に置いた形は、ボードの外に接する辺の数になる（${spec.label}）`, () => {
@@ -2118,9 +2121,9 @@ for (const spec of BOARD_LIST) {
   });
 }
 
-// ---- logic：置き方の重み付け（TODO-059）-----------------------------------
+// ---- search：置き方の重み付け（TODO-059）-----------------------------------
 
-group('src/logic.js — 置き方の重み付け（solveStepsRandom, TODO-059）');
+group('src/search.js — 置き方の重み付け（solveStepsRandom, TODO-059）');
 
 /** 空のボードで、あるピースのすべての置き方（向き×位置）の touchingEdges の一様平均。 */
 function uniformMeanTouchingEdges(spec, board, name) {
@@ -2157,9 +2160,9 @@ for (const spec of BOARD_LIST) {
   });
 }
 
-// ---- logic：moveDistance（TODO-062）---------------------------------------
+// ---- search：moveDistance（TODO-062）---------------------------------------
 
-group('src/logic.js — moveDistance（TODO-062）');
+group('src/search.js — moveDistance（TODO-062）');
 
 test('隣り合う 2 手は距離 1', () => {
   const a = { shape: [[0, 0]], row: 0, col: 0 };
@@ -2183,7 +2186,7 @@ test('離れた 2 手は手で数えた最短のマンハッタン距離にな�
   assertSame(moveDistance(c, d), 3); // 一番近いマスは (0,0) と (0,3)
 });
 
-// ---- logic：solveStepsRandom の近さの重み（TODO-062）----------------------
+// ---- search：solveStepsRandom の近さの重み（TODO-062）----------------------
 
 /**
  * `solveStepsRandom()` の抽選で選ばれた place の、直前に置いた手（stack の最後）
@@ -2264,9 +2267,9 @@ for (const spec of BOARD_LIST) {
   });
 }
 
-// ---- logic：狭い所の重み（countCellMoves, solveStepsRandom, TODO-061）-----
+// ---- search：狭い所の重み（countCellMoves, solveStepsRandom, TODO-061）-----
 
-group('src/logic.js — 狭い所の重み（countCellMoves, TODO-061）');
+group('src/search.js — 狭い所の重み（countCellMoves, TODO-061）');
 
 test('countCellMoves は、空きマスごとにそれを覆う手の数を手で数えた値と一致する', () => {
   // moveDistance のテスト（TODO-062）と同じく、実際のボードではなく手で数えられる
@@ -2461,9 +2464,9 @@ for (const spec of BOARD_LIST) {
   });
 }
 
-// ---- logic：1 種類しか入らないマス（singlePieceCell, solveStepsRandom, TODO-082）----
+// ---- search：1 種類しか入らないマス（singlePieceCell, solveStepsRandom, TODO-082）----
 
-group('src/logic.js — 1 種類しか入らないマス（singlePieceCell, TODO-082）');
+group('src/search.js — 1 種類しか入らないマス（singlePieceCell, TODO-082）');
 
 test('2 種類目のピースが同じマスを覆うと、そのマスは候補から外れる（choices が空でも null）', () => {
   const choices = [
@@ -2583,7 +2586,7 @@ for (const spec of BOARD_LIST) {
   });
 }
 
-// ---- logic：解の無い盤面での打ち切り（solveStepsRandom, DEMO.randomDeadLimit, TODO-081）----
+// ---- search：解の無い盤面での打ち切り（solveStepsRandom, DEMO.randomDeadLimit, TODO-081）----
 //
 // canContinue に hasSolution を渡し（上の「hasSolution を渡すと…」の節と同じ）、
 // 最初の solved まで回す。「直前の盤面が ok 偽のまま続けて置いた place の数」を

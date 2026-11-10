@@ -13,9 +13,8 @@ import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, PALETTES, PALETTE_REGISTRY_KEY,
   TEXT_COLORS, TITLE_DEMO, orientationOf, screenOf,
 } from '../config.js';
-import {
-  createBoard, formatTime, place, remove, solveStepsRandom,
-} from '../logic.js';
+import { createBoard, formatTime, place, remove } from '../logic.js';
+import { solveStepsRandom } from '../search.js';
 import { ensureSolutions, hasSolution } from '../solutions.js';
 import { loadBest, loadProgress, savePalette } from '../storage.js';
 import * as audio from '../audio.js';

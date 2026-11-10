@@ -93,11 +93,11 @@ TODO-110 のあとに着手する（同じ import の行に触る）。
 |------|------|------|
 | 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / low）+ tests（Sonnet 5.5 / low） |
 
-- [ ] `src/logic.js` の `touchingEdges()` から `solveStepsRandom()` まで（内部関数の
+- [x] `src/logic.js` の `touchingEdges()` から `solveStepsRandom()` まで（内部関数の
       `touchWeight`・`moveCoversCell`・`pickTightCell`・`pickWeighted`・`shuffle` を含む
       約 440 行）を、新しい `src/search.js` へ中身を変えずに移す
-- [ ] `src/scenes/demo.js`・`src/scenes/title.js`・`tests.html` の import を直す
-- [ ] `CLAUDE.md`（規約の「Phaser に依存しない計算は…」とファイル構成）、
+- [x] `src/scenes/demo.js`・`src/scenes/title.js`・`tests.html` の import を直す
+- [x] `CLAUDE.md`（規約の「Phaser に依存しない計算は…」とファイル構成）、
       `docs/developer.md`、コード中のコメントの `logic.js の solveSteps()` などの参照を直す
       （対象は `rg -n -w -e solveSteps -e solveStepsRandom -e moveDistance -e touchingEdges -e countCellMoves -e singlePieceCell .`）
 
