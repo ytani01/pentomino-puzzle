@@ -31,7 +31,7 @@ function keyOf(boardKey) {
  * localStorage から文字列を読む。無ければ `null`、localStorage が使えない
  * （例外になる）ときは `undefined`。
  *
- * 例外を外へ出さないのはここだけ（読み・書き・消すの 3 つ）で、使えないときに
+ * localStorage の操作で例外を外へ出さないのはここだけ（読み・書き・消すの 3 つ）で、使えないときに
  * どう見せるかは呼ぶ側が決める。`null` と `undefined` を分けるのは、使えないときに
  * だけ書き込みを諦める呼ぶ側（`removeNumber()`）があるため。
  */
