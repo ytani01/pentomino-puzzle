@@ -32,9 +32,9 @@
 |------|------|------|
 | 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ reviewer（Opus 5.5 / medium）+ screens（Sonnet 5.5 / low） |
 
-- [ ] `src/scenes/title.js` の `create()`（156 行）を、`game.js`・`records.js` と同じく
+- [x] `src/scenes/title.js` の `create()`（156 行）を、`game.js`・`records.js` と同じく
       部品ごとの `createXxx()` に分ける
-- [ ] `src/scenes/clear.js` の `create()`（128 行）も同じく分ける
+- [x] `src/scenes/clear.js` の `create()`（128 行）も同じく分ける
 
 挙動は変えない。部品を作る順番（重なりの順）と、縦に積む位置の計算（`stackTops()` に渡す
 行と結果）は保つ。分け方（どこで切るか・メソッドの名前）は implementer に任せ、

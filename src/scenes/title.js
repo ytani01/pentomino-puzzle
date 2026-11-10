@@ -119,7 +119,41 @@ export default class TitleScene extends Phaser.Scene {
     this.boardKey = this.registry.get(BOARD_REGISTRY_KEY);
     this.paletteKey = this.registry.get(PALETTE_REGISTRY_KEY);
 
-    // 配置は今の向きの組を使う（向きが変わると `relayout()` で作り直す。TODO-095）。
+    const layout = this.computeLayout();
+    const { screen, cx, centerOf } = layout;
+
+    this.createPreviewArea(layout);
+    this.createHeading(layout);
+    this.createHowTo(layout);
+    this.createChoices(layout);
+
+    this.bestText = this.add.text(cx, centerOf('best'), '', textStyle(FONT.hud)).setOrigin(0.5);
+
+    this.createStartButtons(layout);
+
+    // ボード・色・最短時間・`つづきから` を、選んでいるボードに合わせて出す。
+    // ボタンを作ったあとに呼ぶ（`refreshBoard()` が `つづきから` を触るため）。
+    this.refreshBoard();
+    this.refreshPalette();
+
+    this.add.text(cx, centerOf('keyHint'), 'Space / Enter でも始められる',
+      textStyle(FONT.small, TEXT_COLORS.dim)).setOrigin(0.5);
+
+    this.createDemoButton(screen);
+
+    this.input.keyboard.on('keydown-SPACE', this.start, this);
+    this.input.keyboard.on('keydown-ENTER', this.start, this);
+
+    createVersionText(this);
+    // ボード・色の説明。最後に作り、ほかの部品より手前に出す。
+    this.tooltip = createTooltip(this);
+  }
+
+  /**
+   * 今の向きの配置を、各部品を作るメソッドへ渡す形にまとめる。
+   * 配置は今の向きの組を使う（向きが変わると `relayout()` で作り直す。TODO-095）。
+   */
+  computeLayout() {
     const screen = screenOf(this);
     const orientation = orientationOf(this);
     const stack = STACK[orientation];
@@ -128,7 +162,8 @@ export default class TitleScene extends Phaser.Scene {
     const tops = stackTops(stack, screen.height, STACK_BIAS[orientation]);
     const indexOf = (key) => stack.findIndex((row) => row.key === key);
     const topOf = (key) => tops[indexOf(key)];
-    const centerOf = (key) => topOf(key) + stack[indexOf(key)].height / 2;
+    const heightOf = (key) => stack[indexOf(key)].height;
+    const centerOf = (key) => topOf(key) + heightOf(key) / 2;
     // 遊び方の枠は縦画面では画面幅に収まらないので、はみ出す前に詰める。
     // 横画面は左に動くボードを並べるので、そのぶん詰めて 2 つを中央に寄せる。
     const panelWidth = screen.portrait
@@ -137,20 +172,35 @@ export default class TitleScene extends Phaser.Scene {
     const panelX = screen.portrait
       ? cx - panelWidth / 2
       : cx + (preview.width + preview.gap - panelWidth) / 2;
+    return {
+      screen, orientation, preview, cx, topOf, heightOf, centerOf, panelWidth, panelX,
+    };
+  }
+
+  /** 動くボードの置き場（TODO-087）。ほかの部品より奥に重ねるので最初に作る。 */
+  createPreviewArea({
+    screen, preview, cx, topOf, heightOf, panelX,
+  }) {
     this.previewBox = screen.portrait
       ? { x: cx - preview.width / 2, y: topOf('preview'), width: preview.width,
-          height: stack[indexOf('preview')].height }
+          height: heightOf('preview') }
       : { x: panelX - preview.gap - preview.width, y: topOf('howTo'), width: preview.width,
-          height: stack[indexOf('howTo')].height };
+          height: heightOf('howTo') };
     this.previewGraphics = this.add.graphics();
     // シーンに入り直すと前回のタイマーは Phaser が捨てている。触らないよう空にする。
     this.previewTimer = null;
+  }
 
+  createHeading({ cx, centerOf }) {
     this.add.text(cx, centerOf('title'), 'PENTOMINO', textStyle(FONT.title, TEXT_COLORS.normal)).setOrigin(0.5);
     this.add.text(cx, centerOf('subtitle'), 'PUZZLE',
       textStyle(FONT.heading, TEXT_COLORS.accent)).setOrigin(0.5);
+  }
 
-    createPanel(this, panelX, topOf('howTo'), panelWidth, stack[indexOf('howTo')].height);
+  createHowTo({
+    orientation, topOf, heightOf, centerOf, panelX, panelWidth,
+  }) {
+    createPanel(this, panelX, topOf('howTo'), panelWidth, heightOf('howTo'));
     this.add.text(panelX + panelWidth / 2, centerOf('howTo'), howToPlayText(orientation),
       textStyle(FONT.body, TEXT_COLORS.dim, {
         align: 'center',
@@ -158,11 +208,15 @@ export default class TitleScene extends Phaser.Scene {
         // 枠を詰めた縦画面では折り返すことがあるので、枠の内側で折り返す。
         wordWrap: { width: panelWidth - 32 },
       })).setOrigin(0.5);
+  }
 
-    // ボードと色の組を選ぶ 2 行。選べるのはここだけで、遊んでいる最中は変えられない
-    // （途中の盤面を捨てる確認を出さずに済ませるため。TODO-009）。2 行を同じ形に
-    // して、どれを選んでいるかを同じ見え方で示す（TODO-015）。
-    // 選択肢は文字でなく図で見せ、名前は説明に回す（TODO-046）。
+  /**
+   * ボードと色の組を選ぶ 2 行。選べるのはここだけで、遊んでいる最中は変えられない
+   * （途中の盤面を捨てる確認を出さずに済ませるため。TODO-009）。2 行を同じ形に
+   * して、どれを選んでいるかを同じ見え方で示す（TODO-015）。
+   * 選択肢は文字でなく図で見せ、名前は説明に回す（TODO-046）。
+   */
+  createChoices({ cx, centerOf }) {
     const boardChoices = Object.values(BOARDS).map((board) => ({
       ...board, icon: boardIcon(board), tooltip: `${board.label}（${board.note}）`,
     }));
@@ -175,10 +229,10 @@ export default class TitleScene extends Phaser.Scene {
     this.paletteButtons = createChoiceRow(this, cx, centerOf('palette'), '色', paletteChoices,
                                           (choice) => this.selectPalette(choice.key),
                                           CHOICE_ICON_HEIGHT);
+  }
 
-    this.bestText = this.add.text(cx, centerOf('best'), '', textStyle(FONT.hud)).setOrigin(0.5);
-
-    // `はじめる`・`つづきから`・`記録` は同じ行に並べる（TODO-030・TODO-092）。
+  /** `はじめる`・`つづきから`・`記録` は同じ行に並べる（TODO-030・TODO-092）。 */
+  createStartButtons({ cx, centerOf }) {
     const startStep = START.width + START.gap;
     createButton(this, {
       x: cx - startStep,
@@ -217,17 +271,13 @@ export default class TitleScene extends Phaser.Scene {
         this.scene.start('Records');
       },
     });
+  }
 
-    // ボード・色・最短時間・`つづきから` を、選んでいるボードに合わせて出す。
-    // ボタンを作ったあとに呼ぶ（`refreshBoard()` が `つづきから` を触るため）。
-    this.refreshBoard();
-    this.refreshPalette();
-
-    this.add.text(cx, centerOf('keyHint'), 'Space / Enter でも始められる',
-      textStyle(FONT.small, TEXT_COLORS.dim)).setOrigin(0.5);
-
-    // デモ（TODO-040・TODO-092）。ボードと色の組は本編と同じく registry から読む。
-    // 右下に固定で置き、バージョン表示（`createVersionText()`）より上に置く。
+  /**
+   * デモ（TODO-040・TODO-092）。ボードと色の組は本編と同じく registry から読む。
+   * 右下に固定で置き、バージョン表示（`createVersionText()`）より上に置く。
+   */
+  createDemoButton(screen) {
     createButton(this, {
       x: screen.width - DEMO_BUTTON.marginRight - DEMO_BUTTON.width / 2,
       y: screen.height - DEMO_BUTTON.marginBottom - DEMO_BUTTON.height / 2,
@@ -239,13 +289,6 @@ export default class TitleScene extends Phaser.Scene {
         this.scene.start('Demo');
       },
     });
-
-    this.input.keyboard.on('keydown-SPACE', this.start, this);
-    this.input.keyboard.on('keydown-ENTER', this.start, this);
-
-    createVersionText(this);
-    // ボード・色の説明。最後に作り、ほかの部品より手前に出す。
-    this.tooltip = createTooltip(this);
   }
 
   /**

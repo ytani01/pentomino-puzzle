@@ -89,31 +89,54 @@ export default class ClearScene extends Phaser.Scene {
 
   create() {
     const board = BOARDS[this.registry.get(BOARD_REGISTRY_KEY)];
-    const countsForBest = shouldRecordBest(this.usedAuto);
     const screen = screenOf(this);
     if (!this.relayouting) audio.fanfare();
     this.relayouting = false;
 
-    // 下の本編を暗くする幕。本編は止めてあり入力を受けないので、当たり判定は要らない。
-    // 版の表示は本編のものが見えている。
-    this.add.rectangle(0, 0, screen.width, screen.height, BACKDROP.color, BACKDROP.alpha)
-      .setOrigin(0);
+    const layout = this.computeLayout(screen);
 
+    this.createBackdrop(screen);
+    this.createFrame(layout);
+    this.add.text(layout.cx, layout.titleTop + STACK[0].height / 2, 'COMPLETE',
+      textStyle(FONT.title, TEXT_COLORS.accent)).setOrigin(0.5);
+    this.createInfoPanel(layout, board);
+    this.createButtons(layout, board);
+  }
+
+  /** 縦に積む位置と枠の幅を、各部品を作るメソッドへ渡す形にまとめる。 */
+  computeLayout(screen) {
     const cx = screen.width / 2;
     const [titleTop, panelTop, buttonTop] = stackTops(STACK, screen.height,
                                                       STACK_BIAS[orientationOf(this)]);
     const panelWidth = Math.min(560, screen.width - screen.margin * 2);
+    return {
+      screen, cx, titleTop, panelTop, buttonTop, panelWidth,
+    };
+  }
 
+  /**
+   * 下の本編を暗くする幕。本編は止めてあり入力を受けないので、当たり判定は要らない。
+   * 版の表示は本編のものが見えている。
+   */
+  createBackdrop(screen) {
+    this.add.rectangle(0, 0, screen.width, screen.height, BACKDROP.color, BACKDROP.alpha)
+      .setOrigin(0);
+  }
+
+  /** COMPLETE・情報の枠・ボタンをまとめて載せる外枠（`FRAME_PAD`）。 */
+  createFrame({
+    screen, cx, titleTop, buttonTop, panelWidth,
+  }) {
     const buttonsWidth = BUTTONS.width * 4 + BUTTONS.gap * 3;
     const frameWidth = Math.min(Math.max(panelWidth, buttonsWidth) + FRAME_PAD.x * 2,
                                 screen.width - screen.margin * 2);
     const frameTop = titleTop - FRAME_PAD.y;
     createPanel(this, cx - frameWidth / 2, frameTop, frameWidth,
                 buttonTop + STACK[2].height + FRAME_PAD.y - frameTop);
+  }
 
-    this.add.text(cx, titleTop + STACK[0].height / 2, 'COMPLETE',
-      textStyle(FONT.title, TEXT_COLORS.accent)).setOrigin(0.5);
-
+  /** 経過時間・解の番号・記録の状態・最短時間・使った補助を出す枠（5 行。`PANEL_ROWS`）。 */
+  createInfoPanel({ cx, panelTop, panelWidth }, board) {
     createPanel(this, cx - panelWidth / 2, panelTop, panelWidth, STACK[1].height);
 
     this.add.text(cx, panelTop + PANEL_ROWS.time, formatTime(this.elapsed),
@@ -137,18 +160,7 @@ export default class ClearScene extends Phaser.Scene {
         textStyle(FONT.body, this.status === 'kept' ? TEXT_COLORS.dim : TEXT_COLORS.accent)).setOrigin(0.5);
     }
 
-    let bestLine;
-    if (!countsForBest) {
-      bestLine = this.best !== null
-        ? `${board.label} の最短 ${formatTime(this.best)}（今回は最短に入れない）`
-        : `${board.label} はまだ最短の記録が無い`;
-    } else if (this.bestUpdated) {
-      bestLine = `${board.label} の自己最短を更新`;
-    } else {
-      bestLine = `${board.label} の最短 ${formatTime(this.best)}`;
-    }
-    this.add.text(cx, panelTop + PANEL_ROWS.best, bestLine,
-      textStyle(FONT.hud, this.bestUpdated ? TEXT_COLORS.accent : TEXT_COLORS.dim)).setOrigin(0.5);
+    this.createBestLine(cx, panelTop, board);
 
     // おまかせ・ヒント表示のどちらを使ったかを伝える（おまかせは最短に入らない理由）。
     // 一覧には同じ印が付いて残る（TODO-024）ので、そのことも添える。
@@ -160,8 +172,26 @@ export default class ClearScene extends Phaser.Scene {
                     `${helps.join('と')}を使った（記録には残る）`,
                     textStyle(FONT.small, TEXT_COLORS.dim)).setOrigin(0.5);
     }
+  }
 
-    // 4 つのボタンを横に並べる（TODO-032、TODO-072）。
+  /** 最短時間の行。おまかせを使った回・更新した回・そうでない回で言い方を変える。 */
+  createBestLine(cx, panelTop, board) {
+    let bestLine;
+    if (!shouldRecordBest(this.usedAuto)) {
+      bestLine = this.best !== null
+        ? `${board.label} の最短 ${formatTime(this.best)}（今回は最短に入れない）`
+        : `${board.label} はまだ最短の記録が無い`;
+    } else if (this.bestUpdated) {
+      bestLine = `${board.label} の自己最短を更新`;
+    } else {
+      bestLine = `${board.label} の最短 ${formatTime(this.best)}`;
+    }
+    this.add.text(cx, panelTop + PANEL_ROWS.best, bestLine,
+      textStyle(FONT.hud, this.bestUpdated ? TEXT_COLORS.accent : TEXT_COLORS.dim)).setOrigin(0.5);
+  }
+
+  /** 4 つのボタンを横に並べる（TODO-032、TODO-072）。 */
+  createButtons({ cx, buttonTop }, board) {
     const buttonY = buttonTop + STACK[2].height / 2;
     const step = BUTTONS.width + BUTTONS.gap;
     // 「続ける」は止めた本編を動かし、ほかは本編を閉じて移る。「もう一度」は
