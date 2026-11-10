@@ -216,7 +216,7 @@ export function createHintBadge(scene, x, y, originX = 0) {
 
 /**
  * 縮小したボードのピースの境目の太さ。マスが 20〜56px ほどまで縮むので、ボードの
- * `OUTLINE.width`（2）では輪郭として細すぎる。
+ * 外周の太さ（`PALETTES[key].outlineWidth` の 2〜3）では輪郭として細すぎる。
  */
 const MINI_EDGE = 3;
 

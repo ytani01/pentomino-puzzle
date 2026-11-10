@@ -31,10 +31,6 @@ export function isMuted() {
   return muted;
 }
 
-export function setMuted(value) {
-  muted = !!value;
-}
-
 /** ミュートを切り替え、切り替えた後の状態を返す。 */
 export function toggleMuted() {
   muted = !muted;

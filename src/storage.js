@@ -250,7 +250,7 @@ export function isBetterClear(entry, other) {
  *
  * 同じ番号は普段 1 件だが、手で書き換えたときや古い `cells` の件を番号へ
  * 読み替えたときに重なることがある。読むたびにここを通すので、画面と書き戻し
- * （`recordClear()`・`removeHistory()` など）はまとめた形だけを見る。
+ * （`recordClear()`・`removeHistoryMany()` など）はまとめた形だけを見る。
  * 残した件の位置（新しい順）は変えない。成績が同じなら新しいほうを残す。
  * 番号を持たない件（読み替える前の `cells`）はそのまま通す。
  */
@@ -328,31 +328,11 @@ export function recordCompletion(boardKey, clear, solutions = null) {
 }
 
 /**
- * 履歴から 1 件だけ消して、保存後の配列を返す（TODO-031）。
- *
- * 消す件は**解の番号で指す**。履歴に同じ番号は 2 件無い（書くのは
- * `recordClear()` だけで、読むたびに `dedupeHistory()` でまとめる）ので 1 件に
- * 決まり、頁送りの何行目かといった**見た目の位置に依らない**。
- *
- * 番号を持たない古い件（`cells`）は、`solutions` を渡せば読み替えてから消せる。
- * 渡さなければそのまま残る。
- */
-export function removeHistory(boardKey, no, solutions = null) {
-  const board = boardOf(boardKey);
-  const next = loadHistory(boardKey, solutions).filter((entry) => entry.no !== no);
-  try {
-    window.localStorage.setItem(board.historyKey, JSON.stringify(next));
-  } catch (error) {
-    // 消せなくても、その場の一覧は消したあとの形で出せる。
-  }
-  return next;
-}
-
-/**
  * 履歴からチェックした複数件をまとめて消して、保存後の配列を返す（TODO-071）。
  *
- * 消す件は解の番号の配列で指す。`removeHistory()` を件数ぶん呼ぶのと結果は
- * 同じだが、保存を 1 回で済ませる。
+ * 消す件は解の番号で指す。履歴に同じ番号は 2 件無い（書くのは
+ * `recordClear()` だけで、読むたびに `dedupeHistory()` でまとめる）ので 1 件に
+ * 決まり、頁送りの何行目かといった**見た目の位置に依らない**。保存は 1 回で済ませる。
  */
 export function removeHistoryMany(boardKey, nos, solutions = null) {
   const board = boardOf(boardKey);

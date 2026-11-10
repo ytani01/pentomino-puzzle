@@ -72,12 +72,12 @@ TODO-105 のあとに着手する（確認ダイアログの文字が `ui.js` �
 |------|------|------|
 | 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / low）+ tests（Sonnet 5.5 / low） |
 
-- [ ] どこからも呼ばれないものを消す: `cachedSolutions()`（`src/solutions.js`）、
+- [x] どこからも呼ばれないものを消す: `cachedSolutions()`（`src/solutions.js`）、
       `setMuted()`（`src/audio.js`）、`OUTLINE.width`（`src/config.js`。説明のコメントが
       ほかの値から参照しているので、参照も直す）
-- [ ] テストからしか呼ばれない `removeHistory()`（`src/storage.js`）を、そのテストと一緒に消す
+- [x] テストからしか呼ばれない `removeHistory()`（`src/storage.js`）を、そのテストと一緒に消す
       （`removeHistoryMany()` に置き換わった。TODO-071）
-- [ ] 文書（`docs/developer.md`・`CLAUDE.md`）に名前が残っていれば消す
+- [x] 文書（`docs/developer.md`・`CLAUDE.md`）に名前が残っていれば消す
 
 `emptyCells()`・`placedNames()`・`PLAYABLE_CELLS` もテストからしか使われないが、
 テストの道具として使われているので残す。

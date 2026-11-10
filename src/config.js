@@ -628,7 +628,7 @@ export const ACRYLIC = {
  * と同じ理由）。内側の格子は自分の色を薄く引くだけ（`gridAlpha`）。
  *
  * `glow` は外周の芯（`PALETTES.neon.outlineWidth`）の内側へ重ねる、太くて薄い線。
- * 太さは `OUTLINE.width` と同じくボードの 1 マスの座標系での値で、トレイでは縮む。
+ * 太さは `outlineWidth` と同じくボードの 1 マスの座標系での値で、トレイでは縮む。
  * 内側へ寄せるので隣のピースにはかぶらない。角で重なって濃く出るが、
  * 光のにじみとしてはそのほうが自然なので揃えない。
  *
@@ -662,11 +662,11 @@ export const NEON = {
  * **見え方を変えたいときはこの 3 つを触る**（読むのは `game.js` の
  * `drawPieceEdges()` だけ）:
  *
- * - `OUTLINE.width` … 外周の太さ。ボードの 1 マス（`LAYOUT.board.cell`。横画面の
- *   8×8 で 64）の座標系での値で、トレイでは `LAYOUT.tray.cell /
+ * - `PALETTES[key].outlineWidth` … 外周の太さ。ボードの 1 マス（`LAYOUT.board.cell`。
+ *   横画面の 8×8 で 64）の座標系での値で、トレイでは `LAYOUT.tray.cell /
  *   LAYOUT.board.cell` = 20/64 に縮む。**トレイでの実測**は 6→1.9px、4→1.25px、
  *   3→0.94px（消えかける）、2→0.6px（まだらになる）。ボードでの落ち着きを
- *   取って 2 にしてあるが、トレイでも輪郭をはっきりさせたいなら 4
+ *   取って 2〜3 にしてあるが、トレイでも輪郭をはっきりさせたいなら 4
  * - `PALETTES[key].outlineDarken` … 外周の暗さ。自分の色に掛ける係数で、
  *   小さいほど暗い。0.2 まで下げるとほぼ黒になり、隣り合う同系色は分けやすい
  *   が、暗い地に接した所でピースが痩せて見える。**色の組ごとに違う**ので
@@ -676,7 +676,6 @@ export const NEON = {
  *   見えない。TODO-018）
  */
 export const OUTLINE = {
-  width: 2,
   shadowOffset: 5,
   shadowColor: 0x000000,
   shadowAlpha: 0.3,
@@ -760,8 +759,8 @@ export const ICON = {
  * - `pieces` … 見本に使うピース。12 色の並びから色相の離れたもので、形も
  *   見分けやすい F・W・X（どれも 3 マス四方）
  * - `glowScale` … ネオンのにじみ（`NEON.glow`）を見本の大きさへ縮める比
- *   （TODO-092）。`NEON.glow` はボードの 1 マス（`OUTLINE.width` の説明にある
- *   64px）の座標系での太さなので、見本の 1 マス（`pieceCell` = 12）との比
+ *   （TODO-092）。`NEON.glow` はボードの 1 マス（`LAYOUT.board.cell`。横画面の
+ *   8×8 で 64px）の座標系での太さなので、見本の 1 マス（`pieceCell` = 12）との比
  *   `12 / 64` で縮める
  */
 export const CHOICE_ICON = {

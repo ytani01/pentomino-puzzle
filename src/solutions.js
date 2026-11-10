@@ -84,14 +84,6 @@ export async function ensureSolutions(registry, spec) {
 }
 
 /**
- * 読み込み済みなら返し、無ければ `null`。クリアの画面のように**待たずに
- * その場で要る**ところで使う（本編を通ってきた時点で必ず読み込み済み）。
- */
-export function cachedSolutions(registry, spec) {
-  return registry.get(solutionsRegistryKey(spec.key)) || null;
-}
-
-/**
  * 「ボードに置いてあるピースと矛盾しないか」を判定する関数を作る。
  *
  * 置いてあるマスを先に集めるのは、解 1 件ごとに 60 マスをなめ直さないため。
