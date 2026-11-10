@@ -38,7 +38,7 @@
 <div id="results"></div>
 
 <script type="module">
-import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, PALETTE_STORAGE_KEY, DEMO, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT, makeLayout, LAYOUTS, DEMO_LAYOUTS, ORIENTATIONS, SCREENS } from './src/config.js';
+import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, PALETTE_STORAGE_KEY, NEON, DEMO, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT, makeLayout, LAYOUTS, DEMO_LAYOUTS, ORIENTATIONS, SCREENS } from './src/config.js';
 import {
   normalize, rotateCw, rotateCcw, flip, sameShape, orientations, turnOrder, nextTurn, prevTurn,
   turnPivot,
@@ -48,7 +48,7 @@ import {
   clampSelection, selectionAfterRemoval,
   forcedPlacements, hasUncoverableCell,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
-  parseDemoParams, darken, pieceColor, turnMarkKind, turnMarkCenter,
+  parseDemoParams, darken, pieceColor, fillColor, turnMarkKind, turnMarkCenter,
 } from './src/logic.js';
 import {
   touchingEdges, moveDistance, countCellMoves, singlePieceCell, solveSteps, solveStepsRandom,
@@ -2977,6 +2977,24 @@ test('colors があれば、ピースの名前で引いた色になる', () => {
 
 test('mono も colors も無ければ、ピース自身の色になる', () => {
   for (const piece of PIECES) assertSame(pieceColor(PALETTES.colorful, piece), piece.color);
+});
+
+group('src/logic.js — ピースの塗りの色（fillColor。TODO-119）');
+
+test('ネオンの組では、元の色を NEON.fillDarken で暗くした色になる', () => {
+  for (const piece of PIECES) {
+    const color = pieceColor(PALETTES.neon, piece);
+    assertSame(fillColor(PALETTES.neon, color), darken(color, NEON.fillDarken));
+  }
+});
+
+test('ネオン以外の組（colorful・glass）では、元の色のままになる', () => {
+  for (const piece of PIECES) {
+    for (const palette of [PALETTES.colorful, PALETTES.glass]) {
+      const color = pieceColor(palette, piece);
+      assertSame(fillColor(palette, color), color);
+    }
+  }
 });
 
 // ---- logic：向きを変える印（turnMarkKind・turnMarkCenter。TODO-114）------
