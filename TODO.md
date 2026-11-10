@@ -1,6 +1,6 @@
 # TODO
 
-**残っている項目: TODO-105、TODO-106、TODO-108、TODO-110、TODO-111、TODO-113、TODO-114、TODO-115。** これまでに 107 件を決着させた。
+**残っている項目: TODO-105、TODO-106、TODO-108、TODO-111、TODO-113、TODO-114、TODO-115。** これまでに 108 件を決着させた。
 新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-116` から。**
 
 **着手の順番:** 同じ箇所に触る項目は TODO-109 → 110 → 111 → 114 と、TODO-105 → 108 → 115 の
@@ -65,24 +65,6 @@
 **無駄を省く工夫:** reviewer は差し替えの前後でスタイルのキーと値が同じかを差分で見る。
 画面は 5 つのシーンを 1 枚ずつ（縦・横のどちらか片方）で足りる。`tests.html` は流さない。
 TODO-105 のあとに着手する（確認ダイアログの文字が `ui.js` へ移ってから差し替える）。
-
-## TODO-110. darken()・pieceColor() を boot.js から logic.js へ移す
-
-|      | main | 担当 |
-|------|------|------|
-| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / low）+ tests（Sonnet 5.5 / low） |
-
-- [x] `src/scenes/boot.js` の `darken()` と `pieceColor()` を `src/logic.js` へ移し、
-      `boot.js`・`game.js`・`ui.js`・`icons.js` の import を直す
-- [x] `tests.html` に 2 つの関数のテストを足す（`darken` は係数 0・1・中間、
-      `pieceColor` は `mono`・`colors`・どちらも無い色の組）
-- [x] `docs/developer.md` と `CLAUDE.md` のファイル構成の説明を直す
-
-`ui.js` と `icons.js` がシーンのファイルを import している（部品がシーンに依る向き）のを
-直すのが目的。挙動は変えない。`TEX` は Boot シーンが作るテクスチャの名前なので `boot.js` に残す。
-
-**無駄を省く工夫:** 関数の中身は動かすだけなので reviewer は入れない。画面は撮らず、
-`tests.html` が全件通ることと、本編が起動してコンソールにエラーが無いことを見る。
 
 ## TODO-111. ピースの縁（外周の線とネオンの光）の描画を 1 つにまとめる
 
