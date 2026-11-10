@@ -38,7 +38,7 @@
 <div id="results"></div>
 
 <script type="module">
-import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, DEMO, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT, makeLayout, LAYOUTS, DEMO_LAYOUTS, ORIENTATIONS, SCREENS } from './src/config.js';
+import { BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, PALETTE_STORAGE_KEY, DEMO, PALETTES, PIECES, PIECE_SIZE, PLAYABLE_CELLS, HOLE, HISTORY_LIMIT, makeLayout, LAYOUTS, DEMO_LAYOUTS, ORIENTATIONS, SCREENS } from './src/config.js';
 import {
   normalize, rotateCw, rotateCcw, flip, sameShape, orientations, turnOrder, nextTurn, prevTurn,
   turnPivot,
@@ -66,6 +66,7 @@ import {
   removeHistoryMany, removeRecords, removeFound, removeAuto,
   sanitizeProgress, loadProgress, saveProgress, clearProgress, progressFromRecord,
   isBetterClear, dedupeHistory, recordClear, recordCompletion,
+  loadPalette, savePalette,
 } from './src/storage.js';
 
 // ---- ごく小さなテストの土台 ----------------------------------------------
@@ -3985,6 +3986,97 @@ for (const state of boardStates) {
     });
   });
 }
+
+// ---- storage：localStorage が使えない・保存データが壊れているとき（TODO-116）----
+//
+// 読み書きを `readItem()` / `writeItem()` へまとめた（TODO-106）経路を確かめる。
+// 例外を外へ出さず、今の既定値（記録が無いのと同じ見え方）を返すこと。
+// 使えない状態は `Storage.prototype` の 3 つのメソッドを差し替えて作り、
+// finally で必ず戻す（本物の記録には触らない）。壊れたデータを置くテストは
+// `withCleanStorage()` を通す。
+
+group('src/storage.js — localStorage が使えないとき・保存データが壊れているとき（TODO-116）');
+
+/** `localStorage` の読み・書き・削除がすべて例外を投げる状態で `fn` を走らせる。 */
+function withThrowingStorage(fn) {
+  const names = ['getItem', 'setItem', 'removeItem'];
+  const originals = names.map((name) => Storage.prototype[name]);
+  names.forEach((name) => {
+    Storage.prototype[name] = () => { throw new DOMException('denied', 'SecurityError'); };
+  });
+  try {
+    fn();
+  } finally {
+    names.forEach((name, index) => { Storage.prototype[name] = originals[index]; });
+  }
+}
+
+/** 壊れた保存データの例（JSON でない・途中で切れた・形が違う）。 */
+const BROKEN_VALUES = ['not json', '{"at":1,', '{"a":1}', '"text"', '123', 'null'];
+
+for (const { spec, canonical } of boardStates) {
+  const total = canonical.length;
+
+  test(`localStorage が例外を投げても loadHistory は空の配列、loadProgress は null、loadFound は空の配列を返す（${spec.label}）`, () => {
+    withThrowingStorage(() => {
+      assertSame(loadHistory(spec.key), [], 'loadHistory');
+      assertSame(loadProgress(spec.key), null, 'loadProgress');
+      assertSame(loadFound(spec.key, total), [], 'loadFound');
+    });
+  });
+
+  test(`localStorage が例外を投げても addFound は例外を出さず、足した番号だけの配列を返す（${spec.label}）`, () => {
+    withThrowingStorage(() => {
+      assertSame(addFound(spec.key, 3, total), [3], 'addFound');
+    });
+  });
+
+  test(`保存データが壊れていても loadHistory は空の配列、loadProgress は null、loadFound は空の配列を返す（${spec.label}）`, () => {
+    for (const broken of BROKEN_VALUES) {
+      withCleanStorage(spec, () => {
+        window.localStorage.setItem(spec.historyKey, broken);
+        window.localStorage.setItem(spec.progressKey, broken);
+        window.localStorage.setItem(spec.foundKey, broken);
+        assertSame(loadHistory(spec.key), [], `loadHistory（${broken}）`);
+        assertSame(loadProgress(spec.key), null, `loadProgress（${broken}）`);
+        assertSame(loadFound(spec.key, total), [], `loadFound（${broken}）`);
+      });
+    }
+  });
+
+  test(`見つけた解の保存データが壊れていても addFound は例外を出さず、壊れた値を捨てて番号を書き直す（${spec.label}）`, () => {
+    for (const broken of BROKEN_VALUES) {
+      withCleanStorage(spec, () => {
+        window.localStorage.setItem(spec.foundKey, broken);
+        assertSame(addFound(spec.key, 3, total), [3], `addFound（${broken}）`);
+        assertSame(loadFound(spec.key, total), [3], `書き直したあとの loadFound（${broken}）`);
+      });
+    }
+  });
+}
+
+test('localStorage が例外を投げても savePalette は例外を出さず、loadPalette は既定の組を返す', () => {
+  withThrowingStorage(() => {
+    assertSame(savePalette(Object.keys(PALETTES)[1]), undefined, 'savePalette の戻り値');
+    assertSame(loadPalette(), DEFAULT_PALETTE_KEY, 'loadPalette');
+  });
+});
+
+test('色の組の保存データが知らないキーでも loadPalette は既定の組を返し、savePalette で書き直せる', () => {
+  const saved = window.localStorage.getItem(PALETTE_STORAGE_KEY);
+  try {
+    for (const broken of BROKEN_VALUES) {
+      window.localStorage.setItem(PALETTE_STORAGE_KEY, broken);
+      assertSame(loadPalette(), DEFAULT_PALETTE_KEY, `loadPalette（${broken}）`);
+    }
+    const other = Object.keys(PALETTES).find((key) => key !== DEFAULT_PALETTE_KEY);
+    savePalette(other);
+    assertSame(loadPalette(), other, '書き直したあとの loadPalette');
+  } finally {
+    if (saved === null) window.localStorage.removeItem(PALETTE_STORAGE_KEY);
+    else window.localStorage.setItem(PALETTE_STORAGE_KEY, saved);
+  }
+});
 
 // ---- 結果の表示 ---------------------------------------------------------
 

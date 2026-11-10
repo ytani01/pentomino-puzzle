@@ -9,7 +9,7 @@
 |------|------|------|
 | 見込み | Opus 5.5 / effort medium | tests（Sonnet 5.5 / low） |
 
-- [ ] `tests.html` に、`window.localStorage` の読み書きが例外を投げるときと、保存データが
+- [x] `tests.html` に、`window.localStorage` の読み書きが例外を投げるときと、保存データが
       壊れている（JSON でない・形が違う）ときに、`src/storage.js` の export が例外を外へ出さず
       今の既定値を返すことのテストを足す（代表として `loadHistory`・`loadProgress`・
       `loadFound`・`addFound`・`savePalette` を 1 つずつ）
