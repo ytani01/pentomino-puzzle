@@ -1,7 +1,7 @@
 # TODO
 
-**残っている項目: TODO-117、TODO-118、TODO-119、TODO-120、TODO-121、TODO-122。** これまでに 116 件を決着させた。
-新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-123` から。**
+**残っている項目: TODO-117、TODO-118、TODO-119、TODO-120、TODO-121、TODO-122、TODO-123、TODO-124、TODO-125、TODO-126、TODO-127。** これまでに 116 件を決着させた。
+新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-128` から。**
 
 ## TODO-117. 確認の枠の開閉を ui.js の createConfirmDialog() にまとめる
 
@@ -34,7 +34,8 @@
 
 - [ ] 105 行の `create()` を、状態の初期化・全解の読み込み・入力の登録などのメソッドに分ける（TODO-115 と同じやり方）。
   呼ぶ順（部品を組んでから遊びかけを読む、`ready` は最後に立てる）とコメントの「なぜ」は保つ
-- [ ] `DemoScene`（`GameScene` を継承）の `create()` が呼ぶメソッドと食い違わないか見る
+- [ ] `demo.js` の `create()` の前半（`relayoutState` の受け取り・ボード・レイアウト・色の組・空の盤面）は
+  `game.js` と同じなので、分けたメソッドを `DemoScene` からも呼ぶ（レイアウトの表は `LAYOUTS`・`DEMO_LAYOUTS` を引数で渡す）
 
 **無駄を省く工夫:** 画面は本編・つづきから・デモを 1 回ずつ開くだけ。`tests.html` は触らないので流さない。
 
@@ -45,6 +46,7 @@
 | 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ reviewer（Opus 5.5 / high） |
 
 - [ ] 67 行の `refresh()` を、一覧の行・頁送り・全部選ぶ・選んだ回の詳細に分ける
+- [ ] 「番号を持つ件」と「全部にチェックが付いているか」の計算が `refresh()` と `toggleSelectAll()` にあるので 1 つにする
 - [ ] `restoreRelayout()` を `game.js`・`demo.js` と同じ `applyRelayout()` に改名する
   （`rg -n restoreRelayout` で出る箇所と文書をすべて）
 
@@ -72,6 +74,65 @@
   書き直している。ボードの枠とトレイの枠の位置・大きさを、縦と横の `if` 1 つで決める形にする。返す値は変えない
 
 **無駄を省く工夫:** 画面は見ない。`node` で変更前後の `LAYOUTS`・`DEMO_LAYOUTS` を JSON にして一致を見れば足りる。
+
+## TODO-123. ピースの位置を写す処理と、トレイに残るピースの数え方を 1 つにする
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ reviewer（Opus 5.5 / high）+ screens（Sonnet 5.5 / low） |
+
+- [ ] `{ cells, location, row, col }` を読み書きする処理が、`game.js` の `snapshot()`・`restoreState()`・`persist()`・
+  `applyProgress()`・`slideIn()` と `demo.js` の `relayout()`・`applyRelayout()`・`finishStep()` に散らばっている。
+  ピースから読む関数と、ピースへ書く関数を 1 つずつにする
+- [ ] `this.pieces.filter((piece) => piece.location === 'tray')` の 4 か所（`useAuto()`・`runHint()`・`refreshHud()`・`fillForced()`）を 1 つのメソッドにする
+- [ ] 向きを変えたときに回転と裏返しのどちらの音を鳴らすかの判定（`turnDrag()`・`turnPiece()`）を 1 つにする
+
+**無駄を省く工夫:** 画面は本編で置く・外す・一手戻す・向きを変える・つづきからを 1 回ずつと、デモで向きを 1 回変えるだけ。
+
+## TODO-124. logic.js の nextTurn()・prevTurn()・nextPlaceableTurn() の重なりをまとめる
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ reviewer（Opus 5.5 / high）+ tests（Sonnet 5.5 / medium） |
+
+- [ ] 3 つとも「`turnOrder()` を作り、今の形の位置を `findIndex` で引く」ところが同じ。位置を引く内部の関数を 1 つにし、
+  `nextTurn()`・`prevTurn()` は進む向きだけを渡す形にする。公開する関数の名前と返す値は変えない
+
+**無駄を省く工夫:** 確かめるのは `tests.html` の既存のテストだけ（向きの関数はテストがある）。画面は見ない。
+
+## TODO-125. title.js と records.js で、ボタンと選択肢の組み立ての繰り返しをまとめる
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ screens（Sonnet 5.5 / low） |
+
+- [ ] `title.js` の `createStartButtons()` の 3 つのボタン（はじめる・つづきから・記録）を、`clear.js` の `createButtons()` と同じく配列から作る
+- [ ] ボードの選択肢（`boardIcon()` と「ラベル（注記）」のツールチップを足したもの）を `title.js` と `records.js` で同じ関数から作る
+
+**無駄を省く工夫:** 画面はタイトルと記録を縦・横で 1 回ずつ撮るだけ。ボタンは 1 つ押せば足りる（同じ関数を通る）。
+
+## TODO-126. ピースを名前で引く処理と、ピースの塗りの色・テクスチャを焼く手順をまとめる
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ reviewer（Opus 5.5 / high）+ screens（Sonnet 5.5 / low） |
+
+- [ ] ピースの定義を名前で引く処理（`ui.js` の `PIECE_BY_NAME`、`icons.js`・`storage.js` の `PIECES.find()`）を `config.js` の 1 つの Map にする
+- [ ] 「ネオンなら暗くして塗る」色の決め方（`ui.js` の `drawMiniBoard()`、`icons.js` の `paletteIcon()`、`boot.js` の `makeNeonTile()`）を `logic.js` の 1 つの関数にする
+- [ ] `boot.js` の 3 つの `make*Tile()` に共通する前後（`textures.exists()`・`make.graphics()`・`generateTexture()`・`destroy()`）を 1 つにする
+
+**無駄を省く工夫:** 画面は 3 つの色の組でタイトル（色の見本と動くボード）と本編を 1 回ずつ撮るだけ。
+
+## TODO-127. storage.js の値の検査を小さな関数にまとめる
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ reviewer（Opus 5.5 / high）+ tests（Sonnet 5.5 / medium） |
+
+- [ ] 「正の整数か」（`Number.isInteger(x) && x > 0`）と「正の有限な数か」の検査が `sanitizeHistory()`・`migrateHistory()`・
+  `sanitizeFound()`・`sanitizeProgress()` などに繰り返し出てくるので、名前の付いた関数にする。受け入れる値は変えない
+
+**無駄を省く工夫:** 確かめるのは `tests.html` の既存のテストだけ（TODO-116 で、壊れた値と localStorage が使えないときのテストがある）。
 
 ## 完了済み
 
