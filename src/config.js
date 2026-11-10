@@ -228,6 +228,7 @@ export const TEXT_COLORS = {
   danger: cssColor(COLORS.danger),
   disabled: cssColor(COLORS.buttonTextDisabled),
   // 明るい地（`COLORS.solved`）の上の文字。白では読みにくいため（TODO-103）。
+  // 画面の地の色（`COLORS.background`）と同じ濃い色にして、背景の色に揃える。
   onBright: cssColor(COLORS.background),
 };
 
