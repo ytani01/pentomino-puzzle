@@ -365,7 +365,6 @@ export function createChoiceRow(scene, cx, y, label, choices, onSelect,
  * （向きが変わって開き直すとき。TODO-095）。何の確認かの印（`confirmKind`）は
  * 向きが変わったときの持ち越しに要るので、シーン側が持つ。
  *
- * 戻り値の `parts` は開閉でまとめて `setVisible()` する対象、`text` は文言。
  * `width` / `height` は画面の大きさ、`depth` は重なり順、`onNo` は「いいえ」の動作。
  */
 export function createConfirmDialog(scene, { width, height, depth, onNo }) {
@@ -402,8 +401,6 @@ export function createConfirmDialog(scene, { width, height, depth, onNo }) {
   parts.push(button(left + cfg.buttonWidth + cfg.gap + cfg.buttonWidth / 2, 'いいえ', onNo));
 
   return {
-    parts,
-    text,
     open(message, onYes, silent = false) {
       if (!silent) audio.button();
       yes = onYes;
@@ -450,7 +447,6 @@ function buttonState(button) {
  * 説明を見なくても違いが分かってほしいボタン（デモの探し方）で使う（TODO-097）。
  * `setCaption()` で差し替えられる。
  */
-
 export function createButton(scene, options) {
   const {
     x, y, width, height, label, onClick,

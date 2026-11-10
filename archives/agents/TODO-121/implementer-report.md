@@ -34,3 +34,6 @@
 - 判断が要る点は無い。
 - 音: 「いいえ」・`hide()` の音は前と同じ 1 回。`open()` の音も前と同じ（silent で無し）。耳では確かめていない（コードの読み合わせのみ）。
 - コミット対象に、別の担当が触る `tests.html`・`logic.js` は含めていない。
+
+## 追加の直し（reviewer の指摘 2 件）
+- `createConfirmDialog()` の返り値から使われていない `parts`・`text` を消し、`createButton()` の JSDoc と関数の間の空行を消した（`src/ui.js` だけ）。本編と記録で確認の枠を 1 回ずつ開閉し、コンソールのエラー 0 件（`confirm-smoke.mjs`）。
