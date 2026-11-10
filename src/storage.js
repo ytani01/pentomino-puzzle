@@ -31,7 +31,7 @@ function isPositiveInteger(value) {
  * 同じく、保存から読んだ値を同じ基準で検査するため。
  */
 function isPositiveNumber(value) {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+  return Number.isFinite(value) && value > 0;
 }
 
 /** ボードのキーからボードの定義を引く。知らないボードなら既定のボードとして扱う。 */

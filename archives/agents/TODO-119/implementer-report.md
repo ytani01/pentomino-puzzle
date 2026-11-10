@@ -18,3 +18,4 @@
 
 ## 残る懸念
 - `tests.html` は `waitUntil: 'load'` だと 30 秒で goto がタイムアウトする（テストが同期で重いため。今回の変更とは無関係。スクリプトは `commit` で待つ）
+- 追加: `storage.js` の `isPositiveNumber()` から冗長な `typeof value === 'number'` を削除（`Number.isFinite()` は文字列を数にしないので受け入れる値は同じ）。`tests.html` 476 件通過。
