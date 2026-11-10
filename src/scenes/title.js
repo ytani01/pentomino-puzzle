@@ -149,10 +149,7 @@ export default class TitleScene extends Phaser.Scene {
     this.tooltip = createTooltip(this);
   }
 
-  /**
-   * 今の向きの配置を、各部品を作るメソッドへ渡す形にまとめる。
-   * 配置は今の向きの組を使う（向きが変わると `relayout()` で作り直す。TODO-095）。
-   */
+  /** 配置は今の向きの組を使う（向きが変わると `relayout()` で作り直す。TODO-095）。 */
   computeLayout() {
     const screen = screenOf(this);
     const orientation = orientationOf(this);

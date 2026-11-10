@@ -40,3 +40,11 @@
 
 ## 残る懸念
 - 無し（描かれる絵の一致は screens の撮り比べで確かめる）。
+
+## レビューの検討 1 件への直し（JSDoc）
+- `clear.js` の `computeLayout`・`createInfoPanel` の JSDoc は、書ける「なぜ」が無いので消した。
+- `clear.js` の `createFrame` は「後ろの HUD やピースが透けないよう外枠を先に敷く」に、
+  `createBestLine` は「おまかせは最短に入らないので更新と読めない言い方にする（TODO-020・TODO-088）」に直した。
+  どちらも元のコメント・定数の JSDoc にあった理由。
+- `title.js` の `computeLayout` は「何をするか」の 1 行目を消し、「なぜ」の 1 行（TODO-095）だけ残した。
+- コードは変えていない。`node --check` は 2 ファイルとも通った。

@@ -103,7 +103,6 @@ export default class ClearScene extends Phaser.Scene {
     this.createButtons(layout, board);
   }
 
-  /** 縦に積む位置と枠の幅を、各部品を作るメソッドへ渡す形にまとめる。 */
   computeLayout(screen) {
     const cx = screen.width / 2;
     const [titleTop, panelTop, buttonTop] = stackTops(STACK, screen.height,
@@ -123,7 +122,7 @@ export default class ClearScene extends Phaser.Scene {
       .setOrigin(0);
   }
 
-  /** COMPLETE・情報の枠・ボタンをまとめて載せる外枠（`FRAME_PAD`）。 */
+  /** 本編の HUD やピースが後ろから透けないよう、塗りつぶした外枠を先に敷く（`FRAME_PAD`）。 */
   createFrame({
     screen, cx, titleTop, buttonTop, panelWidth,
   }) {
@@ -135,7 +134,6 @@ export default class ClearScene extends Phaser.Scene {
                 buttonTop + STACK[2].height + FRAME_PAD.y - frameTop);
   }
 
-  /** 経過時間・解の番号・記録の状態・最短時間・使った補助を出す枠（5 行。`PANEL_ROWS`）。 */
   createInfoPanel({ cx, panelTop, panelWidth }, board) {
     createPanel(this, cx - panelWidth / 2, panelTop, panelWidth, STACK[1].height);
 
@@ -174,7 +172,7 @@ export default class ClearScene extends Phaser.Scene {
     }
   }
 
-  /** 最短時間の行。おまかせを使った回・更新した回・そうでない回で言い方を変える。 */
+  /** おまかせを使った回は最短に入らないので、更新したと読めない言い方にする（TODO-020・TODO-088）。 */
   createBestLine(cx, panelTop, board) {
     let bestLine;
     if (!shouldRecordBest(this.usedAuto)) {
