@@ -33,3 +33,10 @@
 ## 懸念
 - `layout.confirm` の他の参照は `rg` で見つからなかった（demo.js も含む）。
 - 画面の撮り比べで差が出たら、まず depth（本編 40・記録 10）と生成順を疑う。
+
+## レビューの指摘の修正
+1. `src/ui.js`: `createConfirmDialog()` を `createButton()` の JSDoc の前へ動かした。
+   `createButton` の JSDoc → `BUTTON_PAD` → 関数の並びは元（121d137~1）と同じ。
+2. `RECORDS_CONFIRM_DEPTH` を `config.js` から外し、`src/scenes/records.js` の先頭の
+   `CONFIRM_DEPTH = 10` にした（値は同じ）。文書に `RECORDS_CONFIRM_DEPTH` の記述は無かった
+   （`rg` で確認）。`node --check` は `src/*.js` と `records.js` で成功。

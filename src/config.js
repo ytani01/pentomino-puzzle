@@ -214,12 +214,6 @@ export const CONFIRM = {
   width: 460, height: 200, buttonWidth: 130, buttonHeight: 56, gap: 20,
 };
 
-/**
- * 記録の画面の確認の枠の重なり順。アイコンの説明（既定の 0）より手前であればよい。
- * 本編は `game.js` の `DEPTH.confirm`（HUD やボタンの説明も重なるので、より大きい値）。
- */
-export const RECORDS_CONFIRM_DEPTH = 10;
-
 /** テキストの色。Phaser は文字列で受けるので、`COLORS` を文字列にしたもの。 */
 export const TEXT_COLORS = {
   normal: '#e8ecf4',

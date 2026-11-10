@@ -19,7 +19,7 @@
 
 import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, PALETTES,
-  PALETTE_REGISTRY_KEY, RECORDS_CONFIRM_DEPTH, SCREENS, TEXT_COLORS, orientationOf, screenOf,
+  PALETTE_REGISTRY_KEY, SCREENS, TEXT_COLORS, orientationOf, screenOf,
 } from '../config.js';
 import { boardIcon, ICONS } from '../icons.js';
 import { formatTime, selectionAfterRemoval } from '../logic.js';
@@ -121,6 +121,12 @@ const CONTINUE_BUTTON = { width: 190, height: 48 };
  * 幅を詰めて高さを取る（TODO-076）。タイトルへも同じ大きさで左上に置く。
  */
 const FOOT_GAP = 14;
+
+/**
+ * 確認の枠の重なり順。アイコンの説明（既定の 0）より手前であればよい。
+ * 本編は `game.js` の `DEPTH.confirm`（HUD やボタンの説明も重なるので、より大きい値）。
+ */
+const CONFIRM_DEPTH = 10;
 
 /** 頁の数を出す文字の幅（下段の並びに使う）。 */
 const PAGE_TEXT_WIDTH = 64;
@@ -403,7 +409,7 @@ export default class RecordsScene extends Phaser.Scene {
     const { parts, text } = createConfirmDialog(this, {
       width: screen.width,
       height: screen.height,
-      depth: RECORDS_CONFIRM_DEPTH,
+      depth: CONFIRM_DEPTH,
       onYes: () => this.confirmAction(),
       onNo: () => this.hideConfirm(),
     });
