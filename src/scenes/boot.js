@@ -10,7 +10,7 @@ import {
   BOARD_GLASS, BOARD_REGISTRY_KEY, COLORS, DEFAULT_BOARD_KEY, DEMO_LAYOUTS, GLASS, LAYOUTS, NEON, PALETTES,
   PALETTE_REGISTRY_KEY, PIECES, TILE,
 } from '../config.js';
-import { darken, parseDemoParams, pieceColor } from '../logic.js';
+import { darken, fillColor, parseDemoParams, pieceColor } from '../logic.js';
 import { loadPalette } from '../storage.js';
 
 /**
@@ -71,9 +71,22 @@ export default class BootScene extends Phaser.Scene {
     for (const piece of PIECES) {
       const key = TEX.piece(palette, piece.name, size);
       if (palette.glass) this.makeGlassTile(key, size, pieceColor(palette, piece));
-      else if (palette.neon) this.makeNeonTile(key, size, pieceColor(palette, piece));
+      else if (palette.neon) this.makeNeonTile(key, size, palette, pieceColor(palette, piece));
       else this.makeTile(key, size, pieceColor(palette, piece));
     }
+  }
+
+  /**
+   * `size` 四方のテクスチャを `key` で焼く。3 種のマスが同じ前後（焼き済みなら何も
+   * しない、Graphics を作って、テクスチャにして、捨てる）を共有する。`draw` は
+   * `g` に絵を描くだけ。
+   */
+  bakeTile(key, size, draw) {
+    if (this.textures.exists(key)) return;
+    const g = this.make.graphics({ x: 0, y: 0 }, false);
+    draw(g);
+    g.generateTexture(key, size, size);
+    g.destroy();
   }
 
   /**
@@ -82,20 +95,18 @@ export default class BootScene extends Phaser.Scene {
    * （細かい描き込みより、縮小してトレイに並べたときの見え方を優先した）。
    */
   makeTile(key, size, color) {
-    if (this.textures.exists(key)) return;
-    const g = this.make.graphics({ x: 0, y: 0 }, false);
-    g.fillStyle(color, 1);
-    g.fillRect(0, 0, size, size);
-    g.fillStyle(TILE.highlight, TILE.highlightAlpha);
-    g.fillRect(0, 0, size, TILE.bevel);
-    g.fillRect(0, 0, TILE.bevel, size);
-    g.fillStyle(TILE.shadow, TILE.shadowAlpha);
-    g.fillRect(0, size - TILE.bevel, size, TILE.bevel);
-    g.fillRect(size - TILE.bevel, 0, TILE.bevel, size);
-    g.lineStyle(TILE.border, darken(color, TILE.edgeDarken), 1);
-    g.strokeRect(TILE.border / 2, TILE.border / 2, size - TILE.border, size - TILE.border);
-    g.generateTexture(key, size, size);
-    g.destroy();
+    this.bakeTile(key, size, (g) => {
+      g.fillStyle(color, 1);
+      g.fillRect(0, 0, size, size);
+      g.fillStyle(TILE.highlight, TILE.highlightAlpha);
+      g.fillRect(0, 0, size, TILE.bevel);
+      g.fillRect(0, 0, TILE.bevel, size);
+      g.fillStyle(TILE.shadow, TILE.shadowAlpha);
+      g.fillRect(0, size - TILE.bevel, size, TILE.bevel);
+      g.fillRect(size - TILE.bevel, 0, TILE.bevel, size);
+      g.lineStyle(TILE.border, darken(color, TILE.edgeDarken), 1);
+      g.strokeRect(TILE.border / 2, TILE.border / 2, size - TILE.border, size - TILE.border);
+    });
   }
 
   /**
@@ -110,43 +121,39 @@ export default class BootScene extends Phaser.Scene {
    * 同じ描き方で焼くため。
    */
   makeGlassTile(key, size, color, spec = GLASS) {
-    if (this.textures.exists(key)) return;
-    const g = this.make.graphics({ x: 0, y: 0 }, false);
-    g.fillStyle(color, spec.fillAlpha);
-    g.fillRect(0, 0, size, size);
+    this.bakeTile(key, size, (g) => {
+      g.fillStyle(color, spec.fillAlpha);
+      g.fillRect(0, 0, size, size);
 
-    for (const streak of spec.streaks) {
-      g.fillStyle(TILE.highlight, streak.alpha);
-      // 対角に垂直な帯を、左上の角から `from`〜`to` の位置に置く。
-      g.fillPoints([
-        { x: 0, y: streak.from * 2 * size },
-        { x: streak.from * 2 * size, y: 0 },
-        { x: streak.to * 2 * size, y: 0 },
-        { x: 0, y: streak.to * 2 * size },
-      ], true);
-    }
+      for (const streak of spec.streaks) {
+        g.fillStyle(TILE.highlight, streak.alpha);
+        // 対角に垂直な帯を、左上の角から `from`〜`to` の位置に置く。
+        g.fillPoints([
+          { x: 0, y: streak.from * 2 * size },
+          { x: streak.from * 2 * size, y: 0 },
+          { x: streak.to * 2 * size, y: 0 },
+          { x: 0, y: streak.to * 2 * size },
+        ], true);
+      }
 
-    const inset = spec.innerInset;
-    g.lineStyle(spec.innerWidth, TILE.highlight, spec.innerAlpha);
-    g.strokeRect(inset, inset, size - inset * 2, size - inset * 2);
-    g.lineStyle(TILE.border, spec.gridColor, spec.gridAlpha);
-    g.strokeRect(TILE.border / 2, TILE.border / 2, size - TILE.border, size - TILE.border);
-    g.generateTexture(key, size, size);
-    g.destroy();
+      const inset = spec.innerInset;
+      g.lineStyle(spec.innerWidth, TILE.highlight, spec.innerAlpha);
+      g.strokeRect(inset, inset, size - inset * 2, size - inset * 2);
+      g.lineStyle(TILE.border, spec.gridColor, spec.gridAlpha);
+      g.strokeRect(TILE.border / 2, TILE.border / 2, size - TILE.border, size - TILE.border);
+    });
   }
 
   /**
    * ネオンふうの 1 マス（TODO-039）。暗く沈めた地に、自分の色の薄い格子だけ。
    * 光るのは外周（`game.js` の `drawPieceEdges()`）で、マスの側には描かない。
    */
-  makeNeonTile(key, size, color) {
-    if (this.textures.exists(key)) return;
-    const g = this.make.graphics({ x: 0, y: 0 }, false);
-    g.fillStyle(darken(color, NEON.fillDarken), 1);
-    g.fillRect(0, 0, size, size);
-    g.lineStyle(TILE.border, color, NEON.gridAlpha);
-    g.strokeRect(TILE.border / 2, TILE.border / 2, size - TILE.border, size - TILE.border);
-    g.generateTexture(key, size, size);
-    g.destroy();
+  makeNeonTile(key, size, palette, color) {
+    this.bakeTile(key, size, (g) => {
+      g.fillStyle(fillColor(palette, color), 1);
+      g.fillRect(0, 0, size, size);
+      g.lineStyle(TILE.border, color, NEON.gridAlpha);
+      g.strokeRect(TILE.border / 2, TILE.border / 2, size - TILE.border, size - TILE.border);
+    });
   }
 }

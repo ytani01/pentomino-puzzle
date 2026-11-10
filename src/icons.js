@@ -14,8 +14,10 @@
  * シーンでなく部品の側に持たせる（TODO-111・TODO-114）。
  */
 
-import { CHOICE_ICON, GLASS, ICON, NEON, PIECES, TILE, TURN_MARK } from './config.js';
-import { boardCells, darken, outlineEdges, pieceColor, shapeSize } from './logic.js';
+import { CHOICE_ICON, GLASS, ICON, NEON, PIECE_BY_NAME, TILE, TURN_MARK } from './config.js';
+import {
+  boardCells, darken, fillColor, outlineEdges, pieceColor, shapeSize,
+} from './logic.js';
 
 const U = ICON.size / 2;
 
@@ -361,13 +363,12 @@ export function paletteIcon(palette) {
   const size = cell * 3;
   return (g) => {
     pieces.forEach((name, i) => {
-      const piece = PIECES.find((p) => p.name === name);
+      const piece = PIECE_BY_NAME.get(name);
       const color = pieceColor(palette, piece);
       const left = (i - (pieces.length - 1) / 2) * (size + gap) - size / 2;
       const top = -size / 2;
       const has = (row, col) => piece.cells.some(([r, c]) => r === row && c === col);
-      g.fillStyle(palette.neon ? darken(color, NEON.fillDarken) : color,
-                  palette.glass ? GLASS.fillAlpha : 1);
+      g.fillStyle(fillColor(palette, color), palette.glass ? GLASS.fillAlpha : 1);
       for (const [row, col] of piece.cells) g.fillRect(left + col * cell, top + row * cell, cell, cell);
 
       // ネオンのにじみ。凹の角の欠けを、芯より先に埋めておく。

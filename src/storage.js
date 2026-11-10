@@ -10,7 +10,7 @@
 
 import {
   BOARDS, DEFAULT_BOARD_KEY, DEFAULT_PALETTE_KEY, HISTORY_LIMIT, PALETTES,
-  PALETTE_STORAGE_KEY, PIECES,
+  PALETTE_STORAGE_KEY, PIECE_BY_NAME, PIECES,
 } from './config.js';
 import {
   canPlace, createBoard, normalize, orientations, place, sameShape,
@@ -587,7 +587,7 @@ export function sanitizeProgress(value, board) {
   let filled = createBoard(board);
   for (const entry of parsed.pieces) {
     if (entry === null || typeof entry !== 'object') return null;
-    const definition = PIECES.find((piece) => piece.name === entry.name);
+    const definition = PIECE_BY_NAME.get(entry.name);
     if (!definition || seen.has(entry.name)) return null;
     seen.add(entry.name);
 

@@ -6,10 +6,10 @@
  */
 
 import {
-  ACRYLIC, BACKDROP, COLORS, CONFIRM, FONT, HINT_BADGE, HOLE, ICON, NEON, PIECES, TEXT_COLORS, TILE, TOOLTIP,
+  ACRYLIC, BACKDROP, COLORS, CONFIRM, FONT, HINT_BADGE, HOLE, ICON, PIECE_BY_NAME, TEXT_COLORS, TILE, TOOLTIP,
   VERSION, screenOf,
 } from './config.js';
-import { darken, pieceColor } from './logic.js';
+import { darken, fillColor, pieceColor } from './logic.js';
 
 /**
  * 操作の概要。タイトルの遊び方と本編の下端（TODO-094）で同じ文言を出すため、
@@ -220,9 +220,6 @@ export function createHintBadge(scene, x, y, originX = 0) {
  */
 const MINI_EDGE = 3;
 
-/** ピース名から定義を引く表。ボードの 1 マスずつ引く。 */
-const PIECE_BY_NAME = new Map(PIECES.map((piece) => [piece.name, piece]));
-
 /**
  * ボードを縮小して `box` の中央に描く。記録の完成形（TODO-008）とタイトルの
  * 動くボード（TODO-087）が使う。`cells` は 1 マス 1 要素（ピース名・`HOLE`・空きは
@@ -261,8 +258,7 @@ export function drawMiniBoard(g, board, cells, palette, box) {
         continue;
       }
       // ネオンは本編と同じく地を沈め、外周だけを明るく残す（TODO-039）。
-      const color = pieceColor(palette, piece);
-      g.fillStyle(palette.neon ? darken(color, NEON.fillDarken) : color, 1);
+      g.fillStyle(fillColor(palette, pieceColor(palette, piece)), 1);
       g.fillRect(x, y, cell, cell);
     }
   }

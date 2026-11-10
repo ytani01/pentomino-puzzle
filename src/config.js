@@ -104,6 +104,12 @@ export const PIECES = [
   { name: 'Z', color: 0xe05c9e, cells: [[0, 0], [0, 1], [1, 1], [2, 1], [2, 2]] },
 ];
 
+/**
+ * ピースの定義を名前で引く表。ボードの文字・保存した名前から定義へ戻すとき、
+ * 画面や保存の側が `PIECES.find()` を書かずに済むよう 1 か所に持つ。
+ */
+export const PIECE_BY_NAME = new Map(PIECES.map((piece) => [piece.name, piece]));
+
 /** ピース 1 個のマス数。`logic.js` と `tools/enumerate.mjs` の枝刈りが参照する。 */
 export const PIECE_SIZE = 5;
 

@@ -7,7 +7,7 @@
  */
 
 import {
-  BOARDS, DEFAULT_BOARD_KEY, HOLE, PIECES, PIECE_SIZE,
+  BOARDS, DEFAULT_BOARD_KEY, HOLE, NEON, PIECES, PIECE_SIZE,
 } from './config.js';
 
 /**
@@ -695,6 +695,15 @@ export function parseDemoParams(search) {
 export function pieceColor(palette, piece) {
   if (palette.mono !== null) return palette.mono;
   return palette.colors === null ? piece.color : palette.colors[piece.name];
+}
+
+/**
+ * ピースの塗りの色。ネオンの組は地を暗く沈めて塗り、光るのは外周だけにする
+ * （TODO-039）。ボードのマス・縮小したボード・色の見本が同じ決め方を使うので
+ * 1 か所に置く。`color` は `pieceColor()` の結果（縁やマスの区切りに使う元の色）。
+ */
+export function fillColor(palette, color) {
+  return palette.neon ? darken(color, NEON.fillDarken) : color;
 }
 
 /**
