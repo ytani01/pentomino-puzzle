@@ -4,6 +4,7 @@
 作り直すので、手で直さない。やらないと決めたものは（対応しない）が付いている。
 進行中の項目は [TODO.md](../TODO.md) にある。
 
+- [TODO-116. localStorage が使えないときの storage.js のテストを足す](todo/TODO-116.%20localStorage%20%E3%81%8C%E4%BD%BF%E3%81%88%E3%81%AA%E3%81%84%E3%81%A8%E3%81%8D%E3%81%AE%20storage.js%20%E3%81%AE%E3%83%86%E3%82%B9%E3%83%88%E3%82%92%E8%B6%B3%E3%81%99.md)
 - [TODO-115. title.js と clear.js の長い create() を部品ごとのメソッドに分ける](todo/TODO-115.%20title.js%20%E3%81%A8%20clear.js%20%E3%81%AE%E9%95%B7%E3%81%84%20create%28%29%20%E3%82%92%E9%83%A8%E5%93%81%E3%81%94%E3%81%A8%E3%81%AE%E3%83%A1%E3%82%BD%E3%83%83%E3%83%89%E3%81%AB%E5%88%86%E3%81%91%E3%82%8B.md)
 - [TODO-114. 向きを変える印の計算と描画を game.js から出す](todo/TODO-114.%20%E5%90%91%E3%81%8D%E3%82%92%E5%A4%89%E3%81%88%E3%82%8B%E5%8D%B0%E3%81%AE%E8%A8%88%E7%AE%97%E3%81%A8%E6%8F%8F%E7%94%BB%E3%82%92%20game.js%20%E3%81%8B%E3%82%89%E5%87%BA%E3%81%99.md)
 - [TODO-113. デモの探索を logic.js から search.js へ分ける](todo/TODO-113.%20%E3%83%87%E3%83%A2%E3%81%AE%E6%8E%A2%E7%B4%A2%E3%82%92%20logic.js%20%E3%81%8B%E3%82%89%20search.js%20%E3%81%B8%E5%88%86%E3%81%91%E3%82%8B.md)
