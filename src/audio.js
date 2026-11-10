@@ -104,8 +104,14 @@ export function auto() {
   tone({ freq: 990, type: 'sine', delay: 0.07, duration: 0.12, gain: 0.07 });
 }
 
-/** ボタンを押した。 */
+/**
+ * ボタンを押した。
+ *
+ * ボタンは必ず利用者の操作の中で鳴らすので、ここで `unlock()` も済ませる。
+ * 呼ぶ側が毎回対で書かなくて済み、書き忘れて最初の音が鳴らないことも無い（TODO-112）。
+ */
 export function button() {
+  unlock();
   tone({ freq: 540, type: 'sine', duration: 0.05, gain: 0.06 });
 }
 

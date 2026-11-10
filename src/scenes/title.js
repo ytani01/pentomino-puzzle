@@ -5,8 +5,8 @@
  * 動かす（TODO-087）。
  * 飾りなので押しても何も起きず、音も鳴らさない。見せるボードは選んでいるボード。
  *
- * `audio.unlock()` はここのボタンで呼ぶ。ブラウザは操作をきっかけにしないと
- * 音を鳴らさないので、最初に必ず通る場所で済ませておく。
+ * ブラウザは操作をきっかけにしないと音を鳴らさない。最初に必ず通るここのボタンの
+ * `audio.button()` が `audio.unlock()` も済ませる。
  */
 
 import {
@@ -212,7 +212,6 @@ export default class TitleScene extends Phaser.Scene {
       label: 'つづきから',
       fontSize: FONT.hud,
       onClick: () => {
-        audio.unlock();
         audio.button();
         this.scene.start('Game', { resume: true });
       },
@@ -227,7 +226,6 @@ export default class TitleScene extends Phaser.Scene {
       label: '記録',
       fontSize: FONT.hud,
       onClick: () => {
-        audio.unlock();
         audio.button();
         this.scene.start('Records');
       },
@@ -253,7 +251,6 @@ export default class TitleScene extends Phaser.Scene {
       height: DEMO_BUTTON.height,
       label: 'デモ',
       onClick: () => {
-        audio.unlock();
         audio.button();
         this.scene.start('Demo');
       },
@@ -278,7 +275,6 @@ export default class TitleScene extends Phaser.Scene {
   /** ボードを選び直す。選んだボードは `registry` に置き、他のシーンがそこから読む。 */
   selectBoard(key) {
     if (key === this.boardKey) return;
-    audio.unlock();
     audio.button();
     this.boardKey = key;
     this.registry.set(BOARD_REGISTRY_KEY, key);
@@ -291,7 +287,6 @@ export default class TitleScene extends Phaser.Scene {
    */
   selectPalette(key) {
     if (key === this.paletteKey) return;
-    audio.unlock();
     audio.button();
     this.paletteKey = key;
     this.registry.set(PALETTE_REGISTRY_KEY, key);
@@ -371,7 +366,6 @@ export default class TitleScene extends Phaser.Scene {
   }
 
   start() {
-    audio.unlock();
     audio.button();
     // 引数を明示する。省くと Phaser は前回 `init()` へ渡した値（`つづきから` の
     // `resume`、記録画面の `progress`）を使い回し、まっさらに始まらない（TODO-073）。

@@ -363,7 +363,6 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   goToTitle() {
-    audio.unlock();
     audio.button();
     this.scene.start('Title');
   }
@@ -457,7 +456,6 @@ export default class RecordsScene extends Phaser.Scene {
   /** ボードを切り替える。`registry` は書き換えない（見ているだけで、遊ぶボードは別）。 */
   selectBoard(key) {
     if (key === this.boardKey) return;
-    audio.unlock();
     audio.button();
     this.boardKey = key;
     this.reload();
@@ -466,7 +464,6 @@ export default class RecordsScene extends Phaser.Scene {
   selectRow(index) {
     const entry = this.page * this.L.rowsPerPage + index;
     if (entry >= this.entries.length) return;
-    audio.unlock();
     audio.button();
     this.selected = entry;
     this.refresh();
@@ -480,7 +477,6 @@ export default class RecordsScene extends Phaser.Scene {
   toggleRow(index) {
     const entry = this.entries[this.page * this.L.rowsPerPage + index];
     if (!entry || !entry.no || this.solutions === null) return;
-    audio.unlock();
     audio.button();
     if (this.checked.has(entry.no)) this.checked.delete(entry.no);
     else this.checked.add(entry.no);
@@ -493,7 +489,6 @@ export default class RecordsScene extends Phaser.Scene {
    */
   toggleSelectAll() {
     if (this.solutions === null || this.entries.length === 0) return;
-    audio.unlock();
     audio.button();
     const nos = this.entries.filter((entry) => entry.no).map((entry) => entry.no);
     const allChecked = nos.length > 0 && nos.every((no) => this.checked.has(no));
@@ -506,7 +501,6 @@ export default class RecordsScene extends Phaser.Scene {
     const pages = this.pageCount();
     const next = Math.min(Math.max(this.page + step, 0), pages - 1);
     if (next === this.page) return;
-    audio.unlock();
     audio.button();
     this.page = next;
     this.refresh();
@@ -571,7 +565,6 @@ export default class RecordsScene extends Phaser.Scene {
         action: () => this.doContinue(),
       };
     if (!silent) {
-      audio.unlock();
       audio.button();
     }
     this.confirmKind = kind;
