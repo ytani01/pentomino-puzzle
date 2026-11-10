@@ -19,10 +19,10 @@ import { ensureSolutions, hasSolution } from '../solutions.js';
 import { loadBest, loadProgress, savePalette } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  CHOICE_ICON_HEIGHT, createButton, createChoiceRow, createPanel, createTooltip,
+  boardChoices, CHOICE_ICON_HEIGHT, createButton, createChoiceRow, createPanel, createTooltip,
   createVersionText, drawMiniBoard, HOW_TO_OPERATE, stackTops, textStyle,
 } from '../ui.js';
-import { boardIcon, paletteIcon } from '../icons.js';
+import { paletteIcon } from '../icons.js';
 
 /** ボード・色の行の高さ。ボタンの上下に 1 ずつ空ける（高くする前の 46 のボタンと 48 の行と同じ）。 */
 const CHOICE_ROW = CHOICE_ICON_HEIGHT + 2;
@@ -214,13 +214,10 @@ export default class TitleScene extends Phaser.Scene {
    * 選択肢は文字でなく図で見せ、名前は説明に回す（TODO-046）。
    */
   createChoices({ cx, centerOf }) {
-    const boardChoices = Object.values(BOARDS).map((board) => ({
-      ...board, icon: boardIcon(board), tooltip: `${board.label}（${board.note}）`,
-    }));
     const paletteChoices = Object.values(PALETTES).map((palette) => ({
       ...palette, icon: paletteIcon(palette), tooltip: palette.label,
     }));
-    this.boardButtons = createChoiceRow(this, cx, centerOf('size'), 'ボード', boardChoices,
+    this.boardButtons = createChoiceRow(this, cx, centerOf('size'), 'ボード', boardChoices(),
                                         (choice) => this.selectBoard(choice.key),
                                         CHOICE_ICON_HEIGHT);
     this.paletteButtons = createChoiceRow(this, cx, centerOf('palette'), '色', paletteChoices,
@@ -231,42 +228,30 @@ export default class TitleScene extends Phaser.Scene {
   /** `はじめる`・`つづきから`・`記録` は同じ行に並べる（TODO-030・TODO-092）。 */
   createStartButtons({ cx, centerOf }) {
     const startStep = START.width + START.gap;
-    createButton(this, {
-      x: cx - startStep,
-      y: centerOf('start'),
-      width: START.width,
-      height: START.height,
-      label: 'はじめる',
-      fontSize: FONT.hud,
-      onClick: () => this.start(),
-    });
-    // 遊びかけが無いボードでは押せなくする（記録の画面の `消す` と同じ見せ方）。
+    // 遊びかけが無いボードでは `つづきから` を押せなくする（記録の画面の `消す` と同じ見せ方）。
     // 隠さないのは、ボードを選び直すとボタンが出たり消えたりして行が動くため。
-    this.resumeButton = createButton(this, {
-      x: cx,
-      y: centerOf('start'),
-      width: START.width,
-      height: START.height,
-      label: 'つづきから',
-      fontSize: FONT.hud,
-      onClick: () => {
-        audio.button();
-        this.scene.start('Game', { resume: true });
-      },
-    });
-    // 記録の一覧（TODO-008）。ボードはあちらでも切り替えられるので、ここで
+    // 記録の一覧（TODO-008）はあちらでもボードを切り替えられるので、ここで
     // 選んでいるボードに関わらず 1 つのボタンから入れる。
-    createButton(this, {
-      x: cx + startStep,
-      y: centerOf('start'),
-      width: START.width,
-      height: START.height,
-      label: '記録',
-      fontSize: FONT.hud,
-      onClick: () => {
-        audio.button();
-        this.scene.start('Records');
-      },
+    const leaveTo = (key, data) => () => {
+      audio.button();
+      this.scene.start(key, data);
+    };
+    const actions = [
+      { label: 'はじめる', onClick: () => this.start() },
+      { label: 'つづきから', key: 'resumeButton', onClick: leaveTo('Game', { resume: true }) },
+      { label: '記録', onClick: leaveTo('Records') },
+    ];
+    actions.forEach((action, index) => {
+      const button = createButton(this, {
+        x: cx + (index - (actions.length - 1) / 2) * startStep,
+        y: centerOf('start'),
+        width: START.width,
+        height: START.height,
+        label: action.label,
+        fontSize: FONT.hud,
+        onClick: action.onClick,
+      });
+      if (action.key) this[action.key] = button;
     });
   }
 

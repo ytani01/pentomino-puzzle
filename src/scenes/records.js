@@ -21,7 +21,7 @@ import {
   BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, PALETTES,
   PALETTE_REGISTRY_KEY, SCREENS, TEXT_COLORS, orientationOf, screenOf,
 } from '../config.js';
-import { boardIcon, ICONS } from '../icons.js';
+import { ICONS } from '../icons.js';
 import { formatTime, selectionAfterRemoval } from '../logic.js';
 import { ensureSolutions, solutionCells } from '../solutions.js';
 import {
@@ -29,7 +29,7 @@ import {
 } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  CHOICE_ICON_HEIGHT, createButton, createChoiceRow, createConfirmDialog, createTitleBar,
+  boardChoices, CHOICE_ICON_HEIGHT, createButton, createChoiceRow, createConfirmDialog, createTitleBar,
   createTooltip, drawMiniBoard, textStyle,
 } from '../ui.js';
 
@@ -195,10 +195,7 @@ export default class RecordsScene extends Phaser.Scene {
     this.add.text(cx, this.L.headingY, '記録', textStyle(FONT.heading, TEXT_COLORS.accent)).setOrigin(0.5);
 
     // タイトルと同じ図のボタンにする（TODO-093）。名前は説明（tooltip）に回す。
-    const boardChoices = Object.values(BOARDS).map((board) => ({
-      ...board, icon: boardIcon(board), tooltip: `${board.label}（${board.note}）`,
-    }));
-    this.boardButtons = createChoiceRow(this, cx, this.L.chooseY, 'ボード', boardChoices,
+    this.boardButtons = createChoiceRow(this, cx, this.L.chooseY, 'ボード', boardChoices(),
                                         (choice) => this.selectBoard(choice.key),
                                         CHOICE_ICON_HEIGHT);
 
@@ -214,7 +211,7 @@ export default class RecordsScene extends Phaser.Scene {
     this.createConfirmDialog();
     this.confirmKind = null;
     this.reload();
-    if (saved) this.restoreRelayout(saved);
+    if (saved) this.applyRelayout(saved);
   }
 
   /**
@@ -239,11 +236,11 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * `relayout()` で控えたものを戻す。`reload()` のあとに呼ぶ（`reload()` は頁・
+   * `relayout()` で控えたものを戻す（本編・デモと同じ名前）。`reload()` のあとに呼ぶ（`reload()` は頁・
    * 選び位置・チェックを先頭へ戻すため）。1 頁の行数は向きで変わるので、頁は
    * `anchor` の回が載る頁に合わせ直す。
    */
-  restoreRelayout(saved) {
+  applyRelayout(saved) {
     this.selected = saved.selected;
     this.page = Math.min(Math.floor(saved.anchor / this.L.rowsPerPage),
                          this.pageCount() - 1);
@@ -385,21 +382,13 @@ export default class RecordsScene extends Phaser.Scene {
    * 同じ組みを、`ui.js` の `createConfirmDialog()` で Canvas 内に作る。
    */
   createConfirmDialog() {
-    // 開くときに `openConfirm()` が入れ替える（TODO-031）。枠が出ていない間に
-    // 呼ばれることは無いが、プロパティの有無が場面で変わらないよう先に作る。
-    // 何をするか（TODO-031、TODO-071）は `confirmAction` へ持たせ、枠を組み直さず
-    // 文言と行き先だけを差し替える。
-    this.confirmAction = () => this.hideConfirm();
     const screen = screenOf(this);
-    const { parts, text } = createConfirmDialog(this, {
+    this.confirm = createConfirmDialog(this, {
       width: screen.width,
       height: screen.height,
       depth: CONFIRM_DEPTH,
-      onYes: () => this.confirmAction(),
       onNo: () => this.hideConfirm(),
     });
-    this.confirmParts = parts;
-    this.confirmText = text;
   }
 
   // ---- 操作 -------------------------------------------------------------
@@ -441,10 +430,24 @@ export default class RecordsScene extends Phaser.Scene {
   toggleSelectAll() {
     if (this.solutions === null || this.entries.length === 0) return;
     audio.button();
-    const nos = this.entries.filter((entry) => entry.no).map((entry) => entry.no);
-    const allChecked = nos.length > 0 && nos.every((no) => this.checked.has(no));
-    nos.forEach((no) => (allChecked ? this.checked.delete(no) : this.checked.add(no)));
+    const allChecked = this.allChecked();
+    this.checkableNos().forEach((no) => (allChecked ? this.checked.delete(no) : this.checked.add(no)));
     this.refresh();
+  }
+
+  /** チェックできる件（番号を持つ件。`toggleRow()` の説明）の番号。 */
+  checkableNos() {
+    return this.entries.filter((entry) => entry.no).map((entry) => entry.no);
+  }
+
+  /**
+   * チェックできる件が 1 件以上あり、全部（見えていない頁のぶんも）にチェックが
+   * 付いているか。「全部選ぶ」を選んである見た目にするか、外す動作にするかを、
+   * 見た目と動作で食い違わないよう 1 か所で決める。
+   */
+  allChecked() {
+    const nos = this.checkableNos();
+    return this.solutions !== null && nos.length > 0 && nos.every((no) => this.checked.has(no));
   }
 
   /** 端では押せなくしてあるが、ここでも範囲を守る。 */
@@ -515,19 +518,13 @@ export default class RecordsScene extends Phaser.Scene {
         text: `${label} の遊びかけの盤面が消えます\nこの回を続けますか？`,
         action: () => this.doContinue(),
       };
-    if (!silent) {
-      audio.button();
-    }
     this.confirmKind = kind;
-    this.confirmAction = action;
-    this.confirmText.setText(text);
-    this.confirmParts.forEach((part) => part.setVisible(true));
+    this.confirm.open(text, action, silent);
   }
 
   hideConfirm() {
-    audio.button();
     this.confirmKind = null;
-    this.confirmParts.forEach((part) => part.setVisible(false));
+    this.confirm.hide();
   }
 
   /**
@@ -537,9 +534,7 @@ export default class RecordsScene extends Phaser.Scene {
    * 消したあとの選び位置と頁は `selectionAfterRemoval()`（`logic.js`）で出す。
    */
   doTrash() {
-    audio.button();
-    this.confirmKind = null;
-    this.confirmParts.forEach((part) => part.setVisible(false));
+    this.hideConfirm();
     if (this.solutions === null || this.checked.size === 0) return;
     const removed = [...this.checked];
     const next = selectionAfterRemoval(this.entries.map((entry) => entry.no),
@@ -589,9 +584,16 @@ export default class RecordsScene extends Phaser.Scene {
     return Math.max(1, Math.ceil(this.entries.length / this.L.rowsPerPage));
   }
 
-  /** 一覧・頁送り・完成形を、今の頁・選んでいる 1 件・チェックに合わせて出し直す。 */
+  /** 一覧・頁送り・全部選ぶ・完成形を、今の頁・選んでいる 1 件・チェックに合わせて出し直す。 */
   refresh() {
-    const pages = this.pageCount();
+    this.refreshRows();
+    this.refreshPager();
+    this.refreshSelectAll();
+    this.refreshDetail();
+  }
+
+  /** 一覧の行とチェックボックス。 */
+  refreshRows() {
     const ready = this.solutions !== null;
     this.rowButtons.forEach((button, i) => {
       const index = this.page * this.L.rowsPerPage + i;
@@ -610,23 +612,33 @@ export default class RecordsScene extends Phaser.Scene {
       check.setSelected(isChecked);
       check.setIcon(isChecked ? ICONS.check : null);
     });
+    this.emptyText.setVisible(this.entries.length === 0);
+  }
+
+  /** 頁の数と、前へ・次へ。 */
+  refreshPager() {
+    const pages = this.pageCount();
     const empty = this.entries.length === 0;
-    this.emptyText.setVisible(empty);
     // 頁送りは 1 頁に収まっていても出す（端で押せなくする）。1 件も無いときだけ
     // 頁の数を消す。送る先が無いことと、記録が無いことは別なので。
     this.pageText.setText(empty ? '' : `${this.page + 1} / ${pages}`);
     this.prevButton.setEnabled(!empty && this.page > 0);
     this.nextButton.setEnabled(!empty && this.page < pages - 1);
+  }
 
-    // 「全部選ぶ」は、番号を持つ件が 1 件以上あり、全部（見えていない頁のぶんも）
-    // にチェックが付いているときだけ選んである見た目にする。
-    const nos = this.entries.filter((entry) => entry.no).map((entry) => entry.no);
-    const allChecked = ready && nos.length > 0 && nos.every((no) => this.checked.has(no));
-    this.selectAllButton.setEnabled(ready && nos.length > 0);
+  /** 一覧の上の行。「全部選ぶ」とゴミ箱。 */
+  refreshSelectAll() {
+    // 選んである見た目にするのは、全部にチェックが付いているときだけ（`allChecked()`）。
+    const allChecked = this.allChecked();
+    this.selectAllButton.setEnabled(this.solutions !== null && this.checkableNos().length > 0);
     this.selectAllButton.setSelected(allChecked);
     this.selectAllButton.setIcon(allChecked ? ICONS.check : null);
-
     this.trashButton.setEnabled(this.checked.size > 0);
+  }
+
+  /** 選んでいる 1 件の見出し・完成形・達成度・「この回を続ける」。 */
+  refreshDetail() {
+    const empty = this.entries.length === 0;
     this.continueButton.setVisible(!empty);
     this.continueButton.setEnabled(this.continueProgress() !== null);
 

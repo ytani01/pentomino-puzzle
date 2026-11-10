@@ -239,6 +239,37 @@ export const TEXT_COLORS = {
 };
 
 /**
+ * ボタンの状態ごとの色（`createButton()` の `redraw()` が引く）。状態は先に 1 つへ決める
+ * （`disabled` > `selected` > `pressed` > `hover` > `normal`）ので、組み合わせごとの
+ * 分岐を `redraw()` に持たない。選んだ状態は「押し込んだ面 + 強調色の枠と文字」で、
+ * 塗りだけでは並べたときにどれを選んでいるか一目で分からないため。
+ * `fill`・`edge`・`icon` は Graphics が取る数値、`text`・`mark` は Phaser の文字が取る文字列。
+ * `icon` は文字と同じ規則で変える（`TEXT_COLORS` に対応する `COLORS` の値）。
+ */
+export const BUTTON_STATES = {
+  disabled: {
+    fill: COLORS.panel, edge: COLORS.panelEdge, text: TEXT_COLORS.disabled,
+    icon: COLORS.buttonTextDisabled, mark: TEXT_COLORS.disabled,
+  },
+  selected: {
+    fill: COLORS.buttonFaceDown, edge: COLORS.accent, text: TEXT_COLORS.accent,
+    icon: COLORS.accent, mark: TEXT_COLORS.accent,
+  },
+  pressed: {
+    fill: COLORS.buttonFaceDown, edge: COLORS.buttonEdge, text: TEXT_COLORS.normal,
+    icon: COLORS.text, mark: TEXT_COLORS.dim,
+  },
+  hover: {
+    fill: COLORS.buttonFaceHover, edge: COLORS.buttonEdge, text: TEXT_COLORS.normal,
+    icon: COLORS.text, mark: TEXT_COLORS.dim,
+  },
+  normal: {
+    fill: COLORS.buttonFace, edge: COLORS.buttonEdge, text: TEXT_COLORS.normal,
+    icon: COLORS.text, mark: TEXT_COLORS.dim,
+  },
+};
+
+/**
  * 文字の大きさ。**内部解像度の座標系**なので、`Scale.FIT` が縮めたぶんだけ
  * 実際は小さく出る（TODO-026）。
  *

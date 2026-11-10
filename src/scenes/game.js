@@ -457,16 +457,12 @@ export default class GameScene extends Phaser.Scene {
    * `ui.js` の `createConfirmDialog()`（記録の画面と共通）。
    */
   createConfirmDialog() {
-    const { parts, text } = createConfirmDialog(this, {
+    this.confirm = createConfirmDialog(this, {
       width: this.layout.width,
       height: this.layout.height,
       depth: DEPTH.confirm,
-      onYes: () => this.confirmAction(),
       onNo: () => this.hideConfirm(),
     });
-    this.confirmParts = parts;
-    this.confirmText = text;
-    this.confirmAction = null;
   }
 
   // ---- ピースの見た目 -------------------------------------------------
@@ -1250,17 +1246,13 @@ export default class GameScene extends Phaser.Scene {
         onYes: () => this.goToTitle(),
       }
       : { message: 'やり直しますか？\n今の盤面は消えます', onYes: () => this.restart() };
-    if (!silent) audio.button();
     this.confirmKind = kind;
-    this.confirmText.setText(message);
-    this.confirmAction = onYes;
-    this.confirmParts.forEach((part) => part.setVisible(true));
+    this.confirm.open(message, onYes, silent);
   }
 
   hideConfirm() {
-    audio.button();
     this.confirmKind = null;
-    this.confirmParts.forEach((part) => part.setVisible(false));
+    this.confirm.hide();
   }
 
   goToTitle() {

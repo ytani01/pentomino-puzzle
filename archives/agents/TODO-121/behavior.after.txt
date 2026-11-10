@@ -1,0 +1,208 @@
+{
+ "boardKeys": [
+  "8x8",
+  "6x10"
+ ],
+ "titleTooltip": {
+  "visible": true,
+  "text": "6×10（穴なし）",
+  "resumeButton": true
+ },
+ "gameOpen": {
+  "kind": "restart",
+  "visible": [
+   true,
+   true,
+   true,
+   true,
+   true
+  ],
+  "text": "やり直しますか？\n今の盤面は消えます"
+ },
+ "gameNo": {
+  "kind": null,
+  "visible": [
+   false,
+   false,
+   false,
+   false,
+   false
+  ],
+  "text": "やり直しますか？\n今の盤面は消えます"
+ },
+ "gameYes": {
+  "restarted": 1
+ },
+ "gameRelayout": {
+  "kind": "title",
+  "visible": [
+   true,
+   true,
+   true,
+   true,
+   true
+  ],
+  "text": "タイトルへ戻りますか？\n途中の盤面は残るので、\n「つづきから」で再開できます"
+ },
+ "recInit": {
+  "entries": 10,
+  "page": 0,
+  "checked": 0,
+  "selectAllSelected": false,
+  "selectAllEnabled": true,
+  "trashEnabled": false,
+  "prev": false,
+  "next": true,
+  "pageText": "1 / 2",
+  "kind": null,
+  "visible": [
+   false,
+   false,
+   false,
+   false,
+   false
+  ],
+  "tooltip": 2
+ },
+ "recNext": {
+  "entries": 10,
+  "page": 1,
+  "checked": 0,
+  "selectAllSelected": false,
+  "selectAllEnabled": true,
+  "trashEnabled": false,
+  "prev": true,
+  "next": false,
+  "pageText": "2 / 2",
+  "kind": null,
+  "visible": [
+   false,
+   false,
+   false,
+   false,
+   false
+  ],
+  "tooltip": 2
+ },
+ "recSelectAll": {
+  "entries": 10,
+  "page": 1,
+  "checked": 10,
+  "selectAllSelected": true,
+  "selectAllEnabled": true,
+  "trashEnabled": true,
+  "prev": true,
+  "next": false,
+  "pageText": "2 / 2",
+  "kind": null,
+  "visible": [
+   false,
+   false,
+   false,
+   false,
+   false
+  ],
+  "tooltip": 2
+ },
+ "recDeselectAll": {
+  "entries": 10,
+  "page": 1,
+  "checked": 0,
+  "selectAllSelected": false,
+  "selectAllEnabled": true,
+  "trashEnabled": false,
+  "prev": true,
+  "next": false,
+  "pageText": "2 / 2",
+  "kind": null,
+  "visible": [
+   false,
+   false,
+   false,
+   false,
+   false
+  ],
+  "tooltip": 2
+ },
+ "recTrashOpen": {
+  "entries": 10,
+  "page": 1,
+  "checked": 10,
+  "selectAllSelected": true,
+  "selectAllEnabled": true,
+  "trashEnabled": true,
+  "prev": true,
+  "next": false,
+  "pageText": "2 / 2",
+  "kind": "trash",
+  "visible": [
+   true,
+   true,
+   true,
+   true,
+   true
+  ],
+  "tooltip": 2
+ },
+ "recTrashNo": {
+  "entries": 10,
+  "page": 1,
+  "checked": 10,
+  "selectAllSelected": true,
+  "selectAllEnabled": true,
+  "trashEnabled": true,
+  "prev": true,
+  "next": false,
+  "pageText": "2 / 2",
+  "kind": null,
+  "visible": [
+   false,
+   false,
+   false,
+   false,
+   false
+  ],
+  "tooltip": 2
+ },
+ "recRelayout": {
+  "entries": 10,
+  "page": 0,
+  "checked": 10,
+  "selectAllSelected": true,
+  "selectAllEnabled": true,
+  "trashEnabled": true,
+  "prev": false,
+  "next": true,
+  "pageText": "1 / 2",
+  "kind": "trash",
+  "visible": [
+   true,
+   true,
+   true,
+   true,
+   true
+  ],
+  "tooltip": 2
+ },
+ "recTrashYes": {
+  "entries": 0,
+  "page": 0,
+  "checked": 0,
+  "selectAllSelected": false,
+  "selectAllEnabled": false,
+  "trashEnabled": false,
+  "prev": false,
+  "next": false,
+  "pageText": "",
+  "kind": null,
+  "visible": [
+   false,
+   false,
+   false,
+   false,
+   false
+  ],
+  "tooltip": 2
+ }
+}
+console errors: []

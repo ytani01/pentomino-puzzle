@@ -6,9 +6,11 @@
  */
 
 import {
-  ACRYLIC, BACKDROP, COLORS, CONFIRM, FONT, HINT_BADGE, HOLE, ICON, PIECE_BY_NAME, TEXT_COLORS, TILE, TOOLTIP,
+  ACRYLIC, BACKDROP, BOARDS, BUTTON_STATES, COLORS, CONFIRM, FONT, HINT_BADGE, HOLE, ICON, PIECE_BY_NAME, TEXT_COLORS, TILE, TOOLTIP,
   VERSION, screenOf,
 } from './config.js';
+import * as audio from './audio.js';
+import { boardIcon } from './icons.js';
 import { darken, fillColor, pieceColor } from './logic.js';
 
 /**
@@ -307,6 +309,16 @@ const CHOICE_BUTTON = {
 export const CHOICE_ICON_HEIGHT = 58;
 
 /**
+ * ボードの選択肢（`createChoiceRow()` に渡す）。タイトルと記録の画面が同じ図のボタンと
+ * 説明にするため（TODO-093）。名前は図の代わりに説明（tooltip）へ回す。
+ */
+export function boardChoices() {
+  return Object.values(BOARDS).map((board) => ({
+    ...board, icon: boardIcon(board), tooltip: `${board.label}（${board.note}）`,
+  }));
+}
+
+/**
  * ラベル 1 つと、選択肢ぶんのボタンを 1 行に並べる。中心を `(cx, y)` に置く。
  * 戻り値のボタンには選択肢のキーを持たせ、選び直したときの塗り分けに使う。
  *
@@ -347,14 +359,16 @@ export function createChoiceRow(scene, cx, y, label, choices, onSelect,
  * ボタンへクリックが抜けないようにする（Phaser の入力は既定で最前面の対象だけに
  * 配る `topOnly` なので、これで足りる）。
  *
- * 文言と「はい」の動作は開くときにシーン側が差し替える（枠を組み直さなければ
- * 確認の見え方が分かれない）。だから `onYes` は押した時点のシーンの
- * `confirmAction` を呼ぶ形で渡してもらう。
+ * 文言と「はい」の動作は開くときに `open()` で差し替える（枠を組み直さなければ
+ * 確認の見え方が分かれない）。「はい」を押すと、そのとき開いた `onYes` を呼ぶ。
+ * 閉じる `hide()` は「いいえ」と同じ音を鳴らす。開くときの音は `silent` で消せる
+ * （向きが変わって開き直すとき。TODO-095）。何の確認かの印（`confirmKind`）は
+ * 向きが変わったときの持ち越しに要るので、シーン側が持つ。
  *
- * `parts` は開閉のためにまとめて `setVisible()` する対象、`text` は文言の差し替え先。
- * `width` / `height` は画面の大きさ、`depth` は重なり順。
+ * 戻り値の `parts` は開閉でまとめて `setVisible()` する対象、`text` は文言。
+ * `width` / `height` は画面の大きさ、`depth` は重なり順、`onNo` は「いいえ」の動作。
  */
-export function createConfirmDialog(scene, { width, height, depth, onYes, onNo }) {
+export function createConfirmDialog(scene, { width, height, depth, onNo }) {
   const cfg = CONFIRM;
   const x = (width - cfg.width) / 2;
   const y = (height - cfg.height) / 2;
@@ -382,10 +396,36 @@ export function createConfirmDialog(scene, { width, height, depth, onYes, onNo }
     fontSize: FONT.small,
     onClick,
   }).setDepth(depth).setVisible(false);
-  parts.push(button(left + cfg.buttonWidth / 2, 'はい', onYes));
+  // 開くまでは押せないが、プロパティの有無が場面で変わらないよう「いいえ」と同じ動作を入れておく。
+  let yes = onNo;
+  parts.push(button(left + cfg.buttonWidth / 2, 'はい', () => yes()));
   parts.push(button(left + cfg.buttonWidth + cfg.gap + cfg.buttonWidth / 2, 'いいえ', onNo));
 
-  return { parts, text };
+  return {
+    parts,
+    text,
+    open(message, onYes, silent = false) {
+      if (!silent) audio.button();
+      yes = onYes;
+      text.setText(message);
+      parts.forEach((part) => part.setVisible(true));
+    },
+    hide() {
+      audio.button();
+      parts.forEach((part) => part.setVisible(false));
+    },
+  };
+}
+
+/** 左寄せのボタンで、ラベル・印と枠の間に空ける分。 */
+const BUTTON_PAD = 14;
+
+/** ボタンの今の状態を 1 つに決める。優先は `BUTTON_STATES` の説明のとおり。 */
+function buttonState(button) {
+  if (!button.enabled) return 'disabled';
+  if (button.selected) return 'selected';
+  if (button.pressed) return 'pressed';
+  return button.hovered ? 'hover' : 'normal';
 }
 
 /**
@@ -410,9 +450,6 @@ export function createConfirmDialog(scene, { width, height, depth, onYes, onNo }
  * 説明を見なくても違いが分かってほしいボタン（デモの探し方）で使う（TODO-097）。
  * `setCaption()` で差し替えられる。
  */
-
-/** 左寄せのボタンで、ラベル・印と枠の間に空ける分。 */
-const BUTTON_PAD = 14;
 
 export function createButton(scene, options) {
   const {
@@ -442,38 +479,20 @@ export function createButton(scene, options) {
   container.selected = false;
 
   const redraw = () => {
-    // 選んだ状態は「押し込んだ面 + 強調色の枠と文字」で出す。塗りだけでは、
-    // 並べたときにどれを選んでいるか一目で分からないため。
-    let fill = COLORS.buttonFace;
-    if (!container.enabled) fill = COLORS.panel;
-    else if (container.pressed || container.selected) fill = COLORS.buttonFaceDown;
-    else if (container.hovered) fill = COLORS.buttonFaceHover;
-    let edge = COLORS.buttonEdge;
-    if (!container.enabled) edge = COLORS.panelEdge;
-    else if (container.selected) edge = COLORS.accent;
+    const state = buttonState(container);
+    const colors = BUTTON_STATES[state];
     face.clear();
-    face.fillStyle(fill, 1);
+    face.fillStyle(colors.fill, 1);
     face.fillRoundedRect(-width / 2, -height / 2, width, height, 8);
-    face.lineStyle(2, edge, 1);
+    face.lineStyle(2, colors.edge, 1);
     face.strokeRoundedRect(-width / 2, -height / 2, width, height, 8);
-    let color = TEXT_COLORS.normal;
-    if (!container.enabled) color = TEXT_COLORS.disabled;
-    else if (container.selected) color = TEXT_COLORS.accent;
-    text.setColor(color);
-    captionText.setColor(color);
-    // アイコンも文字と同じ規則で色を変える。Graphics は数値の色を取るので
-    // `TEXT_COLORS` に対応する `COLORS` の値を使う。
-    let iconColor = COLORS.text;
-    if (!container.enabled) iconColor = COLORS.buttonTextDisabled;
-    else if (container.selected) iconColor = COLORS.accent;
+    text.setColor(colors.text);
+    captionText.setColor(colors.text);
     iconGraphics.clear();
-    if (icon) icon(iconGraphics, iconColor);
-    // 印もラベルと同じ規則で色を変える。選んだ行の印が地の色のままだと、
+    if (icon) icon(iconGraphics, colors.icon);
+    // 印もラベルと同じ規則で変える。選んだ行の印が地の色のままだと、
     // 選ばれていることが伝わりにくい（TODO-027）。
-    let markColor = TEXT_COLORS.dim;
-    if (!container.enabled) markColor = TEXT_COLORS.disabled;
-    else if (container.selected) markColor = TEXT_COLORS.accent;
-    markText.setColor(markColor);
+    markText.setColor(colors.mark);
   };
 
   container.setSize(width, height);
