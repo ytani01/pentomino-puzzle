@@ -214,15 +214,21 @@ export const CONFIRM = {
   width: 460, height: 200, buttonWidth: 130, buttonHeight: 56, gap: 20,
 };
 
-/** テキストの色。Phaser は文字列で受けるので、`COLORS` を文字列にしたもの。 */
+/** 数値の色（`0xe8ecf4`）を、Phaser の文字が受ける `'#e8ecf4'` にする。 */
+const cssColor = (n) => `#${n.toString(16).padStart(6, '0')}`;
+
+/**
+ * テキストの色。Phaser は文字列で受けるので、`COLORS` を文字列にしたもの。
+ * 数値と文字列を別々に書くと、色を変えたときに片方が残るため `COLORS` から作る。
+ */
 export const TEXT_COLORS = {
-  normal: '#e8ecf4',
-  dim: '#8d97b0',
-  accent: '#6fd3f2',
-  danger: '#ff5555',
-  disabled: '#5b6480',
+  normal: cssColor(COLORS.text),
+  dim: cssColor(COLORS.textDim),
+  accent: cssColor(COLORS.accent),
+  danger: cssColor(COLORS.danger),
+  disabled: cssColor(COLORS.buttonTextDisabled),
   // 明るい地（`COLORS.solved`）の上の文字。白では読みにくいため（TODO-103）。
-  onBright: '#181b26',
+  onBright: cssColor(COLORS.background),
 };
 
 /**
@@ -410,36 +416,35 @@ export function makeLayout({
     Math.floor((boardBoxWidth - PANEL_PAD * 2) / board.cols),
     Math.floor((boardBoxHeight - PANEL_PAD * 2) / board.rows),
   );
-  const boardPanel = {
+  const boardSize = {
     width: board.cols * cell + PANEL_PAD * 2,
     height: board.rows * cell + PANEL_PAD * 2,
   };
-  // 交わる向き（横画面なら上下、縦画面なら左右）は中央へ寄せる。ボードが
+  // ボードの枠とトレイの枠の位置と大きさ。向きでボードとトレイの並びが変わるので、
+  // ここで 1 度に決める。
+  // ボードは、交わる向き（横画面なら上下、縦画面なら左右）を中央へ寄せる。
   // 幅で頭打ちになったとき（6×10 の横画面など）に片側へ偏らせないため。
-  boardPanel.x = portrait
-    ? Math.round((width - boardPanel.width) / 2)
-    : MARGIN;
-  boardPanel.y = portrait
-    ? top
-    : top + Math.round(((bottom - top) - boardPanel.height) / 2);
-
   // トレイの枠は残りを全部使う（棚の奥行きの合計よりは必ず広い）。
   // スロットは枠のボード側の端から詰めるので、余りはボードから遠い側に出る。
-  const trayPanel = portrait
-    ? {
-      x: MARGIN,
-      y: boardPanel.y + boardPanel.height + GAP,
-      width: width - MARGIN * 2,
-      height: 0,
-    }
-    : {
-      x: MARGIN + boardPanel.width + GAP,
+  let boardPanel;
+  let trayPanel;
+  if (portrait) {
+    boardPanel = {
+      ...boardSize,
+      x: Math.round((width - boardSize.width) / 2),
       y: top,
-      width: 0,
-      height: bottom - top,
     };
-  trayPanel.height = portrait ? bottom - trayPanel.y : trayPanel.height;
-  trayPanel.width = portrait ? trayPanel.width : width - MARGIN - trayPanel.x;
+    const y = boardPanel.y + boardPanel.height + GAP;
+    trayPanel = { x: MARGIN, y, width: width - MARGIN * 2, height: bottom - y };
+  } else {
+    boardPanel = {
+      ...boardSize,
+      x: MARGIN,
+      y: top + Math.round(((bottom - top) - boardSize.height) / 2),
+    };
+    const x = MARGIN + boardPanel.width + GAP;
+    trayPanel = { x, y: top, width: width - MARGIN - x, height: bottom - top };
+  }
 
   const trayInner = {
     x: trayPanel.x + PANEL_PAD,
