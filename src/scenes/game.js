@@ -322,9 +322,9 @@ export default class GameScene extends Phaser.Scene {
 
     this.timeText = this.add.text(hud.x + hud.padding, rowY(0), formatTime(0),
       textStyle(FONT.hud, TEXT_COLORS.normal)).setOrigin(0, 0.5).setDepth(DEPTH.hud);
+
     this.remainText = this.add.text(hud.x + hud.padding + hud.remainX, rowY(0), '',
       textStyle(FONT.hud, TEXT_COLORS.dim)).setOrigin(0, 0.5).setDepth(DEPTH.hud);
-
 
     // 解の有無（TODO-013）。切のうちは隠しておく。色付きの札で目立たせる（TODO-045）。
     this.hintBadge = createHintBadge(this, hud.x + hud.padding + hud.statusX, rowY(0), 0)
