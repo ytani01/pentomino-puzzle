@@ -39,3 +39,25 @@
 エラー 0 件。警告 4 件（毎回同じ）:
 `[.WebGL-…]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels`
 （headless Chromium のドライバのメッセージ）。
+
+# 後半: 直した後（実装 4c110e2 を含む HEAD fcdacf7）
+
+撮り方: `capture.js` の `OUT` を `after` にして同じ手順で撮った。キャッシュは CDP の
+`Network.setCacheDisabled` で切ってから読み込んでいる（リポジトリの外の
+`/home/ytani/tmp/playwright-mcp/todo111/capture-after.js`。差は `OUT` とこの 1 行だけ）。
+新しい JS が読まれたことは、`src/icons.js` を `fetch` して `strokePieceEdges` が入っているのを確かめた。
+切った範囲は前半と同じ（本編 x=111,y=227,1057x422／タイトル x=417,y=404,623x223）。
+
+## 結果: 4 枚とも `cmp` で全バイト一致
+
+| 画像 | sha256（before と after で同じ） |
+|---|---|
+| `/home/ytani/tmp/playwright-mcp/todo111/after/game-colorful.png` | `256b8d24…035158` |
+| `/home/ytani/tmp/playwright-mcp/todo111/after/game-glass.png` | `7a720df4…832134` |
+| `/home/ytani/tmp/playwright-mcp/todo111/after/game-neon.png` | `b8abee59…cbdb0` |
+| `/home/ytani/tmp/playwright-mcp/todo111/after/title-palette.png` | `8c775bdd…d3dc25` |
+
+before の画像は `/home/ytani/tmp/playwright-mcp/todo111/before/` に同名である。
+食い違いが無いので、差のピクセル数の調べと並べて見ることはしていない。
+
+コンソール: エラー 0 件。
