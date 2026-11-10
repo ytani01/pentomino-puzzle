@@ -1,7 +1,7 @@
 # TODO
 
-**残っている項目: TODO-105、TODO-106、TODO-107、TODO-108。** これまでに 104 件を決着させた。
-新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-109` から。**
+**残っている項目: TODO-105、TODO-106、TODO-107、TODO-108、TODO-109。** これまでに 104 件を決着させた。
+新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-110` から。**
 
 ## TODO-105. 確認ダイアログの組み立てを ui.js にまとめる
 
@@ -78,6 +78,25 @@
 
 **無駄を省く工夫:** reviewer は差し替えの前後でスタイルのキーと値が同じかを差分で見る。
 画面は 5 つのシーンを 1 枚ずつ（縦・横のどちらか片方）で足りる。`tests.html` は流さない。
+
+## TODO-109. 使われていないコードを消す
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / low）+ tests（Sonnet 5.5 / low） |
+
+- [ ] どこからも呼ばれないものを消す: `cachedSolutions()`（`src/solutions.js`）、
+      `setMuted()`（`src/audio.js`）、`OUTLINE.width`（`src/config.js`。説明のコメントが
+      ほかの値から参照しているので、参照も直す）
+- [ ] テストからしか呼ばれない `removeHistory()`（`src/storage.js`）を、そのテストと一緒に消す
+      （`removeHistoryMany()` に置き換わった。TODO-071）
+- [ ] 文書（`docs/developer.md`・`CLAUDE.md`）に名前が残っていれば消す
+
+`emptyCells()`・`placedNames()`・`PLAYABLE_CELLS` もテストからしか使われないが、
+テストの道具として使われているので残す。
+
+**無駄を省く工夫:** 消す前に `rg -w <名前> src tools tests.html docs` で呼ぶ側が無いことを
+1 回ずつ見るだけにする。確認は `tests.html` が全件通ることと、本編が起動することだけ。
 
 ## 完了済み
 
