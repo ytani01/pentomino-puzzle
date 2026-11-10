@@ -27,7 +27,7 @@ import {
 import * as audio from '../audio.js';
 import {
   createButton, createConfirmDialog, createHintBadge, createPanel, createTitleBar, createTooltip,
-  drawAcrylic, HOW_TO_OPERATE, HOW_TO_OPERATE_SHORT,
+  drawAcrylic, HOW_TO_OPERATE, HOW_TO_OPERATE_SHORT, textStyle,
 } from '../ui.js';
 import { ICONS, strokePieceEdges, strokeTurnMark } from '../icons.js';
 import { TEX } from './boot.js';
@@ -320,17 +320,11 @@ export default class GameScene extends Phaser.Scene {
     createPanel(this, hud.x, hud.y, hud.width, hud.height).setDepth(DEPTH.hud);
     const rowY = (row) => hud.y + hud.rowHeight * (row + 0.5);
 
-    this.timeText = this.add.text(hud.x + hud.padding, rowY(0), formatTime(0), {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.hud}px`,
-      color: TEXT_COLORS.normal,
-    }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
+    this.timeText = this.add.text(hud.x + hud.padding, rowY(0), formatTime(0),
+      textStyle(FONT.hud, TEXT_COLORS.normal)).setOrigin(0, 0.5).setDepth(DEPTH.hud);
+    this.remainText = this.add.text(hud.x + hud.padding + hud.remainX, rowY(0), '',
+      textStyle(FONT.hud, TEXT_COLORS.dim)).setOrigin(0, 0.5).setDepth(DEPTH.hud);
 
-    this.remainText = this.add.text(hud.x + hud.padding + hud.remainX, rowY(0), '', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.hud}px`,
-      color: TEXT_COLORS.dim,
-    }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
 
     // 解の有無（TODO-013）。切のうちは隠しておく。色付きの札で目立たせる（TODO-045）。
     this.hintBadge = createHintBadge(this, hud.x + hud.padding + hud.statusX, rowY(0), 0)
@@ -339,11 +333,8 @@ export default class GameScene extends Phaser.Scene {
     // 完成した解が新しいか記録済みか（TODO-072）。解の有無の札と同じ位置だが、
     // 札は完成しているときは出ず、こちらは完成しているときだけ出す
     // （`refreshHud()` が消す）ので重ならない。
-    this.recordText = this.add.text(hud.x + hud.padding + hud.statusX, rowY(0), '', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.hud}px`,
-      color: TEXT_COLORS.accent,
-    }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
+    this.recordText = this.add.text(hud.x + hud.padding + hud.statusX, rowY(0), '',
+      textStyle(FONT.hud, TEXT_COLORS.accent)).setOrigin(0, 0.5).setDepth(DEPTH.hud);
 
     // タイトルへは画面を離れるボタンなので、他と分けて一番左に置く（TODO-076）。
     // 続く 3 つが「解くのを助けるもの」、残りが「遊び方を変えるもの」。
@@ -398,11 +389,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createMessage() {
-    this.messageText = this.add.text(this.layout.message.x, this.layout.message.y, '', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.body}px`,
-      color: TEXT_COLORS.dim,
-    }).setOrigin(0.5).setDepth(DEPTH.hud);
+    this.messageText = this.add.text(this.layout.message.x, this.layout.message.y, '',
+      textStyle(FONT.body, TEXT_COLORS.dim)).setOrigin(0.5).setDepth(DEPTH.hud);
   }
 
   /**
@@ -413,12 +401,9 @@ export default class GameScene extends Phaser.Scene {
   createHelp() {
     const { x, y, lines } = this.layout.help;
     const text = lines > 1 ? HOW_TO_OPERATE.join('\n') : HOW_TO_OPERATE_SHORT;
-    this.add.text(x, y, text, {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.small}px`,
-      color: TEXT_COLORS.dim,
+    this.add.text(x, y, text, textStyle(FONT.small, TEXT_COLORS.dim, {
       align: 'center',
-    }).setOrigin(0.5).setDepth(DEPTH.hud);
+    })).setOrigin(0.5).setDepth(DEPTH.hud);
   }
 
   /**

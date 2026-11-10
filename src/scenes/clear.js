@@ -13,7 +13,7 @@ import { formatTime } from '../logic.js';
 import { clearProgress, RECORD_STATUS, shouldRecordBest } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  createButton, createPanel, stackTops,
+  createButton, createPanel, stackTops, textStyle,
 } from '../ui.js';
 
 /**
@@ -111,29 +111,20 @@ export default class ClearScene extends Phaser.Scene {
     createPanel(this, cx - frameWidth / 2, frameTop, frameWidth,
                 buttonTop + STACK[2].height + FRAME_PAD.y - frameTop);
 
-    this.add.text(cx, titleTop + STACK[0].height / 2, 'COMPLETE', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.title}px`,
-      color: TEXT_COLORS.accent,
-    }).setOrigin(0.5);
+    this.add.text(cx, titleTop + STACK[0].height / 2, 'COMPLETE',
+      textStyle(FONT.title, TEXT_COLORS.accent)).setOrigin(0.5);
 
     createPanel(this, cx - panelWidth / 2, panelTop, panelWidth, STACK[1].height);
 
-    this.add.text(cx, panelTop + PANEL_ROWS.time, formatTime(this.elapsed), {
-      fontFamily: FONT.family,
-      fontSize: `${TIME_FONT}px`,
-      color: TEXT_COLORS.normal,
-    }).setOrigin(0.5);
+    this.add.text(cx, panelTop + PANEL_ROWS.time, formatTime(this.elapsed),
+      textStyle(TIME_FONT, TEXT_COLORS.normal)).setOrigin(0.5);
 
     // 解の番号（TODO-022）。回転・反転しただけの解は同じ番号になる。
     // 分母（解の総数）はボードで違う（8×8 は 65、6×10 は 2339）ので、ボードの名前を添える。
     if (this.no !== null && this.total !== null) {
       this.add.text(cx, panelTop + PANEL_ROWS.number,
-                    `正解の ${this.no} 番（${board.label} の全 ${this.total} 解）`, {
-                      fontFamily: FONT.family,
-                      fontSize: `${FONT.body}px`,
-                      color: TEXT_COLORS.normal,
-                    }).setOrigin(0.5);
+                    `正解の ${this.no} 番（${board.label} の全 ${this.total} 解）`,
+                    textStyle(FONT.body, TEXT_COLORS.normal)).setOrigin(0.5);
     }
 
     // 記録はボードごとなので、最短時間の行にはボードの名前を添える。おまかせを使った回は、
@@ -142,11 +133,8 @@ export default class ClearScene extends Phaser.Scene {
     // 状態の行は、履歴に足したか・上書きしたか・前の記録のままか（TODO-072）。
     // HUD にも同じものを出す。
     if (this.status !== null) {
-      this.add.text(cx, panelTop + PANEL_ROWS.status, RECORD_STATUS[this.status], {
-        fontFamily: FONT.family,
-        fontSize: `${FONT.body}px`,
-        color: this.status === 'kept' ? TEXT_COLORS.dim : TEXT_COLORS.accent,
-      }).setOrigin(0.5);
+      this.add.text(cx, panelTop + PANEL_ROWS.status, RECORD_STATUS[this.status],
+        textStyle(FONT.body, this.status === 'kept' ? TEXT_COLORS.dim : TEXT_COLORS.accent)).setOrigin(0.5);
     }
 
     let bestLine;
@@ -159,11 +147,8 @@ export default class ClearScene extends Phaser.Scene {
     } else {
       bestLine = `${board.label} の最短 ${formatTime(this.best)}`;
     }
-    this.add.text(cx, panelTop + PANEL_ROWS.best, bestLine, {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.hud}px`,
-      color: this.bestUpdated ? TEXT_COLORS.accent : TEXT_COLORS.dim,
-    }).setOrigin(0.5);
+    this.add.text(cx, panelTop + PANEL_ROWS.best, bestLine,
+      textStyle(FONT.hud, this.bestUpdated ? TEXT_COLORS.accent : TEXT_COLORS.dim)).setOrigin(0.5);
 
     // おまかせ・ヒント表示のどちらを使ったかを伝える（おまかせは最短に入らない理由）。
     // 一覧には同じ印が付いて残る（TODO-024）ので、そのことも添える。
@@ -172,11 +157,8 @@ export default class ClearScene extends Phaser.Scene {
     if (this.usedHint) helps.push('ヒント表示');
     if (helps.length > 0) {
       this.add.text(cx, panelTop + PANEL_ROWS.help,
-                    `${helps.join('と')}を使った（記録には残る）`, {
-        fontFamily: FONT.family,
-        fontSize: `${FONT.small}px`,
-        color: TEXT_COLORS.dim,
-      }).setOrigin(0.5);
+                    `${helps.join('と')}を使った（記録には残る）`,
+                    textStyle(FONT.small, TEXT_COLORS.dim)).setOrigin(0.5);
     }
 
     // 4 つのボタンを横に並べる（TODO-032、TODO-072）。

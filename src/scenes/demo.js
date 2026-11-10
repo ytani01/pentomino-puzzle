@@ -40,7 +40,7 @@ import { createBoard, orientationSteps, parseDemoParams } from '../logic.js';
 import { solveSteps, solveStepsRandom } from '../search.js';
 import { ensureSolutions, hasSolution } from '../solutions.js';
 import * as audio from '../audio.js';
-import { createHintBadge, createPanel, createTitleBar } from '../ui.js';
+import { createHintBadge, createPanel, createTitleBar, textStyle } from '../ui.js';
 import { ICONS } from '../icons.js';
 import GameScene, { DEPTH } from './game.js';
 
@@ -335,17 +335,11 @@ export default class DemoScene extends GameScene {
     const hud = this.layout.hud;
     createTitleBar(this, this.layout.title.y, () => this.goToTitle()).setDepth(DEPTH.hud);
     // 探し方を切り替えるボタンはアイコンだけなので、2 種類あることをここで伝える（TODO-089）。
-    this.add.text(this.layout.width / 2, this.layout.note.y, '探し方は「機械的」と「人間的」の 2 種類', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.small}px`,
-      color: TEXT_COLORS.dim,
-    }).setOrigin(0.5).setDepth(DEPTH.hud);
+    this.add.text(this.layout.width / 2, this.layout.note.y, '探し方は「機械的」と「人間的」の 2 種類',
+      textStyle(FONT.small, TEXT_COLORS.dim)).setOrigin(0.5).setDepth(DEPTH.hud);
     createPanel(this, hud.x, hud.y, hud.width, hud.height).setDepth(DEPTH.hud);
-    this.statusText = this.add.text(hud.x + hud.padding, hud.y + hud.rowHeight / 2, '', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.hud}px`,
-      color: TEXT_COLORS.normal,
-    }).setOrigin(0, 0.5).setDepth(DEPTH.hud);
+    this.statusText = this.add.text(hud.x + hud.padding, hud.y + hud.rowHeight / 2, '',
+      textStyle(FONT.hud, TEXT_COLORS.normal)).setOrigin(0, 0.5).setDepth(DEPTH.hud);
     // 本編のヒント表示と同じ札（TODO-045）。本編の位置（`statusX`）では
     // 試した手と重なるので、1 段目の右端に寄せる。
     this.hintBadge = createHintBadge(

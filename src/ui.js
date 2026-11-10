@@ -23,16 +23,25 @@ export const HOW_TO_OPERATE = [
 export const HOW_TO_OPERATE_SHORT = 'ドラッグで置く・タップで向きを変える・ボードの外で離すと外す';
 
 /**
+ * 文字のスタイル。`add.text()` に渡す `fontFamily`・`fontSize`・`color` の 3 つを
+ * 各所で同じ形に組むため、ここに 1 つだけ置く。`color` を省くと、キーごと付けない
+ * （後から `setColor()` で決める文字が、既定の色を上書きしないように）。
+ * `align`・`lineSpacing`・`wordWrap`・`padding` など、そのほかのキーは `extra` で足す。
+ */
+export function textStyle(size, color, extra = {}) {
+  const style = { fontFamily: FONT.family, fontSize: `${size}px` };
+  if (color !== undefined) style.color = color;
+  return Object.assign(style, extra);
+}
+
+/**
  * 右下にバージョンを出す。問い合わせのときにどの版かを画面から読めるよう、
  * すべての画面の同じ位置に出す（TODO-041）。
  */
 export function createVersionText(scene) {
   const screen = screenOf(scene);
-  return scene.add.text(screen.width - 12, screen.height - 12, VERSION, {
-    fontFamily: FONT.family,
-    fontSize: `${FONT.small}px`,
-    color: TEXT_COLORS.dim,
-  }).setOrigin(1, 1).setAlpha(0.6);
+  return scene.add.text(screen.width - 12, screen.height - 12, VERSION,
+    textStyle(FONT.small, TEXT_COLORS.dim)).setOrigin(1, 1).setAlpha(0.6);
 }
 
 /**
@@ -51,17 +60,12 @@ export function createVersionText(scene) {
  * `.setDepth()` を掛けても両方に効くよう、2 つの文字を Container にまとめて返す。
  */
 export function createTitleBar(scene, y, onClick) {
-  const text = scene.add.text(screenOf(scene).width / 2, y, 'PENTOMINO PUZZLE', {
-    fontFamily: FONT.family,
-    fontSize: `${FONT.body}px`,
-    color: TEXT_COLORS.accent,
-    padding: { x: 24, y: 6 },
-  }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-  const version = scene.add.text(text.x + text.width / 2 + 8, y, VERSION, {
-    fontFamily: FONT.family,
-    fontSize: `${FONT.small}px`,
-    color: TEXT_COLORS.dim,
-  }).setOrigin(0, 0.5).setAlpha(0.6);
+  const text = scene.add.text(screenOf(scene).width / 2, y, 'PENTOMINO PUZZLE',
+    textStyle(FONT.body, TEXT_COLORS.accent, {
+      padding: { x: 24, y: 6 },
+    })).setOrigin(0.5).setInteractive({ useHandCursor: true });
+  const version = scene.add.text(text.x + text.width / 2 + 8, y, VERSION,
+    textStyle(FONT.small, TEXT_COLORS.dim)).setOrigin(0, 0.5).setAlpha(0.6);
   let pressed = false;
   text.on('pointerdown', () => { pressed = !scene.drag; });
   text.on('pointerout', () => { pressed = false; });
@@ -167,11 +171,7 @@ export function drawAcrylic(g, x, y, width, height) {
  */
 export function createHintBadge(scene, x, y, originX = 0) {
   const face = scene.add.graphics();
-  const label = scene.add.text(0, y, '', {
-    fontFamily: FONT.family,
-    fontSize: `${FONT.hud}px`,
-    color: TEXT_COLORS.normal,
-  }).setOrigin(0.5, 0.5);
+  const label = scene.add.text(0, y, '', textStyle(FONT.hud, TEXT_COLORS.normal)).setOrigin(0.5, 0.5);
 
   const TEXT = { ok: '解ける', dead: '解なし', solved: '解けた！' };
   const FILL = { ok: COLORS.success, dead: COLORS.danger, solved: COLORS.solved };
@@ -326,11 +326,7 @@ export function createChoiceRow(scene, cx, y, label, choices, onSelect,
   const buttons = choices.length * CHOICE_BUTTON.width
     + (choices.length - 1) * CHOICE_BUTTON.gap;
   const left = cx - (CHOICE_BUTTON.labelWidth + buttons) / 2;
-  scene.add.text(left, y, label, {
-    fontFamily: FONT.family,
-    fontSize: `${FONT.body}px`,
-    color: TEXT_COLORS.dim,
-  }).setOrigin(0, 0.5);
+  scene.add.text(left, y, label, textStyle(FONT.body, TEXT_COLORS.dim)).setOrigin(0, 0.5);
   return choices.map((choice, index) => {
     const button = createButton(scene, {
       x: left + CHOICE_BUTTON.labelWidth + CHOICE_BUTTON.width / 2
@@ -373,12 +369,9 @@ export function createConfirmDialog(scene, { width, height, depth, onYes, onNo }
     createPanel(scene, x, y, cfg.width, cfg.height).setDepth(depth).setVisible(false),
   ];
 
-  const text = scene.add.text(x + cfg.width / 2, y + 50, '', {
-    fontFamily: FONT.family,
-    fontSize: `${FONT.body}px`,
-    color: TEXT_COLORS.normal,
+  const text = scene.add.text(x + cfg.width / 2, y + 50, '', textStyle(FONT.body, TEXT_COLORS.normal, {
     align: 'center',
-  }).setOrigin(0.5).setDepth(depth).setVisible(false);
+  })).setOrigin(0.5).setDepth(depth).setVisible(false);
   parts.push(text);
 
   const buttonY = y + cfg.height - 40;
@@ -437,22 +430,13 @@ export function createButton(scene, options) {
   const face = scene.add.graphics();
   const iconGraphics = scene.add.graphics();
   const left = align === 'left';
-  const text = scene.add.text(left ? -width / 2 + BUTTON_PAD : 0, 0, icon ? '' : label, {
-    fontFamily: FONT.family,
-    fontSize: `${fontSize}px`,
-    color: TEXT_COLORS.normal,
-  }).setOrigin(left ? 0 : 0.5, 0.5);
+  const text = scene.add.text(left ? -width / 2 + BUTTON_PAD : 0, 0, icon ? '' : label,
+    textStyle(fontSize, TEXT_COLORS.normal)).setOrigin(left ? 0 : 0.5, 0.5);
   // 印はラベルより 1 段控えめに出す（行の主役は日時と時間なので）。
-  const markText = scene.add.text(width / 2 - BUTTON_PAD, 0, mark, {
-    fontFamily: FONT.family,
-    fontSize: `${Math.round(fontSize * 0.85)}px`,
-    color: TEXT_COLORS.dim,
-  }).setOrigin(1, 0.5);
-  const captionText = scene.add.text(0, height / 2 - 3, caption, {
-    fontFamily: FONT.family,
-    fontSize: `${ICON.captionSize}px`,
-    color: TEXT_COLORS.normal,
-  }).setOrigin(0.5, 1);
+  const markText = scene.add.text(width / 2 - BUTTON_PAD, 0, mark,
+    textStyle(Math.round(fontSize * 0.85), TEXT_COLORS.dim)).setOrigin(1, 0.5);
+  const captionText = scene.add.text(0, height / 2 - 3, caption,
+    textStyle(ICON.captionSize, TEXT_COLORS.normal)).setOrigin(0.5, 1);
   if (caption) iconGraphics.y = -ICON.captionShift;
   container.add([face, iconGraphics, text, markText, captionText]);
 
@@ -582,11 +566,7 @@ export function createButton(scene, options) {
 export function createTooltip(scene) {
   const box = scene.add.container(0, 0).setVisible(false);
   const back = scene.add.graphics();
-  const label = scene.add.text(TOOLTIP.padX, TOOLTIP.padY, '', {
-    fontFamily: FONT.family,
-    fontSize: `${FONT.small}px`,
-    color: TEXT_COLORS.normal,
-  });
+  const label = scene.add.text(TOOLTIP.padX, TOOLTIP.padY, '', textStyle(FONT.small, TEXT_COLORS.normal));
   box.add([back, label]);
   box.timer = null;
 

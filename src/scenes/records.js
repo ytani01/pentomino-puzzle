@@ -30,7 +30,7 @@ import {
 import * as audio from '../audio.js';
 import {
   CHOICE_ICON_HEIGHT, createButton, createChoiceRow, createConfirmDialog, createTitleBar,
-  createTooltip, drawMiniBoard,
+  createTooltip, drawMiniBoard, textStyle,
 } from '../ui.js';
 
 /**
@@ -192,11 +192,7 @@ export default class RecordsScene extends Phaser.Scene {
     const cx = screen.width / 2;
 
     createTitleBar(this, this.L.titleY, () => this.goToTitle());
-    this.add.text(cx, this.L.headingY, '記録', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.heading}px`,
-      color: TEXT_COLORS.accent,
-    }).setOrigin(0.5);
+    this.add.text(cx, this.L.headingY, '記録', textStyle(FONT.heading, TEXT_COLORS.accent)).setOrigin(0.5);
 
     // タイトルと同じ図のボタンにする（TODO-093）。名前は説明（tooltip）に回す。
     const boardChoices = Object.values(BOARDS).map((board) => ({
@@ -267,11 +263,8 @@ export default class RecordsScene extends Phaser.Scene {
       x, y: this.L.selectAllY, width: CHECKBOX.size, height: CHECKBOX.size,
       label: '', onClick: () => this.toggleSelectAll(),
     });
-    this.add.text(x + CHECKBOX.size / 2 + CHECKBOX.gap, this.L.selectAllY, '全部選ぶ', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.small}px`,
-      color: TEXT_COLORS.dim,
-    }).setOrigin(0, 0.5);
+    this.add.text(x + CHECKBOX.size / 2 + CHECKBOX.gap, this.L.selectAllY, '全部選ぶ',
+      textStyle(FONT.small, TEXT_COLORS.dim)).setOrigin(0, 0.5);
     const { width: trashWidth, height: trashHeight } = this.L.trash;
     this.trashButton = createButton(this, {
       x: this.L.listX + this.L.listWidth / 2 - trashWidth / 2, y: this.L.selectAllY,
@@ -321,7 +314,7 @@ export default class RecordsScene extends Phaser.Scene {
       this.L.listX,
       this.L.listTop + (ROW.height + ROW.gap) * this.L.rowsPerPage / 2,
       '記録なし',
-      { fontFamily: FONT.family, fontSize: `${FONT.body}px`, color: TEXT_COLORS.dim },
+      textStyle(FONT.body, TEXT_COLORS.dim),
     ).setOrigin(0.5);
   }
 
@@ -345,11 +338,8 @@ export default class RecordsScene extends Phaser.Scene {
       x: next(size), y: this.L.footY, width: size, height,
       label: '', icon: ICONS.prevPage, tooltip: '前へ', onClick: () => this.turnPage(-1),
     });
-    this.pageText = this.add.text(next(PAGE_TEXT_WIDTH), this.L.footY, '', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.small}px`,
-      color: TEXT_COLORS.dim,
-    }).setOrigin(0.5);
+    this.pageText = this.add.text(next(PAGE_TEXT_WIDTH), this.L.footY, '',
+      textStyle(FONT.small, TEXT_COLORS.dim)).setOrigin(0.5);
     this.nextButton = createButton(this, {
       x: next(size), y: this.L.footY, width: size, height,
       label: '', icon: ICONS.nextPage, tooltip: '次へ', onClick: () => this.turnPage(1),
@@ -370,13 +360,11 @@ export default class RecordsScene extends Phaser.Scene {
   /** 選んだ 1 件の見出し、完成形を描く場所、達成度。 */
   createDetail() {
     this.detailText = this.add.text(
-      this.L.boardBox.x + this.L.boardBox.width / 2, this.L.detailY, '', {
-        fontFamily: FONT.family,
-        fontSize: `${FONT.body}px`,
-        color: TEXT_COLORS.normal,
+      this.L.boardBox.x + this.L.boardBox.width / 2, this.L.detailY, '',
+      textStyle(FONT.body, TEXT_COLORS.normal, {
         align: 'center',
         lineSpacing: 2,
-      },
+      }),
     ).setOrigin(0.5);
     this.mini = this.add.graphics();
     this.continueButton = createButton(this, {
@@ -387,11 +375,8 @@ export default class RecordsScene extends Phaser.Scene {
     // 達成度（TODO-022）。分母がボードで違う（8×8 は 65、6×10 は 2339）ので、
     // ボードの名前を頭に付ける。
     this.achieveText = this.add.text(
-      this.L.boardBox.x + this.L.boardBox.width / 2, this.L.achieveY, '', {
-        fontFamily: FONT.family,
-        fontSize: `${FONT.small}px`,
-        color: TEXT_COLORS.dim,
-      },
+      this.L.boardBox.x + this.L.boardBox.width / 2, this.L.achieveY, '',
+      textStyle(FONT.small, TEXT_COLORS.dim),
     ).setOrigin(0.5);
   }
 

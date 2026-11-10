@@ -20,7 +20,7 @@ import { loadBest, loadProgress, savePalette } from '../storage.js';
 import * as audio from '../audio.js';
 import {
   CHOICE_ICON_HEIGHT, createButton, createChoiceRow, createPanel, createTooltip,
-  createVersionText, drawMiniBoard, HOW_TO_OPERATE, stackTops,
+  createVersionText, drawMiniBoard, HOW_TO_OPERATE, stackTops, textStyle,
 } from '../ui.js';
 import { boardIcon, paletteIcon } from '../icons.js';
 
@@ -146,27 +146,18 @@ export default class TitleScene extends Phaser.Scene {
     // シーンに入り直すと前回のタイマーは Phaser が捨てている。触らないよう空にする。
     this.previewTimer = null;
 
-    this.add.text(cx, centerOf('title'), 'PENTOMINO', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.title}px`,
-      color: TEXT_COLORS.normal,
-    }).setOrigin(0.5);
-    this.add.text(cx, centerOf('subtitle'), 'PUZZLE', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.heading}px`,
-      color: TEXT_COLORS.accent,
-    }).setOrigin(0.5);
+    this.add.text(cx, centerOf('title'), 'PENTOMINO', textStyle(FONT.title, TEXT_COLORS.normal)).setOrigin(0.5);
+    this.add.text(cx, centerOf('subtitle'), 'PUZZLE',
+      textStyle(FONT.heading, TEXT_COLORS.accent)).setOrigin(0.5);
 
     createPanel(this, panelX, topOf('howTo'), panelWidth, stack[indexOf('howTo')].height);
-    this.add.text(panelX + panelWidth / 2, centerOf('howTo'), howToPlayText(orientation), {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.body}px`,
-      color: TEXT_COLORS.dim,
-      align: 'center',
-      lineSpacing: 4,
-      // 枠を詰めた縦画面では折り返すことがあるので、枠の内側で折り返す。
-      wordWrap: { width: panelWidth - 32 },
-    }).setOrigin(0.5);
+    this.add.text(panelX + panelWidth / 2, centerOf('howTo'), howToPlayText(orientation),
+      textStyle(FONT.body, TEXT_COLORS.dim, {
+        align: 'center',
+        lineSpacing: 4,
+        // 枠を詰めた縦画面では折り返すことがあるので、枠の内側で折り返す。
+        wordWrap: { width: panelWidth - 32 },
+      })).setOrigin(0.5);
 
     // ボードと色の組を選ぶ 2 行。選べるのはここだけで、遊んでいる最中は変えられない
     // （途中の盤面を捨てる確認を出さずに済ませるため。TODO-009）。2 行を同じ形に
@@ -185,10 +176,7 @@ export default class TitleScene extends Phaser.Scene {
                                           (choice) => this.selectPalette(choice.key),
                                           CHOICE_ICON_HEIGHT);
 
-    this.bestText = this.add.text(cx, centerOf('best'), '', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.hud}px`,
-    }).setOrigin(0.5);
+    this.bestText = this.add.text(cx, centerOf('best'), '', textStyle(FONT.hud)).setOrigin(0.5);
 
     // `はじめる`・`つづきから`・`記録` は同じ行に並べる（TODO-030・TODO-092）。
     const startStep = START.width + START.gap;
@@ -235,11 +223,8 @@ export default class TitleScene extends Phaser.Scene {
     this.refreshBoard();
     this.refreshPalette();
 
-    this.add.text(cx, centerOf('keyHint'), 'Space / Enter でも始められる', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.small}px`,
-      color: TEXT_COLORS.dim,
-    }).setOrigin(0.5);
+    this.add.text(cx, centerOf('keyHint'), 'Space / Enter でも始められる',
+      textStyle(FONT.small, TEXT_COLORS.dim)).setOrigin(0.5);
 
     // デモ（TODO-040・TODO-092）。ボードと色の組は本編と同じく registry から読む。
     // 右下に固定で置き、バージョン表示（`createVersionText()`）より上に置く。
