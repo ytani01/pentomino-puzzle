@@ -1,6 +1,6 @@
 # TODO
 
-**残っている項目: TODO-106、TODO-108、TODO-115。** これまでに 112 件を決着させた。
+**残っている項目: TODO-106、TODO-115。** これまでに 113 件を決着させた。
 新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-116` から。**
 
 **着手の順番:** 同じ箇所に触る項目は TODO-109 → 110 → 111 → 114 と、TODO-105 → 108 → 115 の
@@ -25,26 +25,6 @@
 
 **無駄を省く工夫:** 確認は `tests.html` の既存のテストが全件通ることだけを見る。
 テストは足さない（足りないものが見つかったら報告させる）。画面は撮らない。
-
-## TODO-108. 文字のスタイルの組み立てを ui.js の 1 つの関数にまとめる
-
-|      | main | 担当 |
-|------|------|------|
-| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / low）+ reviewer（Sonnet 5.5 / medium）+ screens（Sonnet 5.5 / low） |
-
-- [x] `fontFamily`・`fontSize`・`color` の 3 つを組んだスタイルを返す関数を `src/ui.js` に
-      置き、`this.add.text()` / `scene.add.text()` の 35 か所を差し替える
-      （対象は `rg -n "fontFamily: FONT.family" src`）
-- [x] `docs/developer.md` と `CLAUDE.md` の `src/ui.js` の説明に足す
-
-挙動は変えない。`align`・`lineSpacing`・`wordWrap`・`padding` を足している箇所と、
-`color` を付けていない箇所（`title.js` の `bestText`）、`FONT` に無い大きさ
-（`clear.js` の `TIME_FONT`、`ICON.captionSize`、`createButton()` の 0.85 倍）は、
-差し替えたあとも同じスタイルになること。
-
-**無駄を省く工夫:** reviewer は差し替えの前後でスタイルのキーと値が同じかを差分で見る。
-画面は 5 つのシーンを 1 枚ずつ（縦・横のどちらか片方）で足りる。`tests.html` は流さない。
-TODO-105 のあとに着手する（確認ダイアログの文字が `ui.js` へ移ってから差し替える）。
 
 ## TODO-115. title.js と clear.js の長い create() を部品ごとのメソッドに分ける
 
