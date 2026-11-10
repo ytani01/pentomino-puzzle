@@ -660,7 +660,7 @@ export const NEON = {
  * （描画順が一定しないので、隣の上へ落とすと出たり出なかったりする）。
  *
  * **見え方を変えたいときはこの 3 つを触る**（読むのは `game.js` の
- * `drawPieceEdges()` だけ）:
+ * `drawPieceEdges()` と、色の選択肢の見本を描く `icons.js` の `paletteIcon()`）:
  *
  * - `PALETTES[key].outlineWidth` … 外周の太さ。ボードの 1 マス（`LAYOUT.board.cell`。
  *   横画面の 8×8 で 64）の座標系での値で、トレイでは `LAYOUT.tray.cell /
