@@ -1,43 +1,9 @@
 # TODO
 
-**残っている項目: TODO-117、TODO-118、TODO-119、TODO-120、TODO-121。** これまでに 116 件を決着させた。
+**残っている項目: TODO-119、TODO-120、TODO-121。** これまでに 118 件を決着させた。
 新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-122` から。**
 
-項目は、触るファイルと確かめ方が同じものでまとめてある。番号の順に進めると、
-`config.js` の色（TODO-118）を先に直してから画面の項目に入れる。
-
-## TODO-117. 計算側（search.js・logic.js・storage.js・tests.html）の重なりをまとめる
-
-|      | main | 担当 |
-|------|------|------|
-| 見込み | Opus 5.5 / effort medium | implementer（Opus 5.5 / medium）+ reviewer（Opus 5.5 / high）+ tests（Sonnet 5.5 / medium） |
-
-- [x] `search.js` の `solveStepsRandom()`（160 行）のうち、状態（`stack`・`boardOk`・`deadMoves` など）に触らない
-  置ける手の一覧を作る処理と、手を選ぶ処理（詰めて置く手 → 1 種しか入らないマス → 埋めにくいマス → 重み）を
-  モジュールの関数に出す。**`random()` を呼ぶ順番と回数は変えない**（同じ種から同じ手順が出ること）
-- [x] `search.js` で、手が覆うマスを `"row,col"` にして回す処理（`countCellMoves()`・`singlePieceCell()`・`moveCoversCell()`）を 1 つの関数にする
-- [x] `logic.js` の `nextTurn()`・`prevTurn()`・`nextPlaceableTurn()` で、`turnOrder()` の中の今の形の位置を引く処理を
-  1 つの内部の関数にする。公開する関数の名前と返す値は変えない
-- [x] `storage.js` の「正の整数か」「正の有限な数か」の検査（`sanitizeHistory()`・`migrateHistory()`・`sanitizeFound()`・
-  `sanitizeProgress()` など）を名前の付いた関数にする。受け入れる値は変えない
-- [x] `tests.html` の `firstSolutionSteps()` と `firstSolutionStepsWith()` を 1 つにし、テストの中で同じ形で書き直している補助
-  （`sigOf` など。`rg -n "const \w+ = \(" tests.html` で洗い出す）のうち 2 か所以上あるものを上の関数にする。テストの数と中身は変えない
-
-**無駄を省く工夫:** 画面は見ない。確かめるのは `tests.html` の全件（今は 281 件）と、`solveStepsRandom()` について同じ種で
-変更前後の手順が一致するかの突き合わせ 1 回だけ。
-
-## TODO-118. config.js の makeLayout() の分岐と、TEXT_COLORS の書き直しをまとめる
-
-|      | main | 担当 |
-|------|------|------|
-| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ reviewer（Opus 5.5 / high）+ verifier（Haiku 5.5 / low） |
-
-- [ ] `makeLayout()` に散らばった `portrait` の三項演算子（6 か所）と、`trayPanel` を幅か高さ 0 で作って書き直す形をやめ、
-  ボードの枠とトレイの枠の位置・大きさを縦と横の `if` 1 つで決める。返す値は変えない
-- [ ] `TEXT_COLORS` の値は `COLORS` の `text`・`textDim`・`accent`・`danger`・`buttonTextDisabled`・`background` を
-  文字列で書き直したもの。数値から `'#rrggbb'` を作る関数で `COLORS` から作る
-
-**無駄を省く工夫:** 画面は見ない。`node` で変更前後の `LAYOUTS`・`DEMO_LAYOUTS`・`TEXT_COLORS` を JSON にして一致を見れば足りる。
+項目は、触るファイルと確かめ方が同じものでまとめてある。
 
 ## TODO-119. ピースを名前で引く処理と、塗りの色・テクスチャを焼く手順をまとめる
 

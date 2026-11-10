@@ -4,6 +4,8 @@
 作り直すので、手で直さない。やらないと決めたものは（対応しない）が付いている。
 進行中の項目は [TODO.md](../TODO.md) にある。
 
+- [TODO-118. config.js の makeLayout() の分岐と、TEXT_COLORS の書き直しをまとめる](todo/TODO-118.%20config.js%20%E3%81%AE%20makeLayout%28%29%20%E3%81%AE%E5%88%86%E5%B2%90%E3%81%A8%E3%80%81TEXT_COLORS%20%E3%81%AE%E6%9B%B8%E3%81%8D%E7%9B%B4%E3%81%97%E3%82%92%E3%81%BE%E3%81%A8%E3%82%81%E3%82%8B.md)
+- [TODO-117. 計算側（search.js・logic.js・storage.js・tests.html）の重なりをまとめる](todo/TODO-117.%20%E8%A8%88%E7%AE%97%E5%81%B4%EF%BC%88search.js%E3%83%BBlogic.js%E3%83%BBstorage.js%E3%83%BBtests.html%EF%BC%89%E3%81%AE%E9%87%8D%E3%81%AA%E3%82%8A%E3%82%92%E3%81%BE%E3%81%A8%E3%82%81%E3%82%8B.md)
 - [TODO-116. localStorage が使えないときの storage.js のテストを足す](todo/TODO-116.%20localStorage%20%E3%81%8C%E4%BD%BF%E3%81%88%E3%81%AA%E3%81%84%E3%81%A8%E3%81%8D%E3%81%AE%20storage.js%20%E3%81%AE%E3%83%86%E3%82%B9%E3%83%88%E3%82%92%E8%B6%B3%E3%81%99.md)
 - [TODO-115. title.js と clear.js の長い create() を部品ごとのメソッドに分ける](todo/TODO-115.%20title.js%20%E3%81%A8%20clear.js%20%E3%81%AE%E9%95%B7%E3%81%84%20create%28%29%20%E3%82%92%E9%83%A8%E5%93%81%E3%81%94%E3%81%A8%E3%81%AE%E3%83%A1%E3%82%BD%E3%83%83%E3%83%89%E3%81%AB%E5%88%86%E3%81%91%E3%82%8B.md)
 - [TODO-114. 向きを変える印の計算と描画を game.js から出す](todo/TODO-114.%20%E5%90%91%E3%81%8D%E3%82%92%E5%A4%89%E3%81%88%E3%82%8B%E5%8D%B0%E3%81%AE%E8%A8%88%E7%AE%97%E3%81%A8%E6%8F%8F%E7%94%BB%E3%82%92%20game.js%20%E3%81%8B%E3%82%89%E5%87%BA%E3%81%99.md)
