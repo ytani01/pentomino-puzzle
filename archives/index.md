@@ -4,6 +4,7 @@
 作り直すので、手で直さない。やらないと決めたものは（対応しない）が付いている。
 進行中の項目は [TODO.md](../TODO.md) にある。
 
+- [TODO-113. デモの探索を logic.js から search.js へ分ける](todo/TODO-113.%20%E3%83%87%E3%83%A2%E3%81%AE%E6%8E%A2%E7%B4%A2%E3%82%92%20logic.js%20%E3%81%8B%E3%82%89%20search.js%20%E3%81%B8%E5%88%86%E3%81%91%E3%82%8B.md)
 - [TODO-112. audio.button() の中で unlock() を呼び、呼ぶ側の対を消す](todo/TODO-112.%20audio.button%28%29%20%E3%81%AE%E4%B8%AD%E3%81%A7%20unlock%28%29%20%E3%82%92%E5%91%BC%E3%81%B3%E3%80%81%E5%91%BC%E3%81%B6%E5%81%B4%E3%81%AE%E5%AF%BE%E3%82%92%E6%B6%88%E3%81%99.md)
 - [TODO-110. darken()・pieceColor() を boot.js から logic.js へ移す](todo/TODO-110.%20darken%28%29%E3%83%BBpieceColor%28%29%20%E3%82%92%20boot.js%20%E3%81%8B%E3%82%89%20logic.js%20%E3%81%B8%E7%A7%BB%E3%81%99.md)
 - [TODO-109. 使われていないコードを消す](todo/TODO-109.%20%E4%BD%BF%E3%82%8F%E3%82%8C%E3%81%A6%E3%81%84%E3%81%AA%E3%81%84%E3%82%B3%E3%83%BC%E3%83%89%E3%82%92%E6%B6%88%E3%81%99.md)

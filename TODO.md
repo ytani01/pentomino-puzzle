@@ -1,6 +1,6 @@
 # TODO
 
-**残っている項目: TODO-105、TODO-106、TODO-108、TODO-111、TODO-113、TODO-114、TODO-115。** これまでに 108 件を決着させた。
+**残っている項目: TODO-105、TODO-106、TODO-108、TODO-111、TODO-114、TODO-115。** これまでに 109 件を決着させた。
 新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-116` から。**
 
 **着手の順番:** 同じ箇所に触る項目は TODO-109 → 110 → 111 → 114 と、TODO-105 → 108 → 115 の
@@ -86,27 +86,6 @@ TODO-105 のあとに着手する（確認ダイアログの文字が `ui.js` �
 **無駄を省く工夫:** 画面は、色の組 3 種類（ふつう・ガラス・ネオン）で本編 1 枚ずつと
 タイトルの色の選択肢 1 枚を、直す前後で撮り比べる。向きは片方で足りる（描画は向きに依らない）。
 TODO-110 のあとに着手する（同じ import の行に触る）。
-
-## TODO-113. デモの探索を logic.js から search.js へ分ける
-
-|      | main | 担当 |
-|------|------|------|
-| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / low）+ tests（Sonnet 5.5 / low） |
-
-- [x] `src/logic.js` の `touchingEdges()` から `solveStepsRandom()` まで（内部関数の
-      `touchWeight`・`moveCoversCell`・`pickTightCell`・`pickWeighted`・`shuffle` を含む
-      約 440 行）を、新しい `src/search.js` へ中身を変えずに移す
-- [x] `src/scenes/demo.js`・`src/scenes/title.js`・`tests.html` の import を直す
-- [x] `CLAUDE.md`（規約の「Phaser に依存しない計算は…」とファイル構成）、
-      `docs/developer.md`、コード中のコメントの `logic.js の solveSteps()` などの参照を直す
-      （対象は `rg -n -w -e solveSteps -e solveStepsRandom -e moveDistance -e touchingEdges -e countCellMoves -e singlePieceCell .`）
-
-`logic.js` が 1090 行あり、その 4 割がデモ（とタイトルの動くボード）だけが使う探索。
-本編の判定と分けて読めるようにする。挙動は変えない。`forcedPlacements()`・
-`hasUncoverableCell()`・`regionsFitPieces()` は本編のヒント表示も使うので `logic.js` に残す。
-
-**無駄を省く工夫:** 動かすだけなので reviewer は入れない。確認は `tests.html` が全件通ることと、
-デモが起動して 1 手進むことだけ。向きの生成には触らないので `gen-solutions.mjs --check` は流さない。
 
 ## TODO-114. 向きを変える印の計算と描画を game.js から出す
 
