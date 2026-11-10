@@ -1,7 +1,7 @@
 # TODO
 
-**残っている項目: TODO-105、TODO-106、TODO-107、TODO-108、TODO-109。** これまでに 104 件を決着させた。
-新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-110` から。**
+**残っている項目: TODO-105、TODO-106、TODO-107、TODO-108、TODO-109、TODO-110。** これまでに 104 件を決着させた。
+新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-111` から。**
 
 ## TODO-105. 確認ダイアログの組み立てを ui.js にまとめる
 
@@ -97,6 +97,24 @@
 
 **無駄を省く工夫:** 消す前に `rg -w <名前> src tools tests.html docs` で呼ぶ側が無いことを
 1 回ずつ見るだけにする。確認は `tests.html` が全件通ることと、本編が起動することだけ。
+
+## TODO-110. darken()・pieceColor() を boot.js から logic.js へ移す
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / low）+ tests（Sonnet 5.5 / low） |
+
+- [ ] `src/scenes/boot.js` の `darken()` と `pieceColor()` を `src/logic.js` へ移し、
+      `boot.js`・`game.js`・`ui.js`・`icons.js` の import を直す
+- [ ] `tests.html` に 2 つの関数のテストを足す（`darken` は係数 0・1・中間、
+      `pieceColor` は `mono`・`colors`・どちらも無い色の組）
+- [ ] `docs/developer.md` と `CLAUDE.md` のファイル構成の説明を直す
+
+`ui.js` と `icons.js` がシーンのファイルを import している（部品がシーンに依る向き）のを
+直すのが目的。挙動は変えない。`TEX` は Boot シーンが作るテクスチャの名前なので `boot.js` に残す。
+
+**無駄を省く工夫:** 関数の中身は動かすだけなので reviewer は入れない。画面は撮らず、
+`tests.html` が全件通ることと、本編が起動してコンソールにエラーが無いことを見る。
 
 ## 完了済み
 
