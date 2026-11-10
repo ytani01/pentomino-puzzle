@@ -48,7 +48,7 @@ import {
   clampSelection, selectionAfterRemoval,
   forcedPlacements, hasUncoverableCell, touchingEdges, moveDistance, countCellMoves, singlePieceCell,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
-  solveSteps, solveStepsRandom, parseDemoParams,
+  solveSteps, solveStepsRandom, parseDemoParams, darken, pieceColor,
 } from './src/logic.js';
 import {
   autoFrom, buildSolutions, consistentSolutions, hasSolution, placementIn,
@@ -2958,6 +2958,41 @@ for (const state of boardStates) {
     assert(solutionNumber(solutions, boardKey(board)) !== null, '出来上がりがデータに無い');
   });
 }
+
+// ---- logic：ピースの色（darken・pieceColor。TODO-110）-------------------
+
+group('src/logic.js — 縁取り用に暗くする色（darken。TODO-110）');
+
+test('係数 1 は色をそのまま返す', () => {
+  assertSame(darken(0xda3e3e, 1), 0xda3e3e);
+});
+
+test('係数 0 は黒（0）を返す', () => {
+  assertSame(darken(0xda3e3e, 0), 0);
+});
+
+test('中間の係数は R・G・B を別々に掛けて四捨五入する', () => {
+  // 0x80=128, 0x40=64, 0x20=32 を 0.5 倍 → 64, 32, 16
+  assertSame(darken(0x804020, 0.5), 0x402010);
+  // 0xff=255 を 0.5 倍 → 127.5 を四捨五入して 128
+  assertSame(darken(0xff0000, 0.5), 0x800000);
+});
+
+group('src/logic.js — ピースの色の決定（pieceColor。TODO-110）');
+
+test('mono があれば、ピースによらずその色になる', () => {
+  for (const piece of PIECES) assertSame(pieceColor(PALETTES.glass, piece), PALETTES.glass.mono);
+});
+
+test('colors があれば、ピースの名前で引いた色になる', () => {
+  for (const piece of PIECES) {
+    assertSame(pieceColor(PALETTES.neon, piece), PALETTES.neon.colors[piece.name]);
+  }
+});
+
+test('mono も colors も無ければ、ピース自身の色になる', () => {
+  for (const piece of PIECES) assertSame(pieceColor(PALETTES.colorful, piece), piece.color);
+});
 
 // ---- storage：履歴の検証（TODO-008）--------------------------------------
 //
