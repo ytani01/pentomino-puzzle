@@ -1,6 +1,6 @@
 # TODO
 
-**残っている項目: TODO-119、TODO-120、TODO-121。** これまでに 118 件を決着させた。
+**残っている項目: TODO-119、TODO-121。** これまでに 119 件を決着させた。
 新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-122` から。**
 
 項目は、触るファイルと確かめ方が同じものでまとめてある。
@@ -16,23 +16,6 @@
 - [ ] `boot.js` の 3 つの `make*Tile()` に共通する前後（`textures.exists()`・`make.graphics()`・`generateTexture()`・`destroy()`）を 1 つにする
 
 **無駄を省く工夫:** 画面は 3 つの色の組でタイトル（色の見本と動くボード）と本編を 1 回ずつ撮るだけ。
-
-## TODO-120. 本編とデモ（game.js・demo.js）の繰り返しをまとめ、create() を分ける
-
-|      | main | 担当 |
-|------|------|------|
-| 見込み | Opus 5.5 / effort medium | implementer（Opus 5.5 / medium）+ reviewer（Opus 5.5 / high）+ screens（Sonnet 5.5 / low） |
-
-- [ ] `game.js` の 105 行の `create()` を、状態の初期化・全解の読み込み・入力の登録などのメソッドに分ける（TODO-115 と同じやり方）。
-  呼ぶ順（部品を組んでから遊びかけを読む、`ready` は最後に立てる）とコメントの「なぜ」は保つ
-- [ ] `demo.js` の `create()` の前半（`relayoutState` の受け取り・ボード・レイアウト・色の組・空の盤面）は `game.js` と同じなので、
-  分けたメソッドを `DemoScene` からも呼ぶ（レイアウトの表は `LAYOUTS`・`DEMO_LAYOUTS` を引数で渡す）
-- [ ] `{ cells, location, row, col }` を読み書きする処理（`game.js` の `snapshot()`・`restoreState()`・`persist()`・`applyProgress()`・
-  `slideIn()`、`demo.js` の `relayout()`・`applyRelayout()`・`finishStep()`）を、ピースから読む関数と書く関数の 1 つずつにする
-- [ ] トレイに残るピースの数え方（`useAuto()`・`runHint()`・`refreshHud()`・`fillForced()` の 4 か所）と、
-  向きを変えたときに鳴らす音の判定（`turnDrag()`・`turnPiece()`）をそれぞれ 1 つにする
-
-**無駄を省く工夫:** 画面は本編で置く・外す・一手戻す・向きを変える・つづきからを 1 回ずつ、デモを 1 回開くだけ。`tests.html` は触らないので流さない。
 
 ## TODO-121. 部品（ui.js）と記録・タイトル画面の繰り返しをまとめる
 
