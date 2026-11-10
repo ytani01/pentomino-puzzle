@@ -43,3 +43,22 @@ export の全関数を呼んだ。例外は出ず、戻り値は上のとおり�
   今は読むところだけを囲む。入力は `sanitize*` が整えた値なので、ここで例外が出るのは `solutions` の形が壊れているときくらい
   （`solutions.numbers` が Map でない、など）。呼ぶ側（`solutions.js` の読み込み結果）はそうならない。
   この点だけは「例外を投げない」の範囲が元より狭い。気になるなら元どおり囲み直す。
+
+## 修正: 例外を握りつぶす範囲を元に戻した（管理者の指示）
+
+前節の「残る懸念」は解消した。元の `try` が囲んでいた処理が外に出ていた箇所を次のとおり戻した（`src/storage.js`）。
+
+- `writeItem(key, makeValue)` … 値を返す関数を受け、組み立て（`JSON.stringify`・`String(Math.round())`・`sanitizeHistory()`）も `try` の中で呼ぶ。
+  元は書き込みの `try` が値の組み立ても囲んでいたため。対象: `loadBest` の書き戻し、`saveBest`、`savePalette`、`recordClear`、
+  `removeHistoryMany`、`addNumber`（`addFound` / `addAuto`）、`removeNumber`、`saveProgress`
+- `loadHistory` … `sanitizeHistory()`・`migrateHistory()`・`dedupeHistory()` を含めて `try`、失敗は `[]`
+- `loadProgress` … `sanitizeProgress()` を含めて `try`、失敗は `null`
+- `loadNumbers`（`loadFound` / `loadAuto` / `addFound` / `addAuto`）… `sanitizeFound()` を含めて `try`、失敗は `[]`
+- `removeNumber` … 読む・`sanitizeFound()` を `try` に入れ、失敗は `[]`（書かない）。`filter` は元どおり外
+
+`loadBest` の読み（`Number(raw)`）と `loadPalette`（`PALETTES[key]`）は、例外が出る型ではないので変えていない。
+
+確認: `node --check src/storage.js` 成功。使い捨てスクリプト（リポジトリには置いていない）で、
+壊れた `solutions`（`numbers: null`）と古い形の履歴を渡して `loadHistory` / `recordClear`、`BigInt` を渡して
+`Math.round` が例外になる `saveBest` / `recordClear` / `saveProgress`、localStorage が全部例外の状態での全 export を呼んだ。
+どれも例外は出ず、戻り値は前と同じ（`loadHistory` は `[]`、`recordClear` は `'new'`、`saveBest` は `{ best, updated: true }` など）。
