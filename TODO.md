@@ -72,11 +72,11 @@ TODO-105 のあとに着手する（確認ダイアログの文字が `ui.js` �
 |------|------|------|
 | 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / low）+ tests（Sonnet 5.5 / low） |
 
-- [ ] `src/scenes/boot.js` の `darken()` と `pieceColor()` を `src/logic.js` へ移し、
+- [x] `src/scenes/boot.js` の `darken()` と `pieceColor()` を `src/logic.js` へ移し、
       `boot.js`・`game.js`・`ui.js`・`icons.js` の import を直す
 - [ ] `tests.html` に 2 つの関数のテストを足す（`darken` は係数 0・1・中間、
       `pieceColor` は `mono`・`colors`・どちらも無い色の組）
-- [ ] `docs/developer.md` と `CLAUDE.md` のファイル構成の説明を直す
+- [x] `docs/developer.md` と `CLAUDE.md` のファイル構成の説明を直す
 
 `ui.js` と `icons.js` がシーンのファイルを import している（部品がシーンに依る向き）のを
 直すのが目的。挙動は変えない。`TEX` は Boot シーンが作るテクスチャの名前なので `boot.js` に残す。

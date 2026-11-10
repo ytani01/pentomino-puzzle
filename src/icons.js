@@ -11,8 +11,7 @@
  */
 
 import { CHOICE_ICON, GLASS, ICON, NEON, PIECES, TILE } from './config.js';
-import { boardCells, outlineEdges, shapeSize } from './logic.js';
-import { darken, pieceColor } from './scenes/boot.js';
+import { boardCells, darken, outlineEdges, pieceColor, shapeSize } from './logic.js';
 
 const U = ICON.size / 2;
 

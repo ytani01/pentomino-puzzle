@@ -10,7 +10,7 @@ import {
   BOARD_GLASS, BOARD_REGISTRY_KEY, COLORS, DEFAULT_BOARD_KEY, DEMO_LAYOUTS, GLASS, LAYOUTS, NEON, PALETTES,
   PALETTE_REGISTRY_KEY, PIECES, TILE,
 } from '../config.js';
-import { parseDemoParams } from '../logic.js';
+import { darken, parseDemoParams, pieceColor } from '../logic.js';
 import { loadPalette } from '../storage.js';
 
 /**
@@ -29,23 +29,6 @@ export const TEX = {
   boardCell: (cell) => `board-cell-${cell}`,
   ghost: (cell) => `cell-ghost-${cell}`,
 };
-
-/** ピース 1 種を、選んでいる色の組ではどの色で描くか。 */
-export function pieceColor(palette, piece) {
-  if (palette.mono !== null) return palette.mono;
-  return palette.colors === null ? piece.color : palette.colors[piece.name];
-}
-
-/**
- * 縁取り用に色を暗くする。マスの縁と、ピースの外周（`game.js`）が使う。
- * ここに置くのは、マスの縁と外周で同じ作り方を保つため。
- */
-export function darken(color, factor) {
-  const r = Math.round(((color >> 16) & 0xff) * factor);
-  const g = Math.round(((color >> 8) & 0xff) * factor);
-  const b = Math.round((color & 0xff) * factor);
-  return (r << 16) | (g << 8) | b;
-}
 
 export default class BootScene extends Phaser.Scene {
   constructor() {

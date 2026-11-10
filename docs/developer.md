@@ -98,7 +98,7 @@ PLAYWRIGHT=$(dirname "$(rg -l '"version": "1\.63\.0"' \
 ### 3 層の分け方
 
 - **Phaser に依存しない計算** — `src/logic.js`（向きの生成・配置判定・盤面の
-  更新・代表形）と `src/solutions.js`（全解のデータの読み込みと照合）。
+  更新・代表形・ピースの色）と `src/solutions.js`（全解のデータの読み込みと照合）。
   `tests.html` から直接検証する
 - **全解のデータ** — `src/data/8x8.js` / `src/data/6x10.js`。あらかじめ
   数え上げて持つ（詳しくは[全解のデータ](#全解のデータ)）

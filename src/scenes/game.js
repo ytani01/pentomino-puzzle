@@ -12,8 +12,8 @@ import {
   OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, TURN_MARK, orientationOf,
 } from '../config.js';
 import {
-  boardKey, canPlace, createBoard, flip, forcedPlacements, formatTime, isSolved,
-  nextPlaceableTurn, nextTurn, prevTurn,
+  boardKey, canPlace, createBoard, darken, flip, forcedPlacements, formatTime, isSolved,
+  nextPlaceableTurn, nextTurn, pieceColor, prevTurn,
   normalize, outlineEdges, place, remove, rotateCw, sameShape, shapeSize, snapSpot, turnOrder,
   turnPivot,
 } from '../logic.js';
@@ -30,7 +30,7 @@ import {
   drawAcrylic, HOW_TO_OPERATE, HOW_TO_OPERATE_SHORT,
 } from '../ui.js';
 import { ICONS } from '../icons.js';
-import { darken, pieceColor, TEX } from './boot.js';
+import { TEX } from './boot.js';
 
 /**
  * 向きが変わって作り直すとき（`relayout()`。TODO-095）に、そのまま持ち越す

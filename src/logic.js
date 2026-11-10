@@ -1088,3 +1088,20 @@ export function parseDemoParams(search) {
     board: Object.hasOwn(BOARDS, board) ? board : DEFAULT_BOARD_KEY,
   };
 }
+
+/** ピース 1 種を、選んでいる色の組ではどの色で描くか。 */
+export function pieceColor(palette, piece) {
+  if (palette.mono !== null) return palette.mono;
+  return palette.colors === null ? piece.color : palette.colors[piece.name];
+}
+
+/**
+ * 縁取り用に色を暗くする。マスの縁と、ピースの外周（`game.js`）が使う。
+ * ここに置くのは、マスの縁と外周で同じ作り方を保つため。
+ */
+export function darken(color, factor) {
+  const r = Math.round(((color >> 16) & 0xff) * factor);
+  const g = Math.round(((color >> 8) & 0xff) * factor);
+  const b = Math.round((color & 0xff) * factor);
+  return (r << 16) | (g << 8) | b;
+}

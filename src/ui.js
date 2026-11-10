@@ -9,7 +9,7 @@ import {
   ACRYLIC, COLORS, FONT, HINT_BADGE, HOLE, ICON, NEON, PIECES, TEXT_COLORS, TILE, TOOLTIP,
   VERSION, screenOf,
 } from './config.js';
-import { darken, pieceColor } from './scenes/boot.js';
+import { darken, pieceColor } from './logic.js';
 
 /**
  * 操作の概要。タイトルの遊び方と本編の下端（TODO-094）で同じ文言を出すため、
