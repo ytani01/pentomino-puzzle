@@ -18,8 +18,8 @@
  */
 
 import {
-  BACKDROP, BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, LAYOUTS, PALETTES,
-  PALETTE_REGISTRY_KEY, SCREENS, TEXT_COLORS, orientationOf, screenOf,
+  BOARDS, BOARD_REGISTRY_KEY, COLORS, FONT, PALETTES,
+  PALETTE_REGISTRY_KEY, RECORDS_CONFIRM_DEPTH, SCREENS, TEXT_COLORS, orientationOf, screenOf,
 } from '../config.js';
 import { boardIcon, ICONS } from '../icons.js';
 import { formatTime, selectionAfterRemoval } from '../logic.js';
@@ -29,8 +29,8 @@ import {
 } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  CHOICE_ICON_HEIGHT, createButton, createChoiceRow, createPanel, createTitleBar, createTooltip,
-  drawMiniBoard,
+  CHOICE_ICON_HEIGHT, createButton, createChoiceRow, createConfirmDialog, createTitleBar,
+  createTooltip, drawMiniBoard,
 } from '../ui.js';
 
 /**
@@ -124,12 +124,6 @@ const FOOT_GAP = 14;
 
 /** 頁の数を出す文字の幅（下段の並びに使う）。 */
 const PAGE_TEXT_WIDTH = 64;
-
-/**
- * 確認の枠の寸法。ボードにも向きにも依らない値なので、1 つの組の `LAYOUTS` から
- * 取って固定する（この画面はボードを切り替えても組み直さないため）。
- */
-const CONFIRM = LAYOUTS.landscape[BOARDS['8x8'].key].confirm;
 
 /**
  * 行の右端へ出す印（TODO-027）。何に頼って解いた回かを、履歴 1 件の
@@ -396,59 +390,25 @@ export default class RecordsScene extends Phaser.Scene {
   }
 
   /**
-   * 消す・この回を続ける（TODO-073）の前の確認。ブラウザの `confirm()` は
-   * 使わない（CLAUDE.md）ので、`game.js` のタイトルへ戻る確認と同じ組みで
-   * Canvas 内に作る。背景の帯に当たり判定を持たせ、開いている間は後ろの
-   * ボタンへクリックが抜けないようにする。
+   * 消す・この回を続ける（TODO-073）の前の確認。`game.js` のタイトルへ戻る確認と
+   * 同じ組みを、`ui.js` の `createConfirmDialog()` で Canvas 内に作る。
    */
   createConfirmDialog() {
     // 開くときに `openConfirm()` が入れ替える（TODO-031）。枠が出ていない間に
     // 呼ばれることは無いが、プロパティの有無が場面で変わらないよう先に作る。
+    // 何をするか（TODO-031、TODO-071）は `confirmAction` へ持たせ、枠を組み直さず
+    // 文言と行き先だけを差し替える。
     this.confirmAction = () => this.hideConfirm();
     const screen = screenOf(this);
-    const x = (screen.width - CONFIRM.width) / 2;
-    const y = (screen.height - CONFIRM.height) / 2;
-    const depth = 10;
-
-    this.confirmParts = [
-      this.add.rectangle(0, 0, screen.width, screen.height, BACKDROP.color, BACKDROP.alpha)
-        .setOrigin(0).setDepth(depth).setInteractive().setVisible(false),
-      createPanel(this, x, y, CONFIRM.width, CONFIRM.height)
-        .setDepth(depth).setVisible(false),
-    ];
-
-    this.confirmText = this.add.text(x + CONFIRM.width / 2, y + 50, '', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.body}px`,
-      color: TEXT_COLORS.normal,
-      align: 'center',
-    }).setOrigin(0.5).setDepth(depth).setVisible(false);
-    this.confirmParts.push(this.confirmText);
-
-    const buttonY = y + CONFIRM.height - 40;
-    const total = CONFIRM.buttonWidth * 2 + CONFIRM.gap;
-    const left = x + (CONFIRM.width - total) / 2;
-    this.confirmParts.push(createButton(this, {
-      x: left + CONFIRM.buttonWidth / 2,
-      y: buttonY,
-      width: CONFIRM.buttonWidth,
-      height: CONFIRM.buttonHeight,
-      label: 'はい',
-      fontSize: FONT.small,
-      // 何をするか（TODO-031、TODO-071）は開くときに `confirmAction` へ
-      // 持たせる。枠を組み直さず文言と行き先だけを差し替えれば、確認の見え方が
-      // 分かれない。
-      onClick: () => this.confirmAction(),
-    }).setDepth(depth).setVisible(false));
-    this.confirmParts.push(createButton(this, {
-      x: left + CONFIRM.buttonWidth + CONFIRM.gap + CONFIRM.buttonWidth / 2,
-      y: buttonY,
-      width: CONFIRM.buttonWidth,
-      height: CONFIRM.buttonHeight,
-      label: 'いいえ',
-      fontSize: FONT.small,
-      onClick: () => this.hideConfirm(),
-    }).setDepth(depth).setVisible(false));
+    const { parts, text } = createConfirmDialog(this, {
+      width: screen.width,
+      height: screen.height,
+      depth: RECORDS_CONFIRM_DEPTH,
+      onYes: () => this.confirmAction(),
+      onNo: () => this.hideConfirm(),
+    });
+    this.confirmParts = parts;
+    this.confirmText = text;
   }
 
   // ---- 操作 -------------------------------------------------------------

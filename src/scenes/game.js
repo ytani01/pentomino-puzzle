@@ -8,7 +8,7 @@
  */
 
 import {
-  BACKDROP, BOARDS, BOARD_REGISTRY_KEY, CLEAR_DELAY_MS, COLORS, FONT, INPUT, LAYOUTS, NEON,
+  BOARDS, BOARD_REGISTRY_KEY, CLEAR_DELAY_MS, COLORS, FONT, INPUT, LAYOUTS, NEON,
   OUTLINE, PALETTES, PALETTE_REGISTRY_KEY, PIECES, TEXT_COLORS, orientationOf,
 } from '../config.js';
 import {
@@ -26,7 +26,7 @@ import {
 } from '../storage.js';
 import * as audio from '../audio.js';
 import {
-  createButton, createHintBadge, createPanel, createTitleBar, createTooltip,
+  createButton, createConfirmDialog, createHintBadge, createPanel, createTitleBar, createTooltip,
   drawAcrylic, HOW_TO_OPERATE, HOW_TO_OPERATE_SHORT,
 } from '../ui.js';
 import { ICONS, strokePieceEdges, strokeTurnMark } from '../icons.js';
@@ -423,58 +423,20 @@ export default class GameScene extends Phaser.Scene {
 
   /**
    * 確認の枠。タイトルへ戻る前とやり直す前（TODO-094）で同じ枠を使い、
-   * 文言と「はい」の動作だけを `openConfirm()` で差し替える。
-   * ブラウザの `confirm()` は使わない（CLAUDE.md）ので、
-   * Canvas 内に組む。背景の帯に画面全体を覆う当たり判定を持たせ、開いている間は
-   * ピースやほかのボタンへクリックが抜けないようにする（Phaser の入力は既定で
-   * 最前面の対象だけに配る `topOnly` なので、これで足りる）。
+   * 文言と「はい」の動作だけを `openConfirm()` で差し替える。組み立ては
+   * `ui.js` の `createConfirmDialog()`（記録の画面と共通）。
    */
   createConfirmDialog() {
-    const cfg = this.layout.confirm;
-    const x = (this.layout.width - cfg.width) / 2;
-    const y = (this.layout.height - cfg.height) / 2;
-
-    this.confirmParts = [];
-
-    const backdrop = this.add.rectangle(0, 0, this.layout.width, this.layout.height,
-                                        BACKDROP.color, BACKDROP.alpha)
-      .setOrigin(0).setDepth(DEPTH.confirm).setInteractive().setVisible(false);
-    this.confirmParts.push(backdrop);
-
-    this.confirmParts.push(
-      createPanel(this, x, y, cfg.width, cfg.height).setDepth(DEPTH.confirm).setVisible(false),
-    );
-
-    this.confirmText = this.add.text(x + cfg.width / 2, y + 50, '', {
-      fontFamily: FONT.family,
-      fontSize: `${FONT.body}px`,
-      color: TEXT_COLORS.normal,
-      align: 'center',
-    }).setOrigin(0.5).setDepth(DEPTH.confirm).setVisible(false);
-    this.confirmParts.push(this.confirmText);
+    const { parts, text } = createConfirmDialog(this, {
+      width: this.layout.width,
+      height: this.layout.height,
+      depth: DEPTH.confirm,
+      onYes: () => this.confirmAction(),
+      onNo: () => this.hideConfirm(),
+    });
+    this.confirmParts = parts;
+    this.confirmText = text;
     this.confirmAction = null;
-
-    const buttonY = y + cfg.height - 40;
-    const totalWidth = cfg.buttonWidth * 2 + cfg.gap;
-    const left = x + (cfg.width - totalWidth) / 2;
-    this.confirmParts.push(createButton(this, {
-      x: left + cfg.buttonWidth / 2,
-      y: buttonY,
-      width: cfg.buttonWidth,
-      height: cfg.buttonHeight,
-      label: 'はい',
-      fontSize: FONT.small,
-      onClick: () => this.confirmAction(),
-    }).setDepth(DEPTH.confirm).setVisible(false));
-    this.confirmParts.push(createButton(this, {
-      x: left + cfg.buttonWidth + cfg.gap + cfg.buttonWidth / 2,
-      y: buttonY,
-      width: cfg.buttonWidth,
-      height: cfg.buttonHeight,
-      label: 'いいえ',
-      fontSize: FONT.small,
-      onClick: () => this.hideConfirm(),
-    }).setDepth(DEPTH.confirm).setVisible(false));
   }
 
   // ---- ピースの見た目 -------------------------------------------------

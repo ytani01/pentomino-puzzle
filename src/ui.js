@@ -6,7 +6,7 @@
  */
 
 import {
-  ACRYLIC, COLORS, FONT, HINT_BADGE, HOLE, ICON, NEON, PIECES, TEXT_COLORS, TILE, TOOLTIP,
+  ACRYLIC, BACKDROP, COLORS, CONFIRM, FONT, HINT_BADGE, HOLE, ICON, NEON, PIECES, TEXT_COLORS, TILE, TOOLTIP,
   VERSION, screenOf,
 } from './config.js';
 import { darken, pieceColor } from './logic.js';
@@ -370,6 +370,57 @@ export function createChoiceRow(scene, cx, y, label, choices, onSelect,
  * 説明を見なくても違いが分かってほしいボタン（デモの探し方）で使う（TODO-097）。
  * `setCaption()` で差し替えられる。
  */
+
+/**
+ * 確認の枠（背景の帯・枠・文言・「はい」「いいえ」）を作り、全部隠した状態で返す。
+ * ブラウザの `confirm()` は使わない（CLAUDE.md）ので、Canvas 内に組む。
+ * 背景の帯に画面全体を覆う当たり判定を持たせ、開いている間は後ろのピースや
+ * ボタンへクリックが抜けないようにする（Phaser の入力は既定で最前面の対象だけに
+ * 配る `topOnly` なので、これで足りる）。
+ *
+ * 文言と「はい」の動作は開くときにシーン側が差し替える（枠を組み直さなければ
+ * 確認の見え方が分かれない）。だから `onYes` は押した時点のシーンの
+ * `confirmAction` を呼ぶ形で渡してもらう。
+ *
+ * `parts` は開閉のためにまとめて `setVisible()` する対象、`text` は文言の差し替え先。
+ * `width` / `height` は画面の大きさ、`depth` は重なり順。
+ */
+export function createConfirmDialog(scene, { width, height, depth, onYes, onNo }) {
+  const cfg = CONFIRM;
+  const x = (width - cfg.width) / 2;
+  const y = (height - cfg.height) / 2;
+
+  const parts = [
+    scene.add.rectangle(0, 0, width, height, BACKDROP.color, BACKDROP.alpha)
+      .setOrigin(0).setDepth(depth).setInteractive().setVisible(false),
+    createPanel(scene, x, y, cfg.width, cfg.height).setDepth(depth).setVisible(false),
+  ];
+
+  const text = scene.add.text(x + cfg.width / 2, y + 50, '', {
+    fontFamily: FONT.family,
+    fontSize: `${FONT.body}px`,
+    color: TEXT_COLORS.normal,
+    align: 'center',
+  }).setOrigin(0.5).setDepth(depth).setVisible(false);
+  parts.push(text);
+
+  const buttonY = y + cfg.height - 40;
+  const total = cfg.buttonWidth * 2 + cfg.gap;
+  const left = x + (cfg.width - total) / 2;
+  const button = (cx, label, onClick) => createButton(scene, {
+    x: cx,
+    y: buttonY,
+    width: cfg.buttonWidth,
+    height: cfg.buttonHeight,
+    label,
+    fontSize: FONT.small,
+    onClick,
+  }).setDepth(depth).setVisible(false);
+  parts.push(button(left + cfg.buttonWidth / 2, 'はい', onYes));
+  parts.push(button(left + cfg.buttonWidth + cfg.gap + cfg.buttonWidth / 2, 'いいえ', onNo));
+
+  return { parts, text };
+}
 
 /** 左寄せのボタンで、ラベル・印と枠の間に空ける分。 */
 const BUTTON_PAD = 14;

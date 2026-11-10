@@ -205,6 +205,21 @@ export const COLORS = {
  */
 export const BACKDROP = { color: 0x000000, alpha: 0.55 };
 
+/**
+ * 確認の枠の寸法（本編・記録で共通。縦・横の画面にも依らない）。
+ * 画面の大きさに合わせて変える理由が無く、向きごとの `LAYOUTS` に持たせると
+ * 記録の画面がどれかを借りることになるため、ここに 1 つだけ置く（TODO-105）。
+ */
+export const CONFIRM = {
+  width: 460, height: 200, buttonWidth: 130, buttonHeight: 56, gap: 20,
+};
+
+/**
+ * 記録の画面の確認の枠の重なり順。アイコンの説明（既定の 0）より手前であればよい。
+ * 本編は `game.js` の `DEPTH.confirm`（HUD やボタンの説明も重なるので、より大きい値）。
+ */
+export const RECORDS_CONFIRM_DEPTH = 10;
+
 /** テキストの色。Phaser は文字列で受けるので、`COLORS` を文字列にしたもの。 */
 export const TEXT_COLORS = {
   normal: '#e8ecf4',
@@ -460,9 +475,6 @@ export function makeLayout({
     // 概要はトレイとメッセージの帯の間。`lines` が 0 なら出さない（デモ）。
     help: {
       x: width / 2, y: bottom + (helpLines * HELP_LINE) / 2, lines: helpLines, height: helpLines * HELP_LINE,
-    },
-    confirm: {
-      width: 460, height: 200, buttonWidth: 130, buttonHeight: 56, gap: 20,
     },
   };
 }

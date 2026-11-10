@@ -13,12 +13,12 @@
 |------|------|------|
 | 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ reviewer（Opus 5.5 / medium）+ screens（Sonnet 5.5 / low） |
 
-- [ ] `src/scenes/game.js` と `src/scenes/records.js` の `createConfirmDialog()`
+- [x] `src/scenes/game.js` と `src/scenes/records.js` の `createConfirmDialog()`
       （背景の帯・枠・文言・「はい」「いいえ」）を `src/ui.js` の 1 つの関数にする
-- [ ] 確認の枠の大きさを `src/config.js` の 1 か所に置き、`records.js` が
+- [x] 確認の枠の大きさを `src/config.js` の 1 か所に置き、`records.js` が
       `LAYOUTS.landscape['8x8'].confirm` から借りるのをやめる。`records.js` の
       `depth = 10` の直書きも無くす
-- [ ] `docs/developer.md` と `CLAUDE.md` の `src/ui.js` の説明に足す
+- [x] `docs/developer.md` と `CLAUDE.md` の `src/ui.js` の説明に足す
 
 挙動は変えない。`openConfirm()` / `hideConfirm()` の文言と行き先、向きが変わったときの
 開き直し（`confirmKind`）は各シーンに残す。
