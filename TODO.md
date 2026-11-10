@@ -66,7 +66,7 @@
 |------|------|------|
 | 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / low）+ reviewer（Sonnet 5.5 / medium）+ screens（Sonnet 5.5 / low） |
 
-- [ ] `{ fontFamily: FONT.family, fontSize: \`${FONT.x}px\`, color }` を返す関数を `src/ui.js` に
+- [ ] `fontFamily`・`fontSize`・`color` の 3 つを組んだスタイルを返す関数を `src/ui.js` に
       置き、`this.add.text()` / `scene.add.text()` の 35 か所を差し替える
       （対象は `rg -n "fontFamily: FONT.family" src`）
 - [ ] `docs/developer.md` と `CLAUDE.md` の `src/ui.js` の説明に足す
