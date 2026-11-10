@@ -107,8 +107,8 @@ PLAYWRIGHT=$(dirname "$(rg -l '"version": "1\.63\.0"' \
   数え上げて持つ（詳しくは[全解のデータ](#全解のデータ)）
 - **シーン** — `src/scenes/*.js`。Phaser とのつなぎに徹し、判定は上の 2 つに任せる
 
-矢印は import の向き。Phaser を読むのはシーンだけで（import ではなく、
-CDN から入れたグローバルの `Phaser` を使う）、`tests.html` はシーンを
+矢印は import の向き。Phaser を読むのはシーンと、シーンが呼ぶ部品（`src/ui.js`・
+`src/icons.js`）で（import ではなく、CDN から入れたグローバルの `Phaser` を使う）、`tests.html` はシーンを
 通らずに計算と保存を直接読む。どのファイルも読む `src/config.js` は図から省いた。
 
 ```mermaid

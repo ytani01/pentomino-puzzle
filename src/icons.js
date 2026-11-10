@@ -8,6 +8,10 @@
  *
  * 一手戻すとやり直しはどちらも曲がった矢印で似やすいので、一手戻すは左へ折り返す
  * U 字、やり直しは閉じかけた円にして見分けられるようにする。
+ *
+ * 本編のピースに重ねる線画（縁の `strokePieceEdges()`、向きを変える印の
+ * `strokeTurnMark()`）もここに置く。色の選択肢の見本が本編と同じ絵を描くので、
+ * シーンでなく部品の側に持たせる（TODO-111・TODO-114）。
  */
 
 import { CHOICE_ICON, GLASS, ICON, NEON, PIECES, TILE, TURN_MARK } from './config.js';
