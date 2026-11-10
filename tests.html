@@ -48,7 +48,7 @@ import {
   clampSelection, selectionAfterRemoval,
   forcedPlacements, hasUncoverableCell,
   SYMMETRIES, transformBoard, boardKey, boardSymmetries, canonicalBoard, canonicalCellsKey,
-  parseDemoParams, darken, pieceColor,
+  parseDemoParams, darken, pieceColor, turnMarkKind, turnMarkCenter,
 } from './src/logic.js';
 import {
   touchingEdges, moveDistance, countCellMoves, singlePieceCell, solveSteps, solveStepsRandom,
@@ -2995,6 +2995,57 @@ test('colors があれば、ピースの名前で引いた色になる', () => {
 
 test('mono も colors も無ければ、ピース自身の色になる', () => {
   for (const piece of PIECES) assertSame(pieceColor(PALETTES.colorful, piece), piece.color);
+});
+
+// ---- logic：向きを変える印（turnMarkKind・turnMarkCenter。TODO-114）------
+
+group('src/logic.js — 向きを変える印の種類（turnMarkKind。TODO-114）');
+
+test('次のタップが回転になる形（T・I）は \'rotate\'', () => {
+  assertSame(turnMarkKind(cellsOf('T')), 'rotate');
+  assertSame(turnMarkKind(cellsOf('I')), 'rotate');
+});
+
+test('V は回転でも裏返しでも同じ向きになるが、回転とする', () => {
+  assertSame(turnMarkKind(cellsOf('V')), 'rotate');
+});
+
+test('次のタップが裏返しになる形（L・F）は \'flip\'', () => {
+  assertSame(turnMarkKind(cellsOf('L')), 'flip');
+  assertSame(turnMarkKind(cellsOf('F')), 'flip');
+});
+
+test('向きが 1 通りの X は null（印を出さない）', () => {
+  assertSame(turnMarkKind(cellsOf('X')), null);
+});
+
+group('src/logic.js — 向きを変える印の中心（turnMarkCenter。TODO-114）');
+
+test('U は外接矩形の真ん中が空いているが、中心はピースのマスの上に来る', () => {
+  // U: 行 0 の [0,0] [0,2]、行 1 の [1,0] [1,1] [1,2]。矩形の真ん中 (1.5, 1) は
+  // 空きマス [0,1] の下端に近いので、一番近い埋まりマス [1,1]（中心 (1.5, 1.5)）を選ぶ。
+  assertSame(turnMarkCenter(cellsOf('U')), { x: 1.5, y: 1.5 });
+});
+
+test('ふつうの形（P）は、矩形の真ん中に一番近いマスの中心を返す', () => {
+  // P: 2 列 × 3 行。真ん中 (1, 1.5) に最も近い [1,0]（中心 (0.5, 1.5)）が先に見つかる。
+  assertSame(turnMarkCenter(cellsOf('P')), { x: 0.5, y: 1.5 });
+});
+
+test('どのピースでも、中心は必ずピースのマスの中心になる', () => {
+  for (const piece of PIECES) {
+    const { x, y } = turnMarkCenter(piece.cells);
+    assert(piece.cells.some(([row, col]) => col + 0.5 === x && row + 0.5 === y),
+      `${piece.name} の中心 (${x}, ${y}) がマスの上にない`);
+  }
+});
+
+test('入力のマスを書き換えない', () => {
+  const cells = cellsOf('U').map((cell) => [...cell]);
+  const before = JSON.stringify(cells);
+  turnMarkCenter(cells);
+  turnMarkKind(cells);
+  assertSame(JSON.stringify(cells), before);
 });
 
 // ---- storage：履歴の検証（TODO-008）--------------------------------------
