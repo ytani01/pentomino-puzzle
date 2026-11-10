@@ -33,16 +33,15 @@
  */
 
 import {
-  BOARDS, BOARD_REGISTRY_KEY, COLORS, DEMO, DEMO_LAYOUTS, FONT, PALETTES,
-  PALETTE_REGISTRY_KEY, TEXT_COLORS, orientationOf,
+  BOARD_REGISTRY_KEY, DEMO, DEMO_LAYOUTS, FONT, TEXT_COLORS,
 } from '../config.js';
-import { createBoard, orientationSteps, parseDemoParams } from '../logic.js';
+import { orientationSteps, parseDemoParams } from '../logic.js';
 import { solveSteps, solveStepsRandom } from '../search.js';
 import { ensureSolutions, hasSolution } from '../solutions.js';
 import * as audio from '../audio.js';
 import { createHintBadge, createPanel, createTitleBar, textStyle } from '../ui.js';
 import { ICONS } from '../icons.js';
-import GameScene, { DEPTH } from './game.js';
+import GameScene, { DEPTH, piecePosition, setPiecePosition } from './game.js';
 
 /** 速さの並び。HUD のボタンの前半 3 つと同じ順。 */
 const SPEEDS = ['slow', 'fast', 'fastest'];
@@ -79,22 +78,15 @@ export default class DemoScene extends GameScene {
   }
 
   create() {
-    this.cameras.main.setBackgroundColor(COLORS.background);
-    // 向きが変わって作り直したとき（`relayout()`。TODO-095）に控えた状態。
-    const saved = this.relayoutState;
-    this.relayoutState = null;
     // ボードと色の組はタイトルで選んだもの（本編と同じ読み方）。URL で開いたときは
     // ボードと探し方を URL から取る（TODO-083）。registry には書かない（タイトルの
     // 選択を変えないため）。`scene.start()` のデータで渡さないのは、Phaser が
     // データ無しの `start()` では前回のデータを持ち越すため。
     const fromUrl = parseDemoParams(window.location.search);
-    this.boardKey = fromUrl?.board ?? this.registry.get(BOARD_REGISTRY_KEY);
-    this.spec = BOARDS[this.boardKey];
     // ボタンが本編より 1 つ多い分だけ HUD が違う。ボードとトレイは本編と同じ（TODO-050）。
-    this.layout = DEMO_LAYOUTS[orientationOf(this)][this.boardKey];
-    this.palette = PALETTES[this.registry.get(PALETTE_REGISTRY_KEY)];
-    // `drawBoard()` が穴の位置を見るためだけに持つ。探索のボードは generator の中にある。
-    this.board = createBoard(this.spec);
+    const saved = this.prepareScene(
+      DEMO_LAYOUTS, fromUrl?.board ?? this.registry.get(BOARD_REGISTRY_KEY),
+    );
 
     // 'loading'（全解のデータを待っている）・'running'（探している）・
     // 'solved'（解を見つけて止まっている）
@@ -156,9 +148,7 @@ export default class DemoScene extends GameScene {
     this.cancelTurn();
     this.relayoutState = {
       state: Object.fromEntries(RELAYOUT_KEYS.map((key) => [key, this[key]])),
-      pieces: this.pieces.map(({ cells, location, row, col }) => ({
-        cells, location, row, col,
-      })),
+      pieces: this.pieces.map(piecePosition),
     };
     this.scene.restart();
   }
@@ -166,7 +156,7 @@ export default class DemoScene extends GameScene {
   /** `relayout()` で控えたピースの位置を、組み直した画面へ写す。 */
   applyRelayout(saved) {
     this.pieces.forEach((piece, index) => {
-      Object.assign(piece, saved.pieces[index]);
+      setPiecePosition(piece, saved.pieces[index]);
       this.refreshPiece(piece);
       this.settlePiece(piece, false);
     });
@@ -281,10 +271,7 @@ export default class DemoScene extends GameScene {
   finishStep(value, animate, piece) {
     if (value.type === 'place') {
       this.tried += 1;
-      piece.cells = value.cells;
-      piece.location = 'board';
-      piece.row = value.row;
-      piece.col = value.col;
+      setPiecePosition(piece, { ...value, location: 'board' });
       if (animate) audio.drop();
       const hintState = value.ok ? 'ok' : 'dead';
       // 本編と同じく、解なしに変わった瞬間に鳴らす。深さ優先は解なしの手を

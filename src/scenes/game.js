@@ -53,6 +53,27 @@ export const DEPTH = {
   board: 0, ghost: 5, piece: 10, traySlot: 15, dragging: 20, hud: 30, tooltip: 35, confirm: 40,
 };
 
+/**
+ * ピースの位置（`{ cells, location, row, col }`）を読む・書く。Undo の履歴・遊びかけ・
+ * 向きが変わったときの控え（デモも）が同じ 4 つを持ち回るので、並びを 1 か所に置く。
+ */
+export function piecePosition({ cells, location, row, col }) {
+  return { cells, location, row, col };
+}
+
+export function setPiecePosition(piece, { cells, location, row, col }) {
+  Object.assign(piece, { cells, location, row, col });
+}
+
+/**
+ * 向きを 1 段変えたときの音。`turnOrder()` の並びは 90° 回転と裏返しが混ざるので、
+ * どちらになったかを見て選ぶ（タップとドラッグ中で共通。TODO-069）。
+ */
+function playTurnSound(before, after) {
+  if (sameShape(after, normalize(flip(before)))) audio.flip();
+  else audio.rotate();
+}
+
 export default class GameScene extends Phaser.Scene {
   /** キーを受け取るのは、デモ（`DemoScene`。TODO-040）が描画を使い回すため。 */
   constructor(key = 'Game') {
@@ -80,22 +101,49 @@ export default class GameScene extends Phaser.Scene {
   }
 
   create() {
-    this.cameras.main.setBackgroundColor(COLORS.background);
-    // 向きが変わって作り直したとき（`relayout()`。TODO-095）に控えた状態。
-    // 1 回使ったら捨てる（次にふつうに始めたときに持ち越さないため）。
-    const saved = this.relayoutState;
-    this.relayoutState = null;
-
     // ボードはタイトルで選ぶ（TODO-009。記録画面の「この回を続ける」も始める前に
     // 書き換える。TODO-073）。どちらも本編の外で書くので、ここで 1 回読めば
     // シーンが生きている間は変わらない。
-    this.boardKey = this.registry.get(BOARD_REGISTRY_KEY);
+    const saved = this.prepareScene(LAYOUTS, this.registry.get(BOARD_REGISTRY_KEY));
+    this.initPlayState();
+    this.createParts(saved);
+    this.loadSolutions();
+    this.registerInput();
+
+    // 遊びかけの読み込みは、部品を組んでから（`refreshPiece()` などが要る）。
+    // 作り直したときは控えた状態を戻し、遊びかけは読まない（前の `init()` の
+    // `resume` が渡し直されるが、控えた状態のほうが新しい）。
+    if (saved) this.applyRelayout(saved);
+    else if (this.resuming) this.applyProgress(this.startProgress || loadProgress(this.spec.key));
+    this.refreshHud();
+    // ここから先の `refreshHud()` は、ボードが変わったときに呼ばれる。
+    // 組み立ての最中に控えると、何も置いていない盤面で保存済みの遊びかけを
+    // 消してしまう（`はじめる` を押し間違えただけで消えるのは困る）。
+    this.ready = true;
+  }
+
+  /**
+   * 本編とデモ（`DemoScene`）で共通の前半。レイアウトの表はデモだけ HUD が違うので
+   * 引数で受け取る（TODO-050）。ボードもデモは URL から取ることがある（TODO-083）。
+   * 向きが変わって作り直したとき（`relayout()`。TODO-095）に控えた状態を返す。
+   * 1 回使ったら捨てる（次にふつうに始めたときに持ち越さないため）。
+   */
+  prepareScene(layouts, boardKey) {
+    this.cameras.main.setBackgroundColor(COLORS.background);
+    const saved = this.relayoutState;
+    this.relayoutState = null;
+
+    this.boardKey = boardKey;
     this.spec = BOARDS[this.boardKey];
-    this.layout = LAYOUTS[orientationOf(this)][this.boardKey];
+    this.layout = layouts[orientationOf(this)][this.boardKey];
     // 色の組もタイトルでだけ選べる（TODO-015）。
     this.palette = PALETTES[this.registry.get(PALETTE_REGISTRY_KEY)];
-
+    // デモでは `drawBoard()` が穴の位置を見るためだけに使う（探索のボードは generator の中）。
     this.board = createBoard(this.spec);
+    return saved;
+  }
+
+  initPlayState() {
     this.history = [];
     this.elapsed = 0;
     this.usedAuto = false;
@@ -120,7 +168,9 @@ export default class GameScene extends Phaser.Scene {
     // 完成してクリア表示へ渡す値（`checkSolved()`）。「続ける」までは持っておき、
     // 向きが変わって作り直したときにクリア表示を出し直す（TODO-095）。
     this.clearData = null;
+  }
 
+  createParts(saved) {
     this.drawBoard();
     this.drawTray();
     this.createGhost();
@@ -132,10 +182,14 @@ export default class GameScene extends Phaser.Scene {
     this.createConfirmDialog();
     // 作り直したときは、前の `init()` の値が渡し直されるので見ない（TODO-095）。
     if (this.restartTip && !saved) this.tooltip.flash(this.restartButton, RESTART_TIP);
+  }
 
-    // 全解のデータ（TODO-022）。6×10 は 139KB あるので動的 import で読む。
-    // 届くまで [おまかせ] と [ヒント表示] は押せない（`refreshHud()` が見る）。
-    // シーンを離れたあとに届くことがあるので、生きているかを確かめてから使う。
+  /**
+   * 全解のデータ（TODO-022）。6×10 は 139KB あるので動的 import で読む。
+   * 届くまで [おまかせ] と [ヒント表示] は押せない（`refreshHud()` が見る）。
+   * シーンを離れたあとに届くことがあるので、生きているかを確かめてから使う。
+   */
+  loadSolutions() {
     this.solutions = null;
     // おまかせで避ける解の番号（TODO-016）。自力で見つけた解（達成度の分子）と
     // おまかせで導いた解を合わせたもの。**読むのはここ 1 回だけ**で、あとは
@@ -153,7 +207,9 @@ export default class GameScene extends Phaser.Scene {
       ]);
       this.refreshHud();
     });
+  }
 
+  registerInput() {
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
     // ドラッグ中に向きを変える入力（TODO-069）。右クリック・ホイール・
@@ -170,17 +226,6 @@ export default class GameScene extends Phaser.Scene {
     // 考えていた時間が落ちるため。
     // `once` なのは、やり直しで `create()` を通るたびに登録が積み上がらないようにするため。
     this.events.once('shutdown', this.onShutdown, this);
-
-    // 遊びかけの読み込みは、部品を組んでから（`refreshPiece()` などが要る）。
-    // 作り直したときは控えた状態を戻し、遊びかけは読まない（前の `init()` の
-    // `resume` が渡し直されるが、控えた状態のほうが新しい）。
-    if (saved) this.applyRelayout(saved);
-    else if (this.resuming) this.applyProgress(this.startProgress || loadProgress(this.spec.key));
-    this.refreshHud();
-    // ここから先の `refreshHud()` は、ボードが変わったときに呼ばれる。
-    // 組み立ての最中に控えると、何も置いていない盤面で保存済みの遊びかけを
-    // 消してしまう（`はじめる` を押し間違えただけで消えるのは困る）。
-    this.ready = true;
   }
 
   // Phaser が渡す第 1 引数（時刻）は使わない。経過時間は delta を足して数える。
@@ -635,7 +680,7 @@ export default class GameScene extends Phaser.Scene {
       (this.drag.offsetX - touchShiftX) / cell,
     ];
     const [row, col] = turnPivot(piece.cells, next, point);
-    const flipped = sameShape(next, normalize(flip(piece.cells)));
+    const before = piece.cells;
     piece.cells = next;
     this.drag.offsetX = col * cell + touchShiftX;
     this.drag.offsetY = row * cell + touchShiftY;
@@ -643,8 +688,7 @@ export default class GameScene extends Phaser.Scene {
     piece.container.setPosition(
       this.drag.pointer.x - this.drag.offsetX, this.drag.pointer.y - this.drag.offsetY,
     );
-    if (flipped) audio.flip();
-    else audio.rotate();
+    playTurnSound(before, next);
     this.refreshDragGhost();
   }
 
@@ -888,7 +932,7 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
-    const flipped = sameShape(next, normalize(flip(piece.cells)));
+    const before = piece.cells;
     if (onBoard) {
       this.history.push(this.snapshot());
       this.board = place(without, piece.name, next, piece.row, piece.col);
@@ -896,8 +940,7 @@ export default class GameScene extends Phaser.Scene {
     piece.cells = next;
     this.refreshPiece(piece);
     this.layoutPiece(piece);
-    if (flipped) audio.flip();
-    else audio.rotate();
+    playTurnSound(before, next);
     this.refreshHud();
   }
 
@@ -910,12 +953,7 @@ export default class GameScene extends Phaser.Scene {
   snapshot() {
     return {
       board: this.board,
-      pieces: this.pieces.map((piece) => ({
-        cells: piece.cells,
-        location: piece.location,
-        row: piece.row,
-        col: piece.col,
-      })),
+      pieces: this.pieces.map(piecePosition),
     };
   }
 
@@ -924,10 +962,7 @@ export default class GameScene extends Phaser.Scene {
     this.pieces.forEach((piece, index) => {
       const saved = snapshot.pieces[index];
       const changed = piece.cells !== saved.cells;
-      piece.cells = saved.cells;
-      piece.location = saved.location;
-      piece.row = saved.row;
-      piece.col = saved.col;
+      setPiecePosition(piece, saved);
       if (changed) this.refreshPiece(piece);
       this.settlePiece(piece, animate);
     });
@@ -977,13 +1012,7 @@ export default class GameScene extends Phaser.Scene {
       usedAuto: this.usedAuto,
       usedHint: this.usedHint,
       solved: this.solvedNumbers,
-      pieces: this.pieces.map((piece) => ({
-        name: piece.name,
-        cells: piece.cells,
-        location: piece.location,
-        row: piece.row,
-        col: piece.col,
-      })),
+      pieces: this.pieces.map((piece) => ({ name: piece.name, ...piecePosition(piece) })),
     });
   }
 
@@ -1052,10 +1081,7 @@ export default class GameScene extends Phaser.Scene {
     this.pieces.forEach((piece) => {
       const item = saved.get(piece.name);
       if (!item) return;
-      piece.cells = item.cells;
-      piece.location = item.location;
-      piece.row = item.row;
-      piece.col = item.col;
+      setPiecePosition(piece, item);
       if (item.location === 'board') {
         this.board = place(this.board, piece.name, piece.cells, piece.row, piece.col);
       }
@@ -1079,7 +1105,7 @@ export default class GameScene extends Phaser.Scene {
    * 同じボードを何度解いても毎回同じ解へは導かれない（TODO-016）。
    */
   useAuto() {
-    const left = this.pieces.filter((piece) => piece.location === 'tray').length;
+    const left = this.trayPieces().length;
     if (left === 0 || !this.solutions) return;
 
     const result = autoFrom(this.solutions, this.board, Math.random, this.avoidNumbers);
@@ -1132,7 +1158,7 @@ export default class GameScene extends Phaser.Scene {
    */
   runHint() {
     if (!this.hinting) return;
-    const left = this.pieces.filter((piece) => piece.location === 'tray').length;
+    const left = this.trayPieces().length;
     if (left === 0 || !this.solutions) {
       this.hintState = null;
       this.hintBadge.setState(null);
@@ -1161,6 +1187,10 @@ export default class GameScene extends Phaser.Scene {
     // タッチで押したときだけ、作り直したシーンで説明を出し直す（TODO-094）。
     // 確認の「はい」から来たときも、押したのはタッチかマウスかで決める。
     this.scene.restart({ resume: false, restartTip: this.input.activePointer.wasTouch });
+  }
+
+  trayPieces() {
+    return this.pieces.filter((piece) => piece.location === 'tray');
   }
 
   /** ボードに 1 つも置いていないか。置いていなければ、失うものが無いので確認を出さない（TODO-094）。 */
@@ -1243,10 +1273,7 @@ export default class GameScene extends Phaser.Scene {
   /** トレイからボードへ滑らせて置く。おまかせと自動で埋める手（TODO-044）が使う。 */
   slideIn({ name, cells, row, col }) {
     const piece = this.pieces.find((entry) => entry.name === name);
-    piece.cells = cells;
-    piece.location = 'board';
-    piece.row = row;
-    piece.col = col;
+    setPiecePosition(piece, { cells, location: 'board', row, col });
     this.board = place(this.board, name, cells, row, col);
     this.refreshPiece(piece);
     this.settlePiece(piece, true);
@@ -1263,7 +1290,7 @@ export default class GameScene extends Phaser.Scene {
   fillForced() {
     if (!this.playing || !this.hinting || !this.solutions) return false;
     if (!hasSolution(this.solutions, this.board)) return false;
-    const names = this.pieces.filter((piece) => piece.location === 'tray').map((piece) => piece.name);
+    const names = this.trayPieces().map((piece) => piece.name);
     const placements = forcedPlacements(this.board, names);
     if (placements.length === 0) return false;
     for (const placement of placements) this.slideIn(placement);
@@ -1285,7 +1312,7 @@ export default class GameScene extends Phaser.Scene {
    */
   refreshHud(fill = false) {
     const filled = fill && this.fillForced();
-    const left = this.pieces.filter((piece) => piece.location === 'tray').length;
+    const left = this.trayPieces().length;
     this.remainText.setText(`残り ${left}`);
     // 完成した解の知らせ（TODO-072）は、ボードが完成でなくなるまで出しておく。
     // 完成したボードからできるのは外す手だけなので、残りが出たら消せば足りる。
