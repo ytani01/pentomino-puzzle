@@ -1,7 +1,7 @@
 # TODO
 
-**残っている項目: TODO-117、TODO-118、TODO-119、TODO-120、TODO-121、TODO-122、TODO-123、TODO-124、TODO-125、TODO-126、TODO-127。** これまでに 116 件を決着させた。
-新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-128` から。**
+**残っている項目: TODO-117、TODO-118、TODO-119、TODO-120、TODO-121、TODO-122、TODO-123、TODO-124、TODO-125、TODO-126、TODO-127、TODO-128、TODO-129。** これまでに 116 件を決着させた。
+新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-130` から。**
 
 ## TODO-117. 確認の枠の開閉を ui.js の createConfirmDialog() にまとめる
 
@@ -133,6 +133,29 @@
   `sanitizeFound()`・`sanitizeProgress()` などに繰り返し出てくるので、名前の付いた関数にする。受け入れる値は変えない
 
 **無駄を省く工夫:** 確かめるのは `tests.html` の既存のテストだけ（TODO-116 で、壊れた値と localStorage が使えないときのテストがある）。
+
+## TODO-128. config.js の TEXT_COLORS を COLORS から作る
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ verifier（Haiku 5.5 / low） |
+
+- [ ] `TEXT_COLORS` の `'#e8ecf4'` などは `COLORS` の `text`・`textDim`・`accent`・`danger`・`buttonTextDisabled`・`background` と
+  同じ値を文字列で書き直したもの。数値から `'#rrggbb'` を作る関数で `COLORS` から作り、同じ色を 2 か所に書かないようにする
+
+**無駄を省く工夫:** 画面は見ない。`node` で変更前後の `TEXT_COLORS` を JSON にして一致を見れば足りる。
+
+## TODO-129. tests.html の補助関数の重なりを消す
+
+|      | main | 担当 |
+|------|------|------|
+| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ tests（Sonnet 5.5 / medium） |
+
+- [ ] `firstSolutionSteps()` と `firstSolutionStepsWith()` は `canContinue` を渡すかどうかだけが違うので 1 つにする
+- [ ] テストの中で同じ形で書き直している補助（`sigOf` など）を、`rg -n "const \w+ = \(" tests.html` で洗い出して
+  2 か所以上あるものをファイルの上の関数にする。テストの数と中身は変えない
+
+**無駄を省く工夫:** 確かめるのは `tests.html` を流して件数（今は 281 件）と全件通ることだけ。
 
 ## 完了済み
 
