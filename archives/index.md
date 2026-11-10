@@ -5,6 +5,7 @@
 進行中の項目は [TODO.md](../TODO.md) にある。
 
 - [TODO-120. 本編とデモ（game.js・demo.js）の繰り返しをまとめ、create() を分ける](todo/TODO-120.%20%E6%9C%AC%E7%B7%A8%E3%81%A8%E3%83%87%E3%83%A2%EF%BC%88game.js%E3%83%BBdemo.js%EF%BC%89%E3%81%AE%E7%B9%B0%E3%82%8A%E8%BF%94%E3%81%97%E3%82%92%E3%81%BE%E3%81%A8%E3%82%81%E3%80%81create%28%29%20%E3%82%92%E5%88%86%E3%81%91%E3%82%8B.md)
+- [TODO-119. ピースを名前で引く処理と、塗りの色・テクスチャを焼く手順をまとめる](todo/TODO-119.%20%E3%83%94%E3%83%BC%E3%82%B9%E3%82%92%E5%90%8D%E5%89%8D%E3%81%A7%E5%BC%95%E3%81%8F%E5%87%A6%E7%90%86%E3%81%A8%E3%80%81%E5%A1%97%E3%82%8A%E3%81%AE%E8%89%B2%E3%83%BB%E3%83%86%E3%82%AF%E3%82%B9%E3%83%81%E3%83%A3%E3%82%92%E7%84%BC%E3%81%8F%E6%89%8B%E9%A0%86%E3%82%92%E3%81%BE%E3%81%A8%E3%82%81%E3%82%8B.md)
 - [TODO-118. config.js の makeLayout() の分岐と、TEXT_COLORS の書き直しをまとめる](todo/TODO-118.%20config.js%20%E3%81%AE%20makeLayout%28%29%20%E3%81%AE%E5%88%86%E5%B2%90%E3%81%A8%E3%80%81TEXT_COLORS%20%E3%81%AE%E6%9B%B8%E3%81%8D%E7%9B%B4%E3%81%97%E3%82%92%E3%81%BE%E3%81%A8%E3%82%81%E3%82%8B.md)
 - [TODO-117. 計算側（search.js・logic.js・storage.js・tests.html）の重なりをまとめる](todo/TODO-117.%20%E8%A8%88%E7%AE%97%E5%81%B4%EF%BC%88search.js%E3%83%BBlogic.js%E3%83%BBstorage.js%E3%83%BBtests.html%EF%BC%89%E3%81%AE%E9%87%8D%E3%81%AA%E3%82%8A%E3%82%92%E3%81%BE%E3%81%A8%E3%82%81%E3%82%8B.md)
 - [TODO-116. localStorage が使えないときの storage.js のテストを足す](todo/TODO-116.%20localStorage%20%E3%81%8C%E4%BD%BF%E3%81%88%E3%81%AA%E3%81%84%E3%81%A8%E3%81%8D%E3%81%AE%20storage.js%20%E3%81%AE%E3%83%86%E3%82%B9%E3%83%88%E3%82%92%E8%B6%B3%E3%81%99.md)

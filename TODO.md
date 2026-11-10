@@ -1,21 +1,9 @@
 # TODO
 
-**残っている項目: TODO-119、TODO-121。** これまでに 119 件を決着させた。
+**残っている項目: TODO-121。** これまでに 120 件を決着させた。
 新しく足すときは「完了済み」の上に節を作る。**番号は `TODO-122` から。**
 
 項目は、触るファイルと確かめ方が同じものでまとめてある。
-
-## TODO-119. ピースを名前で引く処理と、塗りの色・テクスチャを焼く手順をまとめる
-
-|      | main | 担当 |
-|------|------|------|
-| 見込み | Opus 5.5 / effort medium | implementer（Sonnet 5.5 / medium）+ reviewer（Opus 5.5 / high）+ screens（Sonnet 5.5 / low） |
-
-- [ ] ピースの定義を名前で引く処理（`ui.js` の `PIECE_BY_NAME`、`icons.js`・`storage.js` の `PIECES.find()`）を `config.js` の 1 つの Map にする
-- [ ] 「ネオンなら暗くして塗る」色の決め方（`ui.js` の `drawMiniBoard()`、`icons.js` の `paletteIcon()`、`boot.js` の `makeNeonTile()`）を `logic.js` の 1 つの関数にする
-- [ ] `boot.js` の 3 つの `make*Tile()` に共通する前後（`textures.exists()`・`make.graphics()`・`generateTexture()`・`destroy()`）を 1 つにする
-
-**無駄を省く工夫:** 画面は 3 つの色の組でタイトル（色の見本と動くボード）と本編を 1 回ずつ撮るだけ。
 
 ## TODO-121. 部品（ui.js）と記録・タイトル画面の繰り返しをまとめる
 
